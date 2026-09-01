@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, bannerService, resolveProductImage, mediaUrl } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
-import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
 
 const normalizeProduct = (p) => ({
   id: p.id,
@@ -39,10 +39,10 @@ export const HomePage = () => {
     });
   }, []);
 
-  const heroTitle = heroBanner?.title || 'INGÉNIERIE PAR OBJECTIF';
+  const heroTitle = heroBanner?.title || 'INGÃ‰NIERIE PAR OBJECTIF';
   const heroSubtitle = heroBanner?.subtitle || '';
-  const heroDesc = heroBanner?.description || 'Dominez vos entraînements avec une nutrition de précision testée en laboratoire pour une puissance et une récupération sans compromis.';
-  const heroBtnLabel = heroBanner?.buttonLabel || 'DÉCOUVRIR LA GAMME';
+  const heroDesc = heroBanner?.description || 'Dominez vos entraÃ®nements avec une nutrition de prÃ©cision testÃ©e en laboratoire pour une puissance et une rÃ©cupÃ©ration sans compromis.';
+  const heroBtnLabel = heroBanner?.buttonLabel || 'DÃ‰COUVRIR LA GAMME';
   const heroBgImage = heroBanner?.imageDesktop
     ? mediaUrl(`banners/desktop/${heroBanner.imageDesktop}`)
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
@@ -72,7 +72,7 @@ export const HomePage = () => {
                 {heroSubtitle ? (
                   <>{heroTitle}<br /><span className="text-[#d90429]">{heroSubtitle}</span></>
                 ) : (
-                  <>INGÉNIERIE <br /><span className="text-[#d90429]">PAR OBJECTIF</span></>
+                  <>INGÃ‰NIERIE <br /><span className="text-[#d90429]">PAR OBJECTIF</span></>
                 )}
               </h1>
 
@@ -128,16 +128,16 @@ export const HomePage = () => {
               <span className="italic font-normal text-4xl sm:text-6xl text-white block mt-1">WATER</span>
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
-              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">ZÉRO SUCRE</span>
-              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">10 G DE PROTÉINES</span>
-              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">RAFRAÎCHISSANT</span>
+              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">ZÃ‰RO SUCRE</span>
+              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">10 G DE PROTÃ‰INES</span>
+              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">RAFRAÃŽCHISSANT</span>
             </div>
             <div>
               <button
                 onClick={() => navigateTo("shop")}
                 className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase tracking-wider px-6 py-3.5 rounded-full shadow-lg inline-flex items-center gap-2 transition-transform hover:scale-105"
               >
-                JE DÉCOUVRE <ArrowRight className="w-4 h-4" />
+                JE DÃ‰COUVRE <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -159,7 +159,7 @@ export const HomePage = () => {
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
             <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOS BEST SELLERS</h2>
-            <p className="text-xs text-gray-400 font-body mt-1">Le carburant préféré de nos athlètes d'élite.</p>
+            <p className="text-xs text-gray-400 font-body mt-1">Le carburant prÃ©fÃ©rÃ© de nos athlÃ¨tes d'Ã©lite.</p>
           </div>
           <button
             onClick={() => navigateTo("shop")}
@@ -202,11 +202,11 @@ export const HomePage = () => {
             <div>
               <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">ALGORITHME DE PERFORMANCE</h2>
               <p className="text-xs text-gray-300 font-body leading-relaxed mt-2">
-                Ne devinez plus. Notre algorithme exclusif analyse vos objectifs, votre niveau d'activité et votre morphologie pour vous recommander le stack de suppléments optimale.
+                Ne devinez plus. Notre algorithme exclusif analyse vos objectifs, votre niveau d'activitÃ© et votre morphologie pour vous recommander le stack de supplÃ©ments optimale.
               </p>
             </div>
             <div className="space-y-3">
-              {["DÉFINISSEZ VOTRE OBJECTIF PRINCIPAL", "ANALYSEZ VOS HABITUDES D'ENTRAÎNEMENT", "OBTENEZ VOTRE STACK PERSONNALISÉE"].map((step, i) => (
+              {["DÃ‰FINISSEZ VOTRE OBJECTIF PRINCIPAL", "ANALYSEZ VOS HABITUDES D'ENTRAÃŽNEMENT", "OBTENEZ VOTRE STACK PERSONNALISÃ‰E"].map((step, i) => (
                 <div key={i} className="flex items-center gap-4 bg-[#181818] p-4 rounded-lg border border-white/5">
                   <div className="w-8 h-8 bg-[#d90429] text-white font-black text-sm rounded flex items-center justify-center shrink-0">{i + 1}</div>
                   <span className="font-bold text-xs text-white uppercase">{step}</span>
@@ -218,7 +218,7 @@ export const HomePage = () => {
                 onClick={() => navigateTo("coach-ia")}
                 className="bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-8 py-4 rounded-xs shadow-lg transition-colors"
               >
-                DÉMARRER LE QUIZ (2 MIN)
+                DÃ‰MARRER LE QUIZ (2 MIN)
               </button>
             </div>
           </div>
@@ -229,9 +229,9 @@ export const HomePage = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-white/10">
           {[
-            { icon: Truck, title: 'LIVRAISON RAPIDE', desc: 'Expédition sous 24/48h partout en Tunisie.' },
-            { icon: FlaskConical, title: 'TESTÉ EN LABO', desc: 'Pureté garantie et sans substance interdite.' },
-            { icon: ShieldCheck, title: 'EXPERTISE 25 ANS', desc: 'Formulation de niveau supérieur recommandée.' },
+            { icon: Truck, title: 'LIVRAISON RAPIDE', desc: 'ExpÃ©dition sous 24/48h partout en Tunisie.' },
+            { icon: FlaskConical, title: 'TESTÃ‰ EN LABO', desc: 'PuretÃ© garantie et sans substance interdite.' },
+            { icon: ShieldCheck, title: 'EXPERTISE 25 ANS', desc: 'Formulation de niveau supÃ©rieur recommandÃ©e.' },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="flex items-center gap-4 p-5 bg-[#181818] border border-white/5 rounded-lg">
               <Icon className="w-8 h-8 text-white shrink-0" />
@@ -241,6 +241,64 @@ export const HomePage = () => {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+      {/* ================= 6. OBJECTIFS CLIENT ================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
+        <div className="bg-[#0e0e0e] border border-white/10 rounded-xl p-6 sm:p-10">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-8">
+            <div>
+              <div className="inline-flex items-center gap-2 text-[#d90429] font-black text-[10px] tracking-[0.28em] uppercase">
+                <span className="w-1.5 h-4 bg-[#d90429] inline-block" /> OBJECTIFS CLIENT
+              </div>
+              <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight mt-3">
+                Client goals
+              </h2>
+              <p className="text-xs text-gray-400 font-body mt-2 max-w-2xl leading-relaxed">
+                Simple, direct recommendations to help each client find the products that match their goal.
+              </p>
+            </div>
+
+            <button
+              onClick={() => navigateTo("calculator")}
+              className="inline-flex items-center gap-2 bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-6 py-3 rounded-xs transition-colors w-fit"
+            >
+              DEFINE MY GOAL <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[
+              {
+                icon: Flame,
+                title: "CUTTING / FAT LOSS",
+                desc: "For clients who want to keep energy high while improving body composition.",
+              },
+              {
+                icon: Dumbbell,
+                title: "MUSCLE GAIN",
+                desc: "For those who want more strength, more size, and steady progress.",
+              },
+              {
+                icon: Target,
+                title: "PERFORMANCE",
+                desc: "To improve training intensity, focus, and explosiveness.",
+              },
+              {
+                icon: HeartPulse,
+                title: "RECOVERY",
+                desc: "To recover better between sessions and support cleaner muscle regeneration.",
+              },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="group bg-[#181818] border border-white/5 hover:border-[#d90429]/50 rounded-xl p-5 transition-colors">
+                <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mb-4 group-hover:bg-[#d90429] group-hover:border-[#d90429] transition-colors">
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="font-black text-sm text-white uppercase tracking-wider">{title}</h3>
+                <p className="text-[11px] text-gray-400 font-body leading-relaxed mt-2">{desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>
