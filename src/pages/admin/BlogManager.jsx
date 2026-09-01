@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { blogArticleService, blogCategoryService, iriToId } from '../../services/api';
+import { blogArticleService, blogCategoryService, iriToId, mediaUrl } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, X, Loader2, Check, Upload, Eye, EyeOff, Star } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
-const IMG_BASE = 'https://127.0.0.1:8000/uploads/blog/';
 const EMPTY = { title: '', summary: '', content: '', seoTitle: '', seoDescription: '', published: false, featured: false, categoryId: '' };
 
 export const BlogManager = () => {
@@ -164,7 +164,7 @@ export const BlogManager = () => {
           ) : articles.map(a => (
             <div key={a.id} className="p-5 hover:bg-[#1a1a1a] flex items-center gap-4 group transition-colors">
               <div className="w-16 h-12 bg-[#111] rounded-lg overflow-hidden shrink-0">
-                {a.image ? <img src={`${IMG_BASE}${a.image}`} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">N/A</div>}
+                {a.image ? <img src={mediaUrl(`blog/${a.image}`)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs">N/A</div>}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-white text-sm truncate">{a.title}</h3>
@@ -178,13 +178,19 @@ export const BlogManager = () => {
                   {a.published ? 'Publié' : 'Brouillon'}
                 </span>
                 {a.featured && <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">À la une</span>}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleAction(a.id, a.published ? 'unpublish' : 'publish')} title={a.published ? 'Dépublier' : 'Publier'} className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg">
+                <div className="flex gap-1">
+                  <AdminActionButton label={a.published ? 'Unpublish' : 'Publish'} onClick={() => handleAction(a.id, a.published ? 'unpublish' : 'publish')} className="p-1.5 text-gray-300 hover:text-emerald-400 hover:bg-emerald-400/10">
                     {a.published ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                  <button onClick={() => handleAction(a.id, 'featured')} title="Mettre en avant" className="p-1.5 text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg"><Star size={14} /></button>
-                  <button onClick={() => openEdit(a)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                  <button onClick={() => handleDelete(a.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+                  </AdminActionButton>
+                  <AdminActionButton label="Feature" onClick={() => handleAction(a.id, 'featured')} className="p-1.5 text-gray-300 hover:text-yellow-400 hover:bg-yellow-400/10">
+                    <Star size={14} />
+                  </AdminActionButton>
+                  <AdminActionButton label="Edit" onClick={() => openEdit(a)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                    <Edit2 size={14} />
+                  </AdminActionButton>
+                  <AdminActionButton label="Delete" onClick={() => handleDelete(a.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                    <Trash2 size={14} />
+                  </AdminActionButton>
                 </div>
               </div>
             </div>

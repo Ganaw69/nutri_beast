@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { productService, recipeService } from '../../services/api';
+import { productService, recipeService, mediaUrl } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, X, Loader2, Check, Upload, ChefHat, Clock, Flame } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_INGREDIENT = { name: '', quantity: '100', unit: 'g' };
 
@@ -240,7 +241,7 @@ export const RecipeManager = () => {
           ) : recipes.map((recipe) => (
             <div key={recipe.id} className="p-5 hover:bg-[#1a1a1a] flex items-center gap-4 group transition-colors">
               <div className="w-16 h-12 bg-[#111] rounded-lg overflow-hidden shrink-0">
-                {recipe.image ? <img src={`https://127.0.0.1:8000/uploads/recipes/${recipe.image}`} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs"><ChefHat size={16} /></div>}
+                {recipe.image ? <img src={mediaUrl(`recipes/${recipe.image}`)} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-600 text-xs"><ChefHat size={16} /></div>}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-white text-sm truncate">{recipe.title}</h3>
@@ -250,9 +251,13 @@ export const RecipeManager = () => {
                   <span className="flex items-center gap-1"><Flame className="w-3 h-3" /> {recipe.calories || 0} kcal</span>
                 </div>
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openEdit(recipe)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                <button onClick={() => handleDelete(recipe.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+              <div className="flex gap-1">
+                <AdminActionButton label="Edit" onClick={() => openEdit(recipe)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                  <Edit2 size={14} />
+                </AdminActionButton>
+                <AdminActionButton label="Delete" onClick={() => handleDelete(recipe.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                  <Trash2 size={14} />
+                </AdminActionButton>
               </div>
             </div>
           ))}

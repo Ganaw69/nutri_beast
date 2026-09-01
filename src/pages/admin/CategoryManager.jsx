@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { categoryService } from '../../services/api';
 import { buildCategoryTree, extractCategoryItems } from '../../utils/categoryTree';
 import { FolderTree, Plus, Edit2, Trash2, ChevronRight, ChevronDown, X, Loader2, Check, Upload } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_FORM = {
   name: '',
@@ -184,7 +185,7 @@ export const CategoryManager = () => {
         <div className={`flex items-center justify-between px-4 py-3 hover:bg-[#222] transition-colors group rounded-lg ${depth > 0 ? 'ml-6 border-l border-[#2a2a2a] pl-4' : ''}`}>
           <div className="flex items-center gap-3">
             {children.length > 0 ? (
-              <button onClick={() => toggleExpand(cat.id)} className="text-gray-400 hover:text-white">
+              <button onClick={() => toggleExpand(cat.id)} className="text-white/60 hover:text-white">
                 {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </button>
             ) : <div className="w-4" />}
@@ -194,10 +195,16 @@ export const CategoryManager = () => {
               {cat.isActive ? 'Actif' : 'Inactif'}
             </span>
           </div>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => openNew(cat.id)} title="Ajouter sous-categorie" className="p-1.5 text-gray-400 hover:text-[#d90429] hover:bg-[#d90429]/10 rounded-lg"><Plus size={14} /></button>
-            <button onClick={() => openEdit(cat)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-            <button onClick={() => handleDelete(cat.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+          <div className="flex items-center gap-1">
+            <AdminActionButton label="Add subcategory" onClick={() => openNew(cat.id)} className="p-1.5 text-gray-300 hover:text-[#d90429] hover:bg-[#d90429]/10">
+              <Plus size={14} />
+            </AdminActionButton>
+            <AdminActionButton label="Edit" onClick={() => openEdit(cat)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+              <Edit2 size={14} />
+            </AdminActionButton>
+            <AdminActionButton label="Delete" onClick={() => handleDelete(cat.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+              <Trash2 size={14} />
+            </AdminActionButton>
           </div>
         </div>
 
@@ -228,9 +235,11 @@ export const CategoryManager = () => {
               <div className="text-white font-black text-sm">{subCategoryCount}</div>
             </div>
           </div>
-          <button onClick={() => openNew()} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-[#d90429]/20">
-            <Plus size={16} /> Nouvelle Categorie
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => openNew()} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-[#d90429]/20">
+              <Plus size={16} /> Nouvelle Categorie
+            </button>
+          </div>
         </div>
       </div>
 

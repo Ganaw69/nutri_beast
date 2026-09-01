@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { orderService } from '../../services/api';
-import { Search, Eye, X, Loader2, Package, Truck, Check, XCircle, RefreshCw } from 'lucide-react';
+import { orderService, productService } from '../../services/api';
+import { Search, Eye, X, Loader2, Package, Truck, Check, XCircle, RefreshCw, Plus } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const STATUS_COLORS = {
   pending:   'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
@@ -25,6 +26,10 @@ const TRANSITIONS = {
   cancelled: [],
 };
 
+const EMPTY_ORDER_FORM = {
+  firstName: '', lastName: '', phone: '', email: '', address: '', city: '', postalCode: '', notes: '', productId: '', quantity: 1,
+};
+
 const TRANSITION_LABELS = { confirm: 'Confirmer', prepare: 'Préparer', ship: 'Expédier', deliver: 'Livrer', cancel: 'Annuler' };
 
 export const OrderManager = () => {
@@ -35,6 +40,11 @@ export const OrderManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [detail, setDetail] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [products, setProducts] = useState([]);
+  const [form, setForm] = useState(EMPTY_ORDER_FORM);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -49,6 +59,17 @@ export const OrderManager = () => {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
+  useEffect(() => {
+    if (!showCreate) return;
+    productService.getAll({ isActive: true, itemsPerPage: 200 }, true)
+      .then((data) => {
+        const available = data['hydra:member'] || [];
+        setProducts(available);
+        setForm((current) => ({ ...current, productId: current.productId || String(available[0]?.id || '') }));
+      })
+      .catch((e) => setCreateError(e.message));
+  }, [showCreate]);
+
   const handleTransition = async (id, action) => {
     setTransitioning(true);
     try {
@@ -62,11 +83,43 @@ export const OrderManager = () => {
     setTransitioning(false);
   };
 
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const product = products.find((item) => String(item.id) === String(form.productId));
+    if (!product?.sku) {
+      setCreateError('Selectionnez un produit valide.');
+      return;
+    }
+    setCreating(true);
+    setCreateError('');
+    try {
+      await orderService.create({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: form.phone,
+        email: form.email || null,
+        address: form.address || null,
+        city: form.city || null,
+        postalCode: form.postalCode || null,
+        notes: form.notes || null,
+        items: [{ sku: product.sku, quantity: Number(form.quantity) }],
+      });
+      setShowCreate(false);
+      setForm(EMPTY_ORDER_FORM);
+      await fetchOrders();
+    } catch (e) {
+      setCreateError(e.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const filtered = orders.filter(o =>
     !searchTerm ||
     (o.reference || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (`${o.firstName} ${o.lastName}`).toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const statusKey = String(detail?.status || '').toLowerCase();
 
   return (
     <div className="space-y-6">
@@ -75,7 +128,14 @@ export const OrderManager = () => {
           <h1 className="text-2xl font-bold text-white mb-1">Gestion Commandes</h1>
           <p className="text-gray-400 text-sm">{total} commande{total !== 1 ? 's' : ''} au total</p>
         </div>
-        <button onClick={fetchOrders} className="p-2 text-gray-400 hover:text-white bg-[#222] border border-[#333] rounded-lg"><RefreshCw size={16} /></button>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowCreate(true); setCreateError(''); }} className="px-4 py-2 rounded-lg bg-[#d90429] hover:bg-[#ff1a3c] text-white text-sm font-bold flex items-center gap-2">
+            <Plus size={16} /> Nouvelle commande
+          </button>
+          <AdminActionButton label="Refresh" onClick={fetchOrders} className="p-2 text-gray-300 hover:text-white bg-[#222] border border-[#333]">
+            <RefreshCw size={16} />
+          </AdminActionButton>
+        </div>
       </div>
 
       <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl overflow-hidden">
@@ -111,14 +171,19 @@ export const OrderManager = () => {
                   <td className="px-5 py-4 text-sm text-gray-500">{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
                   <td className="px-5 py-4 font-bold text-white">{parseFloat(o.total || 0).toFixed(2)} TND</td>
                   <td className="px-5 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${STATUS_COLORS[o.status] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
-                      {STATUS_LABELS[o.status] || o.status}
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${STATUS_COLORS[String(o.status || '').toLowerCase()] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+                      {STATUS_LABELS[String(o.status || '').toLowerCase()] || o.status}
                     </span>
+                    {String(o.paymentStatus || '').toLowerCase() === 'paid' && <span className="ml-1 inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Paid</span>}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <button onClick={() => orderService.getOne(o.id).then(setDetail)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg transition-opacity"
-                    ><Eye size={14} /></button>
+                    <AdminActionButton
+                      label="View"
+                      onClick={() => orderService.getOne(o.id).then(setDetail)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-300 hover:text-white hover:bg-[#333] transition-opacity"
+                    >
+                      <Eye size={14} />
+                    </AdminActionButton>
                   </td>
                 </tr>
               ))}
@@ -134,6 +199,33 @@ export const OrderManager = () => {
           </div>
         </div>
       </div>
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <form onSubmit={handleCreate} className="bg-[#161616] border border-[#2a2a2a] rounded-xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-white text-lg">Nouvelle commande</h3>
+              <button type="button" onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+            </div>
+            {createError && <div className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg p-3">{createError}</div>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {['firstName', 'lastName', 'phone', 'email', 'address', 'city', 'postalCode'].map((field) => (
+                <input key={field} required={['firstName', 'lastName', 'phone'].includes(field)} placeholder={field} type={field === 'email' ? 'email' : 'text'} value={form[field]} onChange={(e) => setForm((current) => ({ ...current, [field]: e.target.value }))} className="bg-[#222] border border-[#333] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#d90429]" />
+              ))}
+              <select required value={form.productId} onChange={(e) => setForm((current) => ({ ...current, productId: e.target.value }))} className="bg-[#222] border border-[#333] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#d90429]">
+                <option value="">Produit</option>
+                {products.map((product) => <option key={product.id} value={product.id}>{product.name} {product.sku ? `(${product.sku})` : ''}</option>)}
+              </select>
+              <input required min="1" type="number" placeholder="Quantite" value={form.quantity} onChange={(e) => setForm((current) => ({ ...current, quantity: e.target.value }))} className="bg-[#222] border border-[#333] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#d90429]" />
+            </div>
+            <textarea placeholder="Notes" rows={3} value={form.notes} onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))} className="w-full bg-[#222] border border-[#333] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#d90429]" />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-lg bg-[#333] text-white text-sm font-bold">Annuler</button>
+              <button type="submit" disabled={creating} className="px-4 py-2 rounded-lg bg-[#d90429] text-white text-sm font-bold disabled:opacity-60">{creating ? 'Creation...' : 'Creer la commande'}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Detail Modal */}
       {detail && (
@@ -162,9 +254,9 @@ export const OrderManager = () => {
             </div>
 
             {/* Transition Actions */}
-            {(TRANSITIONS[detail.status] || []).length > 0 && (
+            {(TRANSITIONS[statusKey] || []).length > 0 && (
               <div className="p-5 border-t border-[#2a2a2a] flex flex-wrap gap-2">
-                {TRANSITIONS[detail.status].map(action => (
+                {TRANSITIONS[statusKey].map(action => (
                   <button key={action} disabled={transitioning}
                     onClick={() => handleTransition(detail.id, action)}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-60 ${action === 'cancel' ? 'bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-[#d90429] hover:bg-[#ff1a3c] text-white'}`}

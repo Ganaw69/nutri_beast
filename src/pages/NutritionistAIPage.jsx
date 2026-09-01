@@ -10,13 +10,13 @@ const normalizeProduct = (p) => ({
   image: resolveProductImage(p, null),
 });
 
-export const CoachIaPage = () => {
+export const NutritionistAIPage = () => {
   const { viewProductDetails } = useCart();
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: "ai",
-      text: "Bonjour Athlete ! Posez une question sur vos objectifs et je vous recommanderai des produits du catalogue.",
+      text: "Bonjour Athlete ! Posez une question nutrition et je vous recommanderai les meilleurs produits du catalogue.",
       recommendedProduct: null,
     },
   ]);
@@ -26,8 +26,15 @@ export const CoachIaPage = () => {
   const messagesContainerRef = useRef(null);
 
   useEffect(() => {
-    productService.getAll({ isActive: true, itemsPerPage: 100 }, true)
-      .then((data) => Promise.all((data?.["hydra:member"] || []).map((product) => productService.getOne(product.id, true).catch(() => product))))
+    productService
+      .getAll({ isActive: true, itemsPerPage: 100 }, true)
+      .then((data) =>
+        Promise.all(
+          (data?.["hydra:member"] || []).map((product) =>
+            productService.getOne(product.id, true).catch(() => product)
+          )
+        )
+      )
       .then((detailedProducts) => setCatalog(detailedProducts.map(normalizeProduct)))
       .catch(() => setCatalog([]));
   }, []);
@@ -41,28 +48,28 @@ export const CoachIaPage = () => {
 
   const getRecommendation = (text) => {
     const lower = text.toLowerCase();
-    const whey = catalog.find((p) => /whey|protein|protéine|proteine/i.test(p.name)) || catalog[0];
-    const creatine = catalog.find((p) => /creatine|créatine/i.test(p.name)) || catalog[1] || catalog[0];
-    const gainer = catalog.find((p) => /gainer|mass/i.test(p.name)) || catalog[2] || catalog[0];
-    const preWorkout = catalog.find((p) => /pre|pre-workout|booster/i.test(p.name)) || catalog[3] || catalog[0];
+    const whey = catalog.find((p) => /whey|protein|proteine|protéine/i.test(p.name)) || catalog[0];
+    const gainer = catalog.find((p) => /gainer|mass|bulk/i.test(p.name)) || catalog[1] || catalog[0];
+    const recovery = catalog.find((p) => /recovery|creatine|créatine|force/i.test(p.name)) || catalog[2] || catalog[0];
+    const preWorkout = catalog.find((p) => /pre|pre-workout|booster|energy|energie/i.test(p.name)) || catalog[3] || catalog[0];
 
-    if (lower.includes("masse") || lower.includes("grossir") || lower.includes("gainer")) {
+    if (lower.includes("masse") || lower.includes("grossir") || lower.includes("bulk")) {
       return {
-        text: "Pour une prise de masse, visez un surplus calorique propre et une source de protéines régulière.",
+        text: "Pour une prise de masse, visez un apport calorique cohérent et un support gainer ou protein plus nourrissant.",
         product: gainer || whey,
       };
     }
 
     if (lower.includes("créatine") || lower.includes("creatine") || lower.includes("force")) {
       return {
-        text: "La créatine monohydrate reste un classique pour la force et la performance.",
-        product: creatine || whey,
+        text: "Pour la force, un support autour de la créatine et de la récupération est souvent pertinent.",
+        product: recovery || whey,
       };
     }
 
-    if (lower.includes("sèche") || lower.includes("seche") || lower.includes("maigrir") || lower.includes("isolat")) {
+    if (lower.includes("sèche") || lower.includes("seche") || lower.includes("maigrir") || lower.includes("isolat") || lower.includes("cut")) {
       return {
-        text: "En sèche, privilégiez une protéine maigre et un apport protidique élevé.",
+        text: "En sèche, privilégiez une protéine propre avec peu de calories inutiles.",
         product: whey || catalog[0],
       };
     }
@@ -75,7 +82,7 @@ export const CoachIaPage = () => {
     }
 
     return {
-      text: "Pour maximiser vos résultats, gardez une routine constante, un apport protéique suffisant et un bon sommeil.",
+      text: "Pour optimiser vos résultats, gardez une routine constante, un apport protidique suffisant et un bon sommeil.",
       product: whey || catalog[0],
     };
   };
@@ -120,33 +127,31 @@ export const CoachIaPage = () => {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-heading font-black text-base sm:text-xl text-white uppercase truncate">COACH IA NUTRITION & ATHLETISME</h1>
+              <h1 className="font-heading font-black text-base sm:text-xl text-white uppercase truncate">NUTRITIONIST AI</h1>
               <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/30">
                 EN LIGNE
               </span>
             </div>
-            <p className="text-xs text-gray-300">Posez vos questions nutrition et découvrez les compléments du catalogue.</p>
+            <p className="text-xs text-gray-300">Posez vos questions nutrition et recevez une recommandation du catalogue.</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
         <button
           onClick={() =>
             setMessages([
-                {
-                  id: 1,
-                  sender: "ai",
-                  text: "Conversation réinitialisée ! Quel est votre objectif aujourd'hui ?",
-                  recommendedProduct: null,
-                },
-              ])
-            }
-            className="text-gray-400 hover:text-white p-2 rounded-lg bg-surface border border-white/10"
-            title="Réinitialiser le chat"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
+              {
+                id: 1,
+                sender: "ai",
+                text: "Conversation réinitialisée ! Quel est votre objectif aujourd'hui ?",
+                recommendedProduct: null,
+              },
+            ])
+          }
+          className="text-gray-400 hover:text-white p-2 rounded-lg bg-surface border border-white/10"
+          title="Réinitialiser le chat"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -224,7 +229,7 @@ export const CoachIaPage = () => {
               </div>
               <div className="bg-surface-high border border-white/10 px-4 py-3 rounded-2xl text-xs text-gray-400 flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-accent-gold rounded-full animate-ping" />
-                <span>Le Coach IA prépare votre recommandation...</span>
+                <span>Nutritionist AI prepare your recommendation...</span>
               </div>
             </div>
           )}
@@ -240,7 +245,7 @@ export const CoachIaPage = () => {
         >
           <input
             type="text"
-            placeholder="Posez votre question nutrition au Coach IA..."
+            placeholder="Posez votre question nutrition au Nutritionist AI..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             className="w-full flex-1 bg-surface border border-white/10 rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-gold"

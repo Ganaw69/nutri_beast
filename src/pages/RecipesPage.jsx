@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { recipeService } from "../services/api";
+import { recipeService, mediaUrl } from "../services/api";
 import { Clock, Flame, ChefHat, Loader2 } from "lucide-react";
-
-const IMG_BASE = 'https://127.0.0.1:8000/uploads/recipes/';
 
 const difficultyLabel = { easy: 'Facile', medium: 'Moyen', hard: 'Difficile' };
 const difficultyColor = { easy: 'text-emerald-400', medium: 'text-yellow-400', hard: 'text-red-400' };
@@ -35,7 +33,7 @@ export const RecipesPage = () => {
             <span className="text-gray-400 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {r.preparationTime + r.cookingTime} min</span>
             <span className="text-gray-400 flex items-center gap-1"><Flame className="w-3.5 h-3.5" /> {r.calories} kcal</span>
           </div>
-          {r.image && <img src={`${IMG_BASE}${r.image}`} alt={r.title} className="w-full rounded-xl aspect-video object-cover" />}
+          {r.image && <img src={mediaUrl(`recipes/${r.image}`)} alt={r.title} className="w-full rounded-xl aspect-video object-cover" />}
           <p className="text-gray-300 leading-relaxed">{r.description}</p>
           {r.ingredients?.length > 0 && (
             <div className="bg-[#1a1a1a] border border-white/10 rounded-xl p-6 space-y-3">
@@ -78,7 +76,7 @@ export const RecipesPage = () => {
               >
                 <div className="aspect-video bg-[#111] overflow-hidden">
                   {r.image ? (
-                    <img src={`${IMG_BASE}${r.image}`} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={mediaUrl(`recipes/${r.image}`)} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-600"><ChefHat className="w-12 h-12" /></div>
                   )}

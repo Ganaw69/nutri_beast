@@ -38,7 +38,8 @@ export const CalculatorPage = () => {
 
   useEffect(() => {
     productService.getAll({ isActive: true, itemsPerPage: 100 }, true)
-      .then((data) => setCatalog((data?.["hydra:member"] || []).map(normalizeProduct)))
+      .then((data) => Promise.all((data?.["hydra:member"] || []).map((product) => productService.getOne(product.id, true).catch(() => product))))
+      .then((detailedProducts) => setCatalog(detailedProducts.map(normalizeProduct)))
       .catch(() => setCatalog([]));
   }, []);
 
@@ -250,11 +251,11 @@ export const CalculatorPage = () => {
               </div>
 
               <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <button onClick={() => navigateTo("coach-ia")} className="bg-white hover:bg-gray-100 text-black font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
-                  <Bot className="w-4 h-4 text-black" /> OPEN COACH
+                <button onClick={() => navigateTo("nutritionist-ai")} className="bg-white hover:bg-gray-100 text-black font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
+                  <Sparkles className="w-4 h-4 text-black" /> NUTRITIONIST AI
                 </button>
                 <button onClick={() => navigateTo("coach-ia")} className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
-                  <Sparkles className="w-4 h-4" /> BUILD A PLAN
+                  <Bot className="w-4 h-4" /> OPEN COACH
                 </button>
               </div>
             </div>

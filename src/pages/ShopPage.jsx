@@ -40,8 +40,8 @@ export const ShopPage = () => {
   // Load filter options once
   useEffect(() => {
     Promise.all([
-      categoryService.getAll({ isActive: true, pagination: false }, true).catch(() => ({ 'hydra:member': [] })),
-      goalService.getAll({ isActive: true, pagination: false }, true).catch(() => ({ 'hydra:member': [] })),
+      categoryService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+      goalService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
     ]).then(([catData, goalData]) => {
       setCategories(extractCategoryItems(catData));
       setGoals(goalData['hydra:member'] || []);
@@ -72,7 +72,12 @@ export const ShopPage = () => {
       else if (sortBy === 'featured') params['order[position]'] = 'asc';
 
       const data = await productService.getAll(params, true);
-      setProducts(data['hydra:member'] || []);
+      const productsWithDetails = await Promise.all(
+        (data['hydra:member'] || []).map((product) =>
+          productService.getOne(product.id, true).catch(() => product)
+        )
+      );
+      setProducts(productsWithDetails);
       setTotalCount(data['hydra:totalItems'] || 0);
     } catch (err) {
       setError(err.message);

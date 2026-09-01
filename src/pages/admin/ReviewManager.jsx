@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { reviewService } from '../../services/api';
 import { Search, Check, X, Trash2, Loader2, Star, RefreshCw } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 export const ReviewManager = () => {
   const [reviews, setReviews] = useState([]);
@@ -43,7 +44,9 @@ export const ReviewManager = () => {
           <h1 className="text-2xl font-bold text-white mb-1">Avis Clients</h1>
           <p className="text-gray-400 text-sm">{total} avis</p>
         </div>
-        <button onClick={fetchReviews} className="p-2 text-gray-400 hover:text-white bg-[#222] border border-[#333] rounded-lg"><RefreshCw size={16} /></button>
+        <AdminActionButton label="Refresh" onClick={fetchReviews} className="p-2 text-gray-300 hover:text-white bg-[#222] border border-[#333]">
+          <RefreshCw size={16} />
+        </AdminActionButton>
       </div>
 
       <div className="flex gap-2">
@@ -76,12 +79,18 @@ export const ReviewManager = () => {
                 <p className="text-xs text-gray-300 line-clamp-2">{r.comment}</p>
                 <p className="text-xs text-gray-500 mt-1">{r.product?.name || '—'}</p>
               </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 {filter === 'pending' && <>
-                  <button onClick={() => handleAction(r.id, 'approve')} className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg" title="Approuver"><Check size={14} /></button>
-                  <button onClick={() => handleAction(r.id, 'reject')} className="p-1.5 text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg" title="Rejeter"><X size={14} /></button>
+                  <AdminActionButton label="Approve" onClick={() => handleAction(r.id, 'approve')} className="p-1.5 text-gray-300 hover:text-emerald-400 hover:bg-emerald-400/10">
+                    <Check size={14} />
+                  </AdminActionButton>
+                  <AdminActionButton label="Reject" onClick={() => handleAction(r.id, 'reject')} className="p-1.5 text-gray-300 hover:text-yellow-400 hover:bg-yellow-400/10">
+                    <X size={14} />
+                  </AdminActionButton>
                 </>}
-                <button onClick={() => handleAction(r.id, 'delete')} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg" title="Supprimer"><Trash2 size={14} /></button>
+                <AdminActionButton label="Delete" onClick={() => handleAction(r.id, 'delete')} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                  <Trash2 size={14} />
+                </AdminActionButton>
               </div>
             </div>
           ))}

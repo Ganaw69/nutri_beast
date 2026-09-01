@@ -28,10 +28,10 @@ export const CartDrawer = () => {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-background/80 backdrop-blur-sm transition-opacity animate-fadeIn">
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-surface-dark border-l border-white/10 shadow-2xl flex flex-col justify-between">
+      <div className="absolute inset-y-0 right-0 flex w-full max-w-full sm:pl-10">
+        <div className="flex h-full w-full flex-col justify-between bg-surface-dark border-l border-white/10 shadow-2xl sm:ml-auto sm:max-w-md">
           {/* Header */}
-          <div className="p-6 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-6">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-md bg-primary/20 text-primary flex items-center justify-center">
                 <ShoppingCart className="w-5 h-5" />
@@ -50,7 +50,7 @@ export const CartDrawer = () => {
           </div>
 
           {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
             {cart.length === 0 ? (
               <div className="text-center py-16 space-y-4">
                 <div className="w-16 h-16 bg-surface-high rounded-full flex items-center justify-center mx-auto text-gray-500">
@@ -74,27 +74,27 @@ export const CartDrawer = () => {
               cart.map((item, index) => (
                 <div
                   key={`${item.id}-${item.selectedFlavor}-${item.selectedSize}-${index}`}
-                  className="bg-surface border border-white/5 rounded-xl p-4 flex gap-4 items-center group relative"
+                  className="bg-surface border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row gap-4 sm:items-center group relative"
                 >
                   <img
                     src={item.image}
                     alt={item.name}
-                    className="w-16 h-16 object-contain bg-surface-dark p-2 rounded-lg"
+                    className="w-20 h-20 sm:w-16 sm:h-16 object-contain bg-surface-dark p-2 rounded-lg self-center sm:self-auto"
                   />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 text-center sm:text-left">
                     <h4 className="font-heading font-bold text-sm text-white truncate">
                       {item.name}
                     </h4>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {item.selectedFlavor} • {item.selectedSize}
                     </p>
-                    <div className="flex items-center justify-between mt-3">
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <span className="font-heading font-black text-sm text-white">
                         {item.price * item.quantity} <span className="text-xs text-primary font-bold">TND</span>
                       </span>
 
                       {/* Qty controls */}
-                      <div className="flex items-center gap-2 bg-surface-high px-2 py-1 rounded-md border border-white/5">
+                      <div className="flex items-center gap-2 bg-surface-high px-2 py-1 rounded-md border border-white/5 self-center sm:self-auto">
                         <button
                           onClick={() => updateQuantity(index, -1)}
                           className="text-gray-400 hover:text-white"
@@ -116,7 +116,7 @@ export const CartDrawer = () => {
 
                   <button
                     onClick={() => removeFromCart(index)}
-                    className="text-gray-500 hover:text-red-400 p-1.5 transition-colors"
+                    className="absolute right-3 top-3 sm:static sm:ml-1 text-gray-500 hover:text-red-400 p-1.5 transition-colors"
                     title="Supprimer"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -128,9 +128,9 @@ export const CartDrawer = () => {
 
           {/* Footer Summary & Checkout */}
           {cart.length > 0 && (
-            <div className="p-6 bg-surface border-t border-white/10 space-y-4">
+            <div className="p-4 sm:p-6 bg-surface border-t border-white/10 space-y-4">
               {/* Promo Code Form */}
-              <form onSubmit={handlePromoSubmit} className="flex gap-2">
+              <form onSubmit={handlePromoSubmit} className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <input
                     type="text"
@@ -143,7 +143,7 @@ export const CartDrawer = () => {
                 </div>
                 <button
                   type="submit"
-                  className="bg-surface-high border border-white/10 hover:border-primary text-white text-xs font-heading font-bold px-4 py-2 rounded-lg transition-colors"
+                  className="w-full sm:w-auto bg-surface-high border border-white/10 hover:border-primary text-white text-xs font-heading font-bold px-4 py-2 rounded-lg transition-colors"
                 >
                   Appliquer
                 </button>

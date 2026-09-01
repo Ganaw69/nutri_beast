@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { blogArticleService } from "../services/api";
+import { blogArticleService, mediaUrl } from "../services/api";
 import { ChevronLeft, Calendar, Loader2 } from "lucide-react";
-
-const IMG_BASE = 'https://127.0.0.1:8000/uploads/blog/';
 
 export const BlogArticlePage = () => {
   const { selectedArticleId, navigateTo } = useCart();
@@ -49,7 +47,7 @@ export const BlogArticlePage = () => {
         )}
 
         {article.image && (
-          <img src={`${IMG_BASE}${article.image}`} alt={article.title}
+          <img src={mediaUrl(`blog/${article.image}`)} alt={article.title}
             className="w-full rounded-xl aspect-video object-cover"
           />
         )}

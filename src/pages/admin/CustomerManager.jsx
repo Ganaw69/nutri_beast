@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { userService } from "../../services/api";
 import { Users, Search, MoreHorizontal, Loader2 } from "lucide-react";
+import { AdminActionButton } from "../../components/admin/AdminActionButton";
 
 export const CustomerManager = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [detail, setDetail] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -24,6 +26,15 @@ export const CustomerManager = () => {
       return !search || haystack.includes(search.toLowerCase());
     });
   }, [users, search]);
+
+  const openCustomerDetail = async (customer) => {
+    try {
+      const fullCustomer = await userService.getOne(customer.id);
+      setDetail(fullCustomer || customer);
+    } catch (e) {
+      setDetail(customer);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -101,9 +112,13 @@ export const CustomerManager = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors">
+                      <AdminActionButton
+                        label="View"
+                        onClick={() => openCustomerDetail(customer)}
+                        className="p-2 text-gray-300 hover:text-white rounded-lg transition-colors"
+                      >
                         <MoreHorizontal size={16} />
-                      </button>
+                      </AdminActionButton>
                     </td>
                   </tr>
                 );
@@ -116,6 +131,50 @@ export const CustomerManager = () => {
           <div className="text-center py-10 text-gray-500">Aucun client trouvé.</div>
         )}
       </div>
+
+      {detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-xl border border-[#2a2a2a] bg-[#161616] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2a2a2a] p-5">
+              <div>
+                <h2 className="text-lg font-bold text-white">Customer details</h2>
+                <p className="text-xs text-gray-500">{detail.email || "No email"}</p>
+              </div>
+              <button onClick={() => setDetail(null)} className="text-gray-400 hover:text-white">×</button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-5">
+              <div className="rounded-lg bg-[#111] border border-[#2a2a2a] p-3">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500">Name</div>
+                <div className="mt-1 font-bold text-white">{detail.firstName || ""} {detail.lastName || ""}</div>
+              </div>
+              <div className="rounded-lg bg-[#111] border border-[#2a2a2a] p-3">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500">Email</div>
+                <div className="mt-1 font-bold text-white break-all">{detail.email || "—"}</div>
+              </div>
+              <div className="rounded-lg bg-[#111] border border-[#2a2a2a] p-3">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500">Phone</div>
+                <div className="mt-1 font-bold text-white">{detail.phone || "—"}</div>
+              </div>
+              <div className="rounded-lg bg-[#111] border border-[#2a2a2a] p-3">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500">Status</div>
+                <div className="mt-1 font-bold text-white">{detail.isActive !== false ? "Active" : "Inactive"}</div>
+              </div>
+            </div>
+            <div className="px-5 pb-5">
+              <div className="rounded-lg border border-[#2a2a2a] bg-[#111] p-3">
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Roles</div>
+                <div className="flex flex-wrap gap-2">
+                  {(detail.roles || []).map((role) => (
+                    <span key={role} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#d90429]/10 text-[#d90429] border border-[#d90429]/20">
+                      {role.replace("ROLE_", "")}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

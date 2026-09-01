@@ -7,12 +7,22 @@
     background-color: #131313;
     color: #e5e2e1;
     font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Montserrat', sans-serif;
     letter-spacing: 0.02em;
   }
+}
+
+/* Admin labels and supporting copy use a high-contrast white treatment. */
+.admin-shell .text-gray-200,
+.admin-shell .text-gray-300,
+.admin-shell .text-gray-400,
+.admin-shell .text-gray-500,
+.admin-shell .text-gray-600 {
+  color: #ffffff !important;
 }
 
 /* Apex Athletic Glowing Wave Background Effect */

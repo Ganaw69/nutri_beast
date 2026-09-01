@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { brandService } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, X, Loader2, Check, Globe } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY = { name: '', slug: '', description: '', website: '', isActive: true };
 
@@ -90,9 +91,13 @@ export const BrandManager = () => {
                 {b.website && <div className="flex items-center gap-1 text-xs text-gray-500 mt-1"><Globe size={10} />{b.website}</div>}
                 {b.description && <p className="text-xs text-gray-400 mt-1 line-clamp-1">{b.description}</p>}
               </div>
-              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openEdit(b)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                <button onClick={() => handleDelete(b.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+              <div className="flex gap-2">
+                <AdminActionButton label="Edit" onClick={() => openEdit(b)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                  <Edit2 size={14} />
+                </AdminActionButton>
+                <AdminActionButton label="Delete" onClick={() => handleDelete(b.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                  <Trash2 size={14} />
+                </AdminActionButton>
               </div>
             </div>
           ))}

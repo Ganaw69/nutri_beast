@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { bannerService } from '../../services/api';
+import { bannerService, mediaUrl } from '../../services/api';
 import { Plus, Trash2, Edit2, X, Loader2, Check, Upload, Image } from 'lucide-react';
-
-const DESKTOP_BASE = 'https://127.0.0.1:8000/uploads/banners/desktop/';
-const MOBILE_BASE  = 'https://127.0.0.1:8000/uploads/banners/mobile/';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const LINK_TYPES = ['PRODUCT', 'CATEGORY', 'CMS', 'EXTERNAL_URL'];
 const EMPTY = { title: '', subtitle: '', description: '', buttonLabel: '', buttonLink: '', linkType: 'EXTERNAL_URL', position: 0, isActive: true, startDate: '', endDate: '' };
@@ -102,7 +100,7 @@ export const BannerManager = () => {
             <div key={b.id} className="bg-[#161616] border border-[#2a2a2a] rounded-xl overflow-hidden group">
               <div className="aspect-video bg-[#111] relative">
                 {b.imageDesktop ? (
-                  <img src={`${DESKTOP_BASE}${b.imageDesktop}`} alt={b.title} className="w-full h-full object-cover" />
+                  <img src={mediaUrl(`banners/desktop/${b.imageDesktop}`)} alt={b.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-600"><Image size={40} /></div>
                 )}
@@ -123,9 +121,13 @@ export const BannerManager = () => {
                   <span className="font-bold text-white mr-2">Position {b.position}</span>
                   {b.linkType && <span className="bg-[#333] px-2 py-0.5 rounded">{b.linkType}</span>}
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(b)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                  <button onClick={() => handleDelete(b.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+                <div className="flex gap-2">
+                  <AdminActionButton label="Edit" onClick={() => openEdit(b)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                    <Edit2 size={14} />
+                  </AdminActionButton>
+                  <AdminActionButton label="Delete" onClick={() => handleDelete(b.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                    <Trash2 size={14} />
+                  </AdminActionButton>
                 </div>
               </div>
             </div>

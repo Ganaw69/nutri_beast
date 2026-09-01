@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { productService, categoryService, brandService, goalService, flavorService, productImageUrl, iriToId, isPrimaryProductImage } from '../../services/api';
+import { productService, categoryService, brandService, goalService, flavorService, productImageUrl, resolveProductImage, iriToId, isPrimaryProductImage } from '../../services/api';
 import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, ToggleLeft, Copy, Upload } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_FORM = {
   name: '', slug: '', sku: '', barcode: '', shortDescription: '', description: '',
@@ -131,9 +132,9 @@ export const ProductManager = () => {
 
   useEffect(() => {
     Promise.all([
-      categoryService.getAll({ pagination: false }).catch(() => ({ 'hydra:member': [] })),
+      categoryService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 200 }).catch(() => ({ 'hydra:member': [] })),
-      goalService.getAll({ pagination: false }).catch(() => ({ 'hydra:member': [] })),
+      goalService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
       flavorService.getAll().catch(() => ({ 'hydra:member': [] })),
     ]).then(([c, b, g, f]) => {
       setCategories(c['hydra:member'] || []);
@@ -176,29 +177,12 @@ export const ProductManager = () => {
   }, [imageFiles]);
 
   const hydrateProductImages = useCallback(async (productId, embeddedImages = []) => {
-    const attempts = [
-      { 'product.id': productId, itemsPerPage: 100 },
-      { product: productId, itemsPerPage: 100 },
-      { itemsPerPage: 100 },
-    ];
-
-    for (const params of attempts) {
-      try {
-        const data = await productService.getImages(params);
-        const members = data['hydra:member'] || [];
-        const matched = members.filter((img) => {
-          const relatedId = getProductImageProductId(img);
-          return relatedId == null || relatedId === productId;
-        });
-        if (matched.length > 0) {
-          return mergeProductImages(embeddedImages, matched);
-        }
-      } catch (_) {
-        // Try the next lookup shape.
-      }
+    try {
+      const fullProduct = await productService.getOne(productId, true);
+      return mergeProductImages(embeddedImages, fullProduct?.productImages || []);
+    } catch (_) {
+      return mergeProductImages(embeddedImages, []);
     }
-
-    return mergeProductImages(embeddedImages, []);
   }, []);
 
   const fetchProducts = useCallback(async () => {
@@ -207,7 +191,12 @@ export const ProductManager = () => {
       const params = { page, itemsPerPage: 20 };
       if (searchTerm) params.name = searchTerm;
       const data = await productService.getAll(params);
-      setProducts(data['hydra:member'] || []);
+      const productsWithDetails = await Promise.all(
+        (data['hydra:member'] || []).map((product) =>
+          productService.getOne(product.id).catch(() => product)
+        )
+      );
+      setProducts(productsWithDetails);
       setTotal(data['hydra:totalItems'] || 0);
     } catch (e) { setError(e.message); }
     setLoading(false);
@@ -407,8 +396,7 @@ export const ProductManager = () => {
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-[#222] flex items-center justify-center overflow-hidden shrink-0">
                         {(() => {
-                          const primary = p.productImages?.find((img) => isPrimaryProductImage(img)) || p.productImages?.[0];
-                          const primarySrc = productImageUrl(primary);
+                          const primarySrc = resolveProductImage(p, null);
                           return primarySrc
                             ? <img src={primarySrc} alt={p.name} className="w-full h-full object-cover" />
                             : <Package size={16} className="text-gray-500" />;
@@ -433,12 +421,22 @@ export const ProductManager = () => {
                     </span>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setStockModal({ id: p.id, name: p.name })} title="Ajuster le stock" className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg"><Package size={14} /></button>
-                      <button onClick={() => handleDuplicate(p.id)} title="Dupliquer" className="p-1.5 text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg"><Copy size={14} /></button>
-                      <button onClick={() => handleToggle(p)} title={p.isActive ? 'Désactiver' : 'Activer'} className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg"><ToggleLeft size={14} /></button>
-                      <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                      <button onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-[#d90429] hover:bg-[#d90429]/10 rounded-lg"><Trash2 size={14} /></button>
+                    <div className="flex items-center justify-end gap-1">
+                      <AdminActionButton label="Stock" onClick={() => setStockModal({ id: p.id, name: p.name })} className="p-1.5 text-gray-300 hover:text-blue-400 hover:bg-blue-400/10">
+                        <Package size={14} />
+                      </AdminActionButton>
+                      <AdminActionButton label="Duplicate" onClick={() => handleDuplicate(p.id)} className="p-1.5 text-gray-300 hover:text-yellow-400 hover:bg-yellow-400/10">
+                        <Copy size={14} />
+                      </AdminActionButton>
+                      <AdminActionButton label={p.isActive ? 'Deactivate' : 'Activate'} onClick={() => handleToggle(p)} className="p-1.5 text-gray-300 hover:text-emerald-400 hover:bg-emerald-400/10">
+                        <ToggleLeft size={14} />
+                      </AdminActionButton>
+                      <AdminActionButton label="Edit" onClick={() => openEdit(p)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                        <Edit2 size={14} />
+                      </AdminActionButton>
+                      <AdminActionButton label="Delete" onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-300 hover:text-[#d90429] hover:bg-[#d90429]/10">
+                        <Trash2 size={14} />
+                      </AdminActionButton>
                     </div>
                   </td>
                 </tr>

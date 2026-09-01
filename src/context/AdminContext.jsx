@@ -64,14 +64,14 @@ const readStoredJson = (key, fallback) => {
 const isJwtExpired = (token) => {
   if (!token || typeof token !== 'string') return true;
   const parts = token.split('.');
-  if (parts.length !== 3) return true;
+  if (parts.length !== 3) return false;
 
   try {
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
     if (!payload.exp) return false;
     return Date.now() >= payload.exp * 1000;
   } catch (_) {
-    return true;
+    return false;
   }
 };
 

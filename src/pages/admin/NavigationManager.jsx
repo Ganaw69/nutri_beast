@@ -23,7 +23,7 @@ export const NavigationManager = () => {
     setLoading(true);
     categoryService.getAll({
       isActive: true,
-      pagination: false,
+      itemsPerPage: 100,
       'order[position]': 'asc',
       'order[name]': 'asc',
     })

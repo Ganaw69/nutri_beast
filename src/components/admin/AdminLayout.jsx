@@ -9,7 +9,7 @@ export const AdminLayout = ({ children, activeAdminTab, setActiveAdminTab, onLog
   };
 
   return (
-    <div className="min-h-screen bg-[#101010] text-[#e5e2e1] flex font-sans selection:bg-[#d90429] selection:text-white">
+    <div className="admin-shell min-h-screen bg-[#101010] text-[#e5e2e1] flex font-sans selection:bg-[#d90429] selection:text-white">
       {/* Sidebar */}
       <AdminSidebar activeTab={activeAdminTab} setActiveTab={setActiveAdminTab} onExit={handleViewStore} onLogout={onLogout} />
 

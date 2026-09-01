@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { blogArticleService, blogCategoryService } from "../services/api";
+import { blogArticleService, blogCategoryService, mediaUrl } from "../services/api";
 import { Search, Calendar, Loader2, ChevronRight } from "lucide-react";
-
-const IMG_BASE = 'https://127.0.0.1:8000/uploads/blog/';
 
 export const BlogPage = () => {
   const { navigateTo, viewBlogArticle } = useCart();
@@ -74,7 +72,7 @@ export const BlogPage = () => {
               >
                 <div className="aspect-video bg-[#111] overflow-hidden">
                   {a.image ? (
-                    <img src={`${IMG_BASE}${a.image}`} alt={a.title}
+                    <img src={mediaUrl(`blog/${a.image}`)} alt={a.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   ) : (

@@ -32,7 +32,7 @@ export const AdminLoginPage = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center relative overflow-hidden">
+    <div className="admin-shell min-h-screen bg-[#0a0a0a] flex items-center justify-center relative overflow-hidden">
       {/* Animated background grid */}
       <div className="absolute inset-0 opacity-10"
         style={{

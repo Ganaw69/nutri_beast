@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { couponService } from '../../services/api';
 import { Plus, Edit2, Trash2, X, Loader2, Check, Tag } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY = { code: '', type: 'percentage', value: '', minimumAmount: '', usageLimit: '', startDate: '', endDate: '', isActive: true };
 
@@ -85,9 +86,13 @@ export const CouponManager = () => {
                   {c.isActive ? 'Actif' : 'Inactif'}
                 </span>
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openEdit(c)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                <button onClick={() => handleDelete(c.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+              <div className="flex gap-1">
+                <AdminActionButton label="Edit" onClick={() => openEdit(c)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                  <Edit2 size={14} />
+                </AdminActionButton>
+                <AdminActionButton label="Delete" onClick={() => handleDelete(c.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                  <Trash2 size={14} />
+                </AdminActionButton>
               </div>
             </div>
             <div className="text-2xl font-black text-[#d90429]">

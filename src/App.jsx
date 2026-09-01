@@ -8,6 +8,7 @@ import { HomePage } from "./pages/HomePage";
 import { ShopPage } from "./pages/ShopPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { CalculatorPage } from "./pages/CalculatorPage";
+import { NutritionistAIPage } from "./pages/NutritionistAIPage";
 import { CoachIaPage } from "./pages/CoachIaPage";
 import { CartPage } from "./pages/CartPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
@@ -44,6 +45,7 @@ const MainContent = () => {
       {activeTab === "shop" && <ShopPage />}
       {activeTab === "product-detail" && <ProductDetailPage />}
       {activeTab === "calculator" && <CalculatorPage />}
+      {activeTab === "nutritionist-ai" && <NutritionistAIPage />}
       {activeTab === "coach-ia" && <CoachIaPage />}
       {activeTab === "cart" && <CartPage />}
       {activeTab === "checkout" && <CheckoutPage />}

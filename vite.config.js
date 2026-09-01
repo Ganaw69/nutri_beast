@@ -8,15 +8,22 @@ export default defineConfig({
     cssMinify: 'esbuild'
   },
   server: {
-    historyApiFallback: true,
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
+    hmr: {
+      host: '127.0.0.1',
+      port: 5173,
+      clientPort: 5173,
+    },
     proxy: {
       '/api': {
-        target: 'https://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       },
       '/uploads': {
-        target: 'https://127.0.0.1:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       },

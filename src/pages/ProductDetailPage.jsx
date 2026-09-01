@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, reviewService, resolveProductImage, productImageUrl, isPrimaryProductImage } from "../services/api";
+import { productService, reviewService, flavorService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
   ChevronLeft, Zap, Loader2, Send
 } from "lucide-react";
 
-const normalizeProduct = (p) => ({
+const normalizeProduct = (p, flavorCatalog = []) => ({
   id: p.id,
   name: p.name,
   category: p.category?.name || '',
@@ -17,7 +17,7 @@ const normalizeProduct = (p) => ({
   image: resolveProductImage(p, null),
   badge: p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : null,
   inStock: (p.stock || 0) > 0,
-  flavors: p.flavors?.map(f => f.name) || [],
+  flavors: resolveProductFlavors(p, flavorCatalog),
   sizes: [],
   sku: p.sku,
   description: p.shortDescription || p.description || '',
@@ -48,17 +48,19 @@ export const ProductDetailPage = () => {
     setLoading(true);
 
     Promise.all([
-      productService.getOne(selectedProductId, true),
-      productService.getAll({ isActive: true, itemsPerPage: 4 }, true).catch(() => ({ 'hydra:member': [] })),
-      reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([prod, relData, revData]) => {
-      const norm = normalizeProduct(prod);
+    productService.getOne(selectedProductId, true),
+    productService.getAll({ isActive: true, itemsPerPage: 4 }, true).catch(() => ({ 'hydra:member': [] })),
+    reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
+    flavorService.getAll(true).catch(() => ({ 'hydra:member': [] })),
+    ]).then(([prod, relData, revData, flavorData]) => {
+      const flavorCatalog = flavorData['hydra:member'] || [];
+      const norm = normalizeProduct(prod, flavorCatalog);
       setProduct(norm);
       const primaryImageUrl = (prod?.productImages || [])
         .find((img) => isPrimaryProductImage(img));
       setActiveImage(resolveProductImage(prod, norm.image) || productImageUrl(primaryImageUrl));
       setSelectedFlavor(norm.flavors[0] || '');
-      const relProds = (relData['hydra:member'] || []).filter(p => p.id !== prod.id).slice(0, 3).map(normalizeProduct);
+      const relProds = (relData['hydra:member'] || []).filter(p => p.id !== prod.id).slice(0, 3).map((item) => normalizeProduct(item, flavorCatalog));
       setRelated(relProds);
       setReviews(revData['hydra:member'] || []);
       setLoading(false);

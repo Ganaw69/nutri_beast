@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, bannerService, resolveProductImage } from "../services/api";
+import { productService, bannerService, resolveProductImage, mediaUrl } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronRight, Loader2 } from "lucide-react";
 
@@ -29,9 +29,10 @@ export const HomePage = () => {
     Promise.all([
       productService.getAll({ isFeatured: true, isActive: true, itemsPerPage: 3 }, true).catch(() => ({ 'hydra:member': [] })),
       bannerService.getActive().catch(() => ({ 'hydra:member': [] })),
-    ]).then(([prodData, bannerData]) => {
+    ]).then(async ([prodData, bannerData]) => {
       const prods = prodData['hydra:member'] || [];
-      setBestSellers(prods.map(normalizeProduct));
+      const detailed = await Promise.all(prods.map((product) => productService.getOne(product.id, true).catch(() => product)));
+      setBestSellers(detailed.map(normalizeProduct));
       const banners = bannerData['hydra:member'] || [];
       if (banners.length > 0) setHeroBanner(banners[0]);
       setLoading(false);
@@ -43,7 +44,7 @@ export const HomePage = () => {
   const heroDesc = heroBanner?.description || 'Dominez vos entraînements avec une nutrition de précision testée en laboratoire pour une puissance et une récupération sans compromis.';
   const heroBtnLabel = heroBanner?.buttonLabel || 'DÉCOUVRIR LA GAMME';
   const heroBgImage = heroBanner?.imageDesktop
-    ? `https://127.0.0.1:8000/uploads/banners/desktop/${heroBanner.imageDesktop}`
+    ? mediaUrl(`banners/desktop/${heroBanner.imageDesktop}`)
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
 
   return (

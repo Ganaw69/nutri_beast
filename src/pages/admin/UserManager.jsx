@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { userService } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, X, Loader2, Check, User } from 'lucide-react';
+import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY = { email: '', firstName: '', lastName: '', phone: '', roles: ['ROLE_USER'], plainPassword: '' };
 
@@ -102,9 +103,13 @@ export const UserManager = () => {
                     <span key={r} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#d90429]/10 text-[#d90429] border border-[#d90429]/20">{r.replace('ROLE_', '')}</span>
                   ))}
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(u)} className="p-1.5 text-gray-400 hover:text-white hover:bg-[#333] rounded-lg"><Edit2 size={14} /></button>
-                  <button onClick={() => handleDelete(u.id)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg"><Trash2 size={14} /></button>
+                <div className="flex gap-2">
+                  <AdminActionButton label="Edit" onClick={() => openEdit(u)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]">
+                    <Edit2 size={14} />
+                  </AdminActionButton>
+                  <AdminActionButton label="Delete" onClick={() => handleDelete(u.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
+                    <Trash2 size={14} />
+                  </AdminActionButton>
                 </div>
               </div>
             </div>
