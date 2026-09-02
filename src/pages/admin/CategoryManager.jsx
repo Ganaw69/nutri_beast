@@ -6,20 +6,11 @@ import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_FORM = {
   name: '',
-  slug: '',
   description: '',
   position: 0,
   isActive: true,
   parent: '',
 };
-
-const slugify = (value) =>
-  value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
 
 const countChildren = (items = []) =>
   items.reduce((total, item) => total + 1 + countChildren(item.children || []), 0);
@@ -93,7 +84,6 @@ export const CategoryManager = () => {
   const openEdit = (cat) => {
     setForm({
       name: cat.name || '',
-      slug: cat.slug || '',
       description: cat.description || '',
       position: cat.position || 0,
       isActive: cat.isActive ?? true,
@@ -112,7 +102,6 @@ export const CategoryManager = () => {
     try {
       const payload = {
         name: form.name,
-        slug: form.slug || slugify(form.name),
         description: form.description || undefined,
         position: parseInt(form.position, 10) || 0,
         isActive: form.isActive,
@@ -268,11 +257,6 @@ export const CategoryManager = () => {
                 <div>
                   <label className={labelCls}>Nom *</label>
                   <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
-                </div>
-
-                <div>
-                  <label className={labelCls}>Slug</label>
-                  <input value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value }))} className={inputCls} placeholder="Auto generated if empty" />
                 </div>
 
                 <div>

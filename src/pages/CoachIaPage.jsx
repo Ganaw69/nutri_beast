@@ -120,7 +120,7 @@ export const CoachIaPage = () => {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-heading font-black text-base sm:text-xl text-white uppercase truncate">COACH IA NUTRITION & ATHLETISME</h1>
+              <h1 className="font-heading font-black text-base sm:text-xl text-white uppercase truncate">COACH IA</h1>
               <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/30">
                 EN LIGNE
               </span>

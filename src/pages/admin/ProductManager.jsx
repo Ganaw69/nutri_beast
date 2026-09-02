@@ -4,8 +4,8 @@ import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, Tog
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_FORM = {
-  name: '', slug: '', sku: '', barcode: '', shortDescription: '', description: '',
-  price: '', salePrice: '', stock: '', minimumStock: '3', weight: '',
+  name: '', sku: '', barcode: '', shortDescription: '', description: '',
+  price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', expirationDate: '',
   isActive: true, isFeatured: false, isNew: false, isOnSale: false,
   category: '', brand: '', goals: [], flavors: [],
   metaTitle: '', metaDescription: '',
@@ -21,6 +21,10 @@ const relationToIri = (value, resource) => {
   }
   return value['@id'] || value.iri || value['iri'] || (value.id ? `/api/${resource}/${value.id}` : '');
 };
+
+const collectionItems = (data) => data?.['hydra:member'] || data?.member || data?.items || [];
+const displayName = (item) => item?.name || item?.title || item?.label || '';
+const dateInputValue = (value) => (value ? String(value).slice(0, 10) : '');
 
 const normalizeProductImages = (images = []) =>
   [...images].sort((a, b) => Number(isPrimaryProductImage(b)) - Number(isPrimaryProductImage(a)) || Number(a?.position ?? 0) - Number(b?.position ?? 0));
@@ -82,17 +86,23 @@ const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
     if (key) byKey.set(key, img);
   });
 
-  const sourceImages = embeddedImages.length > 0 ? embeddedImages : fetchedImages;
+  const sourceImages = [...embeddedImages, ...fetchedImages];
+  const seen = new Set();
 
   return normalizeProductImages(sourceImages.map((img, index) => {
     const id = getProductImageId(img);
     const key = getProductImageKey(img);
     const fetched = (id != null && byId.get(String(id))) || (key && byKey.get(key)) || null;
+    const resolvedId = getProductImageId(fetched) ?? id;
+    const uniqueKey = resolvedId != null ? `id:${resolvedId}` : key ? `file:${key}` : `index:${index}`;
+    if (seen.has(uniqueKey)) return null;
+    seen.add(uniqueKey);
+
     if (fetched) {
       return {
         ...fetched,
         ...img,
-        id: getProductImageId(fetched) ?? id ?? getProductImageId(img),
+        id: resolvedId,
       };
     }
 
@@ -101,7 +111,7 @@ const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
     }
 
     return img;
-  }));
+  }).filter(Boolean));
 };
 
 export const ProductManager = () => {
@@ -137,10 +147,10 @@ export const ProductManager = () => {
       goalService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
       flavorService.getAll().catch(() => ({ 'hydra:member': [] })),
     ]).then(([c, b, g, f]) => {
-      setCategories(c['hydra:member'] || []);
-      setBrands(b['hydra:member'] || []);
-      setGoals(g['hydra:member'] || []);
-      setFlavors(f['hydra:member'] || []);
+      setCategories(collectionItems(c));
+      setBrands(collectionItems(b));
+      setGoals(collectionItems(g));
+      setFlavors(collectionItems(f));
     });
   }, []);
 
@@ -153,7 +163,7 @@ export const ProductManager = () => {
     const term = brandSearch.trim().toLowerCase();
     const sorted = [...brands].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr'));
     if (!term) return sorted;
-    return sorted.filter((brand) => (brand.name || '').toLowerCase().includes(term));
+    return sorted.filter((brand) => displayName(brand).toLowerCase().includes(term));
   }, [brands, brandSearch]);
 
   useEffect(() => {
@@ -178,8 +188,14 @@ export const ProductManager = () => {
 
   const hydrateProductImages = useCallback(async (productId, embeddedImages = []) => {
     try {
-      const fullProduct = await productService.getOne(productId, true);
-      return mergeProductImages(embeddedImages, fullProduct?.productImages || []);
+      const [fullProduct, imageData] = await Promise.all([
+        productService.getOne(productId, true),
+        productService.getImages({ 'product.id': productId, itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
+      ]);
+      return mergeProductImages(
+        embeddedImages.length > 0 ? embeddedImages : (fullProduct?.productImages || []),
+        imageData?.['hydra:member'] || []
+      );
     } catch (_) {
       return mergeProductImages(embeddedImages, []);
     }
@@ -213,10 +229,11 @@ export const ProductManager = () => {
     setBrandSearch('');
     setModal({ mode: 'edit', id: p.id });
     setForm({
-      name: p.name || '', slug: p.slug || '', sku: p.sku || '', barcode: p.barcode || '',
+      name: p.name || '', sku: p.sku || '', barcode: p.barcode || '',
       shortDescription: p.shortDescription || '', description: p.description || '',
       price: p.price || '', salePrice: p.salePrice || '', stock: p.stock || '',
       minimumStock: p.minimumStock || '3', weight: p.weight != null ? String(p.weight) : '',
+      expirationDate: dateInputValue(p.expirationDate || p.expiryDate),
       isActive: p.isActive ?? true, isFeatured: p.isFeatured ?? false,
       isNew: p.isNew ?? false, isOnSale: p.isOnSale ?? false,
       category: relationToIri(p.category, 'categories'),
@@ -229,10 +246,11 @@ export const ProductManager = () => {
     try {
       const fullProduct = await productService.getOne(p.id).catch(() => p);
       setForm({
-        name: fullProduct.name || '', slug: fullProduct.slug || '', sku: fullProduct.sku || '', barcode: fullProduct.barcode || '',
+        name: fullProduct.name || '', sku: fullProduct.sku || '', barcode: fullProduct.barcode || '',
         shortDescription: fullProduct.shortDescription || '', description: fullProduct.description || '',
         price: fullProduct.price || '', salePrice: fullProduct.salePrice || '', stock: fullProduct.stock || '',
       minimumStock: fullProduct.minimumStock || '3', weight: fullProduct.weight != null ? String(fullProduct.weight) : '',
+        expirationDate: dateInputValue(fullProduct.expirationDate || fullProduct.expiryDate),
         isActive: fullProduct.isActive ?? true, isFeatured: fullProduct.isFeatured ?? false,
         isNew: fullProduct.isNew ?? false, isOnSale: fullProduct.isOnSale ?? false,
         category: relationToIri(fullProduct.category, 'categories'),
@@ -466,9 +484,9 @@ export const ProductManager = () => {
             <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-5">
               {error && <div className="text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg p-3">{error}</div>}
               
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className={labelCls}>Nom *</label><input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Slug</label><input value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value }))} className={inputCls} /></div>
+              <div>
+                <label className={labelCls}>Nom *</label>
+                <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>SKU</label><input value={form.sku} onChange={e => setForm(p => ({ ...p, sku: e.target.value }))} className={inputCls} /></div>
@@ -481,6 +499,7 @@ export const ProductManager = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
+                <div><label className={labelCls}>Date d'expiration</label><input type="date" value={form.expirationDate} onChange={e => setForm(p => ({ ...p, expirationDate: e.target.value }))} className={inputCls} /></div>
               </div>
               <div>
                 <label className={labelCls}>Image produit</label>
@@ -628,13 +647,13 @@ export const ProductManager = () => {
                           key={b['@id'] ?? b.id ?? `brand-${index}`}
                           onClick={() => {
                             setForm((p) => ({ ...p, brand: iri }));
-                            setBrandSearch(b.name || '');
+                            setBrandSearch(displayName(b));
                           }}
                           className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-3 border-b border-[#222] last:border-b-0 ${
                             active ? 'bg-[#d90429]/10 text-white' : 'text-gray-300 hover:bg-[#1a1a1a] hover:text-white'
                           }`}
                         >
-                          <span className="truncate">{b.name}</span>
+                          <span className="truncate">{displayName(b)}</span>
                           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${b.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>
                             {b.isActive ? 'Active' : 'Inactive'}
                           </span>
@@ -651,7 +670,7 @@ export const ProductManager = () => {
                 </div>
               </div>
               <div><label className={labelCls}>Description courte</label><input value={form.shortDescription} onChange={e => setForm(p => ({ ...p, shortDescription: e.target.value }))} className={inputCls} /></div>
-              <div><label className={labelCls}>Description</label><textarea rows={3} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={`${inputCls} resize-none`} /></div>
+              <div><label className={labelCls}>Description longue</label><textarea rows={5} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               
               {/* Goals */}
               {goals.length > 0 && <div>

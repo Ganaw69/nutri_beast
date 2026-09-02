@@ -17,7 +17,6 @@ export const BlogManager = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategorySlug, setNewCategorySlug] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryModal, setCategoryModal] = useState(false);
 
@@ -96,22 +95,13 @@ export const BlogManager = () => {
     setCategorySaving(true);
     setError('');
     try {
-      const slug = newCategorySlug.trim() || name
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-
       await blogCategoryService.create({
         name,
-        slug,
         active: true,
         position: categories.length + 1,
       });
 
       setNewCategoryName('');
-      setNewCategorySlug('');
       setCategoryModal(false);
       fetchAll();
     } catch (e) {
@@ -268,15 +258,6 @@ export const BlogManager = () => {
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="Training"
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Slug</label>
-                <input
-                  value={newCategorySlug}
-                  onChange={(e) => setNewCategorySlug(e.target.value)}
-                  placeholder="training"
                   className={inputCls}
                 />
               </div>

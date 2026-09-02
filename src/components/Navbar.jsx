@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { CATEGORY_ARCHITECTURE } from "../data/categoryArchitecture";
+import logo from "../assets/logo.png";
 import {
   Search,
   ShoppingBag,
   Menu,
   X,
-  Shield,
   Dumbbell,
   Sparkles,
 } from "lucide-react";
@@ -84,6 +84,18 @@ export const Navbar = () => {
       children: category.children,
     })),
     []
+  );
+
+  const secondaryDesktopLinks = useMemo(
+    () => [
+      ...quickAccessStrip,
+      { id: "recipes", label: "Recettes" },
+      { id: "blog", label: "Blog" },
+      { id: "coach-ia", label: "Coach IA" },
+      { id: "nutritionist-ai", label: "Nutrition IA" },
+      { id: "calculator", label: "Calculateur" },
+    ],
+    [quickAccessStrip]
   );
 
   const navigateShop = (query = "") => {
@@ -186,7 +198,7 @@ export const Navbar = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#050505]/98 backdrop-blur-xl border-b border-[#2e261b] font-heading relative overflow-visible">
+    <header className="relative z-40 w-full bg-[#050505]/98 backdrop-blur-xl border-b border-[#2e261b] font-heading overflow-visible">
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <div className="navbar-red-shine-beam absolute top-0 bottom-0 w-[45%] opacity-40 blur-xl bg-gradient-to-r from-transparent via-[#ff1a3c] to-transparent pointer-events-none" />
         <div className="absolute inset-0 flex items-center opacity-45">
@@ -243,7 +255,7 @@ export const Navbar = () => {
             </svg>
           </div>
         </div>
-        <div className="absolute bottom-0 left-0 right-0 h-[2.5px] w-[60%] bg-gradient-to-r from-transparent via-[#ff6a2b] to-transparent navbar-bottom-laser" />
+        <div className="absolute bottom-0 left-0 w-full h-[2.5px] navbar-bottom-laser" />
       </div>
 
       <div className="relative z-10 py-1.5 px-4 overflow-hidden text-[10px] font-black tracking-[0.28em] uppercase text-center bg-[#8f1025] text-white">
@@ -267,25 +279,35 @@ export const Navbar = () => {
               <span>*</span>
               <span>{promoMessage}</span>
             </div>
+            <div className="banner-marquee__group" aria-hidden="true">
+              <span>{promoMessage}</span>
+              <span>*</span>
+              <span>{promoMessage}</span>
+              <span>*</span>
+              <span>{promoMessage}</span>
+              <span>*</span>
+              <span>{promoMessage}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-3">
-        <div className="flex items-center gap-4">
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 pt-2 pb-2">
+        <div className="flex items-center gap-4 xl:hidden">
           <button
             onClick={() => {
               setSelectedShopCategoryIds([]);
               navigateTo("home");
               setMobileMenuOpen(false);
             }}
-            className="flex items-center gap-3 focus:outline-none group shrink-0"
+            className="flex items-center focus:outline-none group shrink-0 py-1"
             title="Accueil"
           >
-            <div className="relative w-12 h-12 bg-gradient-to-br from-[#b51d35] to-[#5b0b19] rounded-xl flex items-center justify-center shadow-lg shadow-[#8f1025]/30 border border-[#d6b36a]/50 group-hover:scale-105 transition-transform">
-              <Shield className="w-7 h-7 text-white fill-white/20" />
-              <Dumbbell className="w-4 h-4 text-white absolute transform -rotate-45" />
-            </div>
+            <img 
+              src={logo} 
+              alt="Nutri Beast" 
+              className="h-20 w-auto sm:h-24 object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-200" 
+            />
           </button>
 
           <div className="hidden lg:flex items-center gap-4 ml-2">
@@ -296,10 +318,10 @@ export const Navbar = () => {
                   key={item.id}
                   type="button"
                   onClick={() => handleSectionClick(item.id)}
-                    className={`min-w-[118px] rounded-lg border px-4 py-2.5 text-xs font-black tracking-[0.16em] uppercase transition-all duration-200 ${
+                  className={`min-w-[118px] rounded-lg border px-4 py-2.5 text-xs font-black tracking-[0.16em] uppercase transition-all duration-200 ${
                     isActive
-                      ? "border-[#d6b36a] bg-[#d6b36a]/10 text-[#e5c987] shadow-[0_0_18px_rgba(214,179,106,0.12)]"
-                      : "border-[#403521] bg-transparent text-[#c9c0af] hover:border-[#8f7545] hover:bg-[#17130d] hover:text-[#e5c987]"
+                      ? "border-white bg-white/10 text-white shadow-[0_0_18px_rgba(255,255,255,0.12)]"
+                      : "border-white/25 bg-transparent text-white/80 hover:border-white hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   {item.label}
@@ -321,7 +343,7 @@ export const Navbar = () => {
                     handleSearchSubmit(e);
                   }
                 }}
-              className="w-full rounded-lg bg-[#11100e] text-white placeholder:text-[#aaa294] border border-[#403521] px-12 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#d6b36a]/50 focus:border-[#d6b36a]"
+                className="w-full rounded-lg bg-[#11100e] text-white placeholder:text-white/60 border border-white/25 px-12 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-white/50 focus:border-white"
               />
             </div>
           </div>
@@ -329,21 +351,21 @@ export const Navbar = () => {
           <div className="hidden xl:flex items-center gap-3 shrink-0">
             <button
               onClick={() => navigateTo("nutritionist-ai")}
-              className="rounded-lg border border-[#8f7545] bg-[#17130d] px-3 py-2.5 text-[10px] font-black tracking-[0.12em] uppercase text-[#e5c987] transition-colors hover:border-[#d6b36a] hover:bg-[#241d12] flex items-center gap-2"
+              className="rounded-lg border border-white/40 bg-white/10 px-3 py-2.5 text-[10px] font-black tracking-[0.12em] uppercase text-white transition-colors hover:border-white hover:bg-white/15 flex items-center gap-2"
             >
-              <Sparkles className="w-4 h-4 text-[#d6b36a]" />
+              <Sparkles className="w-4 h-4 text-white" />
               Nutrition IA
             </button>
             <button
               onClick={() => navigateTo("coach-ia")}
-              className="rounded-lg border border-[#403521] bg-transparent px-3 py-2.5 text-[10px] font-black tracking-[0.12em] uppercase text-[#c9c0af] transition-colors hover:border-[#d6b36a] hover:bg-[#17130d] hover:text-[#e5c987] flex items-center gap-2"
+              className="rounded-lg border border-white/25 bg-transparent px-3 py-2.5 text-[10px] font-black tracking-[0.12em] uppercase text-white/80 transition-colors hover:border-white hover:bg-white/10 hover:text-white flex items-center gap-2"
             >
-              <Dumbbell className="w-4 h-4 text-[#d6b36a]" />
+              <Dumbbell className="w-4 h-4 text-white" />
               Coach IA
             </button>
             <button
               onClick={() => navigateTo("cart")}
-              className="relative p-2.5 text-white hover:text-[#d6b36a] transition-colors"
+              className="relative p-2.5 text-white hover:text-white/70 transition-colors"
               title="Panier"
             >
               <ShoppingBag className="w-6 h-6" />
@@ -384,20 +406,120 @@ export const Navbar = () => {
           </div>
         </div>
 
-        <div className="hidden lg:flex flex-col gap-3 mt-4 border-t border-[#403521] pt-3">
+        <div className="hidden xl:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-6 min-h-[90px]">
+          <nav className="flex min-w-0 items-center justify-end gap-1 2xl:gap-2 pr-2" aria-label="Catégories principales">
+            {navigationCategories.slice(0, 4).map((item) => (
+              <div
+                key={item.id}
+                className="relative"
+                onMouseEnter={() => item.children && setOpenCategoryId(item.id)}
+                onMouseLeave={() => item.children && setOpenCategoryId(null)}
+              >
+                <button
+                  type="button"
+                  aria-expanded={item.children ? openCategoryId === item.id : undefined}
+                  onClick={() => !item.children && handleCategoryClick(item.id)}
+                  className={`whitespace-nowrap rounded-md px-1.5 py-2 text-[11px] 2xl:px-2.5 2xl:text-sm font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
+                >
+                  {item.label}{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
+                </button>
+                {item.children && openCategoryId === item.id && (
+                  <div className="absolute right-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
+                    {item.children.map((child) => (
+                      <button key={child} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
+                        {child}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </nav>
+
+          <button
+            onClick={() => { setSelectedShopCategoryIds([]); navigateTo("home"); }}
+            className="flex items-center justify-center focus:outline-none group px-4 py-1"
+            title="Accueil"
+          >
+            <img 
+              src={logo} 
+              alt="Nutri Beast" 
+              className="h-28 w-auto max-w-none 2xl:h-32 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.24)] group-hover:scale-105 transition-transform duration-200" 
+            />
+          </button>
+
+          <nav className="flex min-w-0 items-center justify-start gap-1 2xl:gap-2 pl-2 pr-52" aria-label="Catégories secondaires">
+            {navigationCategories.slice(4, 7).map((item) => (
+              <div
+                key={item.id}
+                className="relative"
+                onMouseEnter={() => item.children && setOpenCategoryId(item.id)}
+                onMouseLeave={() => item.children && setOpenCategoryId(null)}
+              >
+                <button
+                  type="button"
+                  aria-expanded={item.children ? openCategoryId === item.id : undefined}
+                  onClick={() => !item.children && handleCategoryClick(item.id)}
+                  className={`whitespace-nowrap rounded-md px-1.5 py-2 text-[11px] 2xl:px-2.5 2xl:text-sm font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
+                >
+                  {item.label}{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
+                </button>
+                {item.children && openCategoryId === item.id && (
+                  <div className="absolute left-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
+                    {item.children.map((child) => (
+                      <button key={child} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
+                        {child}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </nav>
+
+          <div className="absolute right-4 sm:right-6 lg:right-8 flex items-center gap-2">
+            <button onClick={() => setShowSearchModal(!showSearchModal)} className="p-2.5 text-white hover:bg-white/10 rounded-md transition-colors" title="Rechercher">
+              <Search className="w-6 h-6" />
+            </button>
+            <button onClick={() => navigateTo("cart")} className="relative p-2.5 text-white hover:bg-white/10 rounded-md transition-colors" title="Panier">
+              <ShoppingBag className="w-6 h-6" />
+              {totalItems > 0 && <span className="absolute -top-0.5 -right-0.5 bg-white text-black text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>}
+            </button>
+          </div>
+        </div>
+
+        <nav className="hidden xl:flex items-center justify-center gap-1 2xl:gap-2 border-t border-white/25 pt-3 mt-1" aria-label="Accès rapides">
+          {secondaryDesktopLinks.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === item.id) ? handleCategoryClick(item.id) : handleSectionClick(item.id)}
+              className="whitespace-nowrap rounded-md px-2 py-2 text-[11px] 2xl:px-3 2xl:text-sm font-black uppercase tracking-wide text-white transition-colors hover:bg-white/10"
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="hidden lg:flex xl:hidden flex-col gap-3 mt-4 border-t border-white/25 pt-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] font-bold text-white">
             {navigationCategories.map((item) => (
-              <div key={item.id} className="relative">
+                <div
+                  key={item.id}
+                  className="relative"
+                  onMouseEnter={() => setOpenCategoryId(item.id)}
+                  onMouseLeave={() => setOpenCategoryId(null)}
+                >
                 <button
                   type="button"
                   aria-expanded={openCategoryId === item.id}
-                  onClick={() => setOpenCategoryId((current) => current === item.id ? null : item.id)}
-                  className={`whitespace-nowrap rounded-md px-3 py-2 transition-all border ${openCategoryId === item.id ? "border-[#d6b36a] bg-[#1b1710] text-[#e5c987]" : "border-transparent text-[#c9c0af] hover:border-[#403521] hover:bg-[#17130d] hover:text-[#e5c987]"}`}
+                  onClick={() => setOpenCategoryId(item.id)}
+                  className={`whitespace-nowrap rounded-md px-3 py-2 transition-all border ${openCategoryId === item.id ? "border-white bg-white/10 text-white" : "border-transparent text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white"}`}
                 >
                   {item.label} <span className="ml-1 text-[10px]">{openCategoryId === item.id ? "▲" : "▼"}</span>
                 </button>
                 {openCategoryId === item.id && (
-                  <div className="absolute left-0 top-full z-50 mt-2 min-w-[250px] rounded-xl border border-[#3a3a3a] bg-[#111] p-2 shadow-2xl">
+                  <div className="absolute left-0 top-full z-50 min-w-[250px] rounded-xl border border-[#3a3a3a] bg-[#111] p-2 shadow-2xl">
                     {item.children.map((child) => (
                       <button key={child} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold normal-case tracking-normal text-[#d0d0d0] transition-colors hover:bg-[#252525] hover:text-[#ff6a2b]">
                         {child}
@@ -410,7 +532,7 @@ export const Navbar = () => {
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#8f887d]">
             {quickAccessStrip.map((item) => (
-              <button key={item.id} type="button" onClick={() => handleCategoryClick(item.id)} className="whitespace-nowrap rounded-md px-3 py-1.5 transition-all border border-transparent hover:border-[#403521] hover:bg-[#17130d] hover:text-[#e5c987]">
+              <button key={item.id} type="button" onClick={() => handleCategoryClick(item.id)} className="whitespace-nowrap rounded-md px-3 py-1.5 transition-all border border-transparent hover:border-white/25 hover:bg-white/10 hover:text-white">
                 {item.label}
               </button>
             ))}
@@ -419,7 +541,7 @@ export const Navbar = () => {
       </div>
 
       {showSearchModal && (
-        <div className="xl:hidden bg-black border-t border-b border-[#2b2b2b] p-4 animate-fadeIn relative z-10">
+        <div className="bg-black border-t border-b border-[#2b2b2b] p-4 animate-fadeIn relative z-10">
           <form onSubmit={handleSearchSubmit} className="max-w-xl mx-auto flex gap-2">
             <input
               type="text"
@@ -456,9 +578,16 @@ export const Navbar = () => {
             >
               Panier
             </button>
+            
+            <button
+              onClick={() => navigateTo("calculator")}
+              className="bg-white/10 border border-white/40 p-3 rounded-lg text-left text-white"
+            >
+              Calculateur
+            </button>
             <button
               onClick={() => navigateTo("nutritionist-ai")}
-              className="bg-[#17130d] border border-[#8f7545] p-3 rounded-lg text-left text-[#e5c987]"
+              className="bg-white/10 border border-white/40 p-3 rounded-lg text-left text-white"
             >
               Nutrition IA
             </button>

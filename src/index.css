@@ -48,37 +48,37 @@
 /* Navbar Red Glowing Wave & Shining Line Animations (Left to Right) */
 @keyframes navbarWaveMove {
   0% {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
   100% {
-    transform: translateX(0%);
+    transform: translate3d(0%, 0, 0);
   }
 }
 
 @keyframes navbarShineMove {
   0% {
-    transform: translateX(-150%) skewX(-20deg);
+    transform: translate3d(-150%, 0, 0) skewX(-20deg);
   }
   100% {
-    transform: translateX(250%) skewX(-20deg);
+    transform: translate3d(250%, 0, 0) skewX(-20deg);
   }
 }
 
 @keyframes navbarLaserMove {
   0% {
-    transform: translateX(-100%);
+    background-position: 0 0;
   }
   100% {
-    transform: translateX(100%);
+    background-position: 33.333% 0;
   }
 }
 
 @keyframes marqueeMove {
   0% {
-    transform: translateX(0%);
+    transform: translate3d(-33.333%, 0, 0);
   }
   100% {
-    transform: translateX(-50%);
+    transform: translate3d(0%, 0, 0);
   }
 }
 
@@ -90,7 +90,7 @@
   display: flex;
   width: max-content;
   will-change: transform;
-  animation: marqueeMove 18s linear infinite;
+  animation: marqueeMove 14s linear infinite;
 }
 
 .banner-marquee__group {
@@ -107,13 +107,16 @@
 }
 
 .navbar-red-shine-beam {
-  animation: navbarShineMove 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: navbarShineMove 4s linear infinite;
   box-shadow: 0 0 50px 20px rgba(217, 4, 41, 0.45);
 }
 
 .navbar-bottom-laser {
-  animation: navbarLaserMove 2.5s ease-in-out infinite;
-  box-shadow: 0 0 12px 3px #ff1a3c, 0 0 24px 6px rgba(217, 4, 41, 0.7);
+  background-image: linear-gradient(90deg, transparent 0%, rgba(217, 4, 41, 0.15) 8%, #ff1a3c 18%, #d90429 32%, #ff1a3c 46%, rgba(217, 4, 41, 0.15) 58%, transparent 70%);
+  background-size: 33.333% 100%;
+  background-repeat: repeat-x;
+  animation: navbarLaserMove 2.4s linear infinite;
+  box-shadow: 0 0 10px 2px #ff1a3c, 0 0 20px 4px rgba(217, 4, 41, 0.55);
 }
 
 .animate-marquee {

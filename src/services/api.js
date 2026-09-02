@@ -743,6 +743,7 @@ export const productImageUrl = (filename) => {
   if (!normalized) return null;
   if (normalized.startsWith('http')) return normalized;
   if (normalized.startsWith('/uploads/products/')) return MEDIA_BASE ? `${MEDIA_BASE}${normalized}` : normalized;
+  if (normalized.startsWith('/')) return MEDIA_BASE ? `${MEDIA_BASE}${normalized}` : normalized;
   return MEDIA_BASE ? `${MEDIA_BASE}/uploads/products/${normalized}` : `/uploads/products/${normalized}`;
 };
 

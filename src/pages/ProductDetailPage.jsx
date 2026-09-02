@@ -20,7 +20,8 @@ const normalizeProduct = (p, flavorCatalog = []) => ({
   flavors: resolveProductFlavors(p, flavorCatalog),
   sizes: [],
   sku: p.sku,
-  description: p.shortDescription || p.description || '',
+  shortDescription: p.shortDescription || '',
+  longDescription: p.longDescription || p.description || p.shortDescription || '',
   nutritionFact: p.nutritionFact || null,
   productImages: p.productImages || [],
   '@id': p['@id'],
@@ -178,7 +179,24 @@ export const ProductDetailPage = () => {
             </div>
           </div>
 
-          <p className="text-xs sm:text-sm text-gray-300 leading-relaxed border-t border-b border-white/10 py-4">{product.description}</p>
+          {(product.shortDescription || product.longDescription) && (
+            <div className="space-y-4 border-t border-b border-white/10 py-4">
+              {product.shortDescription && (
+                <div>
+                  <h2 className="text-[10px] font-heading font-black uppercase tracking-widest text-[#d90429] mb-1">Description courte</h2>
+                  <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{product.shortDescription}</p>
+                </div>
+              )}
+              {product.longDescription && product.longDescription !== product.shortDescription && (
+                <div>
+                  <h2 className="text-[10px] font-heading font-black uppercase tracking-widest text-[#d90429] mb-1">Description longue</h2>
+                  <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">
+                    {product.longDescription}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {product.flavors.length > 0 && (
             <div className="space-y-2">

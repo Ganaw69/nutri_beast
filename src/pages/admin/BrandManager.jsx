@@ -3,7 +3,7 @@ import { brandService } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, X, Loader2, Check, Globe } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
-const EMPTY = { name: '', slug: '', description: '', website: '', isActive: true };
+const EMPTY = { name: '', description: '', website: '', isActive: true };
 
 export const BrandManager = () => {
   const [brands, setBrands] = useState([]);
@@ -27,7 +27,7 @@ export const BrandManager = () => {
 
   const openAdd = () => { setForm(EMPTY); setModal({ mode: 'add' }); setError(''); };
   const openEdit = (b) => {
-    setForm({ name: b.name || '', slug: b.slug || '', description: b.description || '', website: b.website || '', isActive: b.isActive ?? true });
+    setForm({ name: b.name || '', description: b.description || '', website: b.website || '', isActive: b.isActive ?? true });
     setModal({ mode: 'edit', id: b.id });
     setError('');
   };
@@ -115,7 +115,6 @@ export const BrandManager = () => {
             <form onSubmit={handleSave} className="p-5 space-y-4">
               {error && <div className="text-red-400 text-xs bg-red-900/20 border border-red-500/30 rounded-lg p-3">{error}</div>}
               <div><label className={labelCls}>Nom *</label><input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} /></div>
-              <div><label className={labelCls}>Slug</label><input value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value }))} className={inputCls} /></div>
               <div><label className={labelCls}>Description</label><textarea rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={`${inputCls} resize-none`} /></div>
               <div><label className={labelCls}>Site web</label><input type="url" value={form.website} onChange={e => setForm(p => ({ ...p, website: e.target.value }))} className={inputCls} placeholder="https://..." /></div>
               <label className="flex items-center gap-2 cursor-pointer">
