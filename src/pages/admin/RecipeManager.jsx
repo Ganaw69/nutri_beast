@@ -49,7 +49,7 @@ export const RecipeManager = () => {
   }, [fetchAll]);
 
   useEffect(() => {
-    productService.getAll({ itemsPerPage: 200 }, false)
+    productService.getAll({ itemsPerPage: 100 }, false)
       .then((data) => setProducts(data['hydra:member'] || []))
       .catch(() => setProducts([]));
   }, []);

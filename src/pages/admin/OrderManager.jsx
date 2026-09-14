@@ -61,7 +61,7 @@ export const OrderManager = () => {
 
   useEffect(() => {
     if (!showCreate) return;
-    productService.getAll({ isActive: true, itemsPerPage: 200 }, true)
+    productService.getAll({ isActive: true, itemsPerPage: 100 }, true)
       .then((data) => {
         const available = data['hydra:member'] || [];
         setProducts(available);

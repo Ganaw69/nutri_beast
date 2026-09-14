@@ -44,7 +44,6 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
         { id: 'products', label: 'Produits' },
         { id: 'categories', label: 'Catégories' },
         { id: 'orders', label: 'Commandes' },
-        { id: 'brands', label: 'Marques' },
         { id: 'coupons', label: 'Codes Promo' },
         { id: 'stock', label: 'Stocks' },
         { id: 'reviews', label: 'Avis Clients' },
@@ -57,7 +56,9 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
       label: 'Site Web',
       icon: Image,
       subItems: [
+        { id: 'brands', label: 'Marques' },
         { id: 'banner', label: 'Bannières' },
+        { id: 'couvertures', label: 'Couvertures' },
       ],
     },
     {

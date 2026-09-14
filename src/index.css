@@ -125,6 +125,87 @@
   animation: marqueeMove 18s linear infinite;
 }
 
+@keyframes brandLogoMarqueeMove {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+.brand-logo-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: brandLogoMarqueeMove 32s linear infinite;
+  will-change: transform;
+}
+
+.brand-logo-marquee-section:hover .brand-logo-marquee-track {
+  animation-play-state: paused;
+}
+
+.brand-logo-marquee-group {
+  display: flex;
+  gap: 1.75rem;
+  padding-right: 1.75rem;
+}
+
+.brand-logo-card {
+  position: relative;
+  display: flex;
+  width: 330px;
+  height: 170px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(217, 4, 41, 0.55);
+  border-radius: 1rem;
+  background: #141414;
+  box-shadow: 0 0 10px rgba(217, 4, 41, 0.5), 0 0 30px rgba(217, 4, 41, 0.25), inset 0 0 22px rgba(217, 4, 41, 0.1);
+}
+
+.brand-logo-card::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(110deg, transparent 28%, rgba(255, 55, 85, 0.2) 50%, transparent 72%);
+  transform: translateX(-110%);
+  animation: navbarShineMove 4.5s linear infinite;
+}
+
+.brand-logo-image {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: auto;
+  max-width: 270px;
+  max-height: 125px;
+  object-fit: contain;
+  /* The API includes logos with baked-in white backgrounds. Convert every
+     logo to a clean light mark: white image backgrounds become black and
+     disappear through screen blending on the dark card. */
+  mix-blend-mode: screen;
+  filter: grayscale(1) contrast(250%) invert(1);
+  transition: transform 250ms ease, opacity 250ms ease;
+}
+
+.brand-logo-card:hover .brand-logo-image {
+  transform: scale(1.08);
+  opacity: 0.9;
+}
+
+@media (max-width: 640px) {
+  .brand-logo-card {
+    width: 260px;
+    height: 142px;
+  }
+
+  .brand-logo-image {
+    max-width: 215px;
+    max-height: 100px;
+  }
+}
+
 /* Industrial Metallic Sheen Hover Effect */
 .sheen-btn {
   position: relative;

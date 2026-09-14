@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, categoryService, goalService, resolveProductImage } from "../services/api";
+import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages, iriToId } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems } from "../utils/categoryTree";
 
 const ITEMS_PER_PAGE = 20;
+
+const sameId = (first, second) => String(first) === String(second);
+
+const getProductCategoryId = (product) => {
+  const category = product?.category;
+  return typeof category === 'object'
+    ? category?.id ?? iriToId(category?.['@id'] || category?.iri)
+    : iriToId(category);
+};
 
 export const ShopPage = () => {
   const { searchQuery, selectedShopCategoryIds, setSelectedShopCategoryIds } = useCart();
@@ -52,15 +61,17 @@ export const ShopPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const params = {
-        page: currentPage,
-        itemsPerPage: ITEMS_PER_PAGE,
-        isActive: true,
-      };
+      const params = { isActive: true };
 
       if (searchQuery) params.name = searchQuery;
+      // A navbar click can arrive before the complete category list is loaded.
+      // In that case still send the clicked category id instead of fetching the
+      // whole catalogue. Once the list is available, roots can be expanded to
+      // include their descendants for the sidebar filter.
       const expandedCategoryIds = collectExpandedCategoryIds(selectedShopCategoryIds, categories);
-      if (expandedCategoryIds.length > 0) params['category.id'] = expandedCategoryIds;
+      const categoryFilterIds = expandedCategoryIds.length > 0
+        ? expandedCategoryIds
+        : selectedShopCategoryIds.filter((id) => id !== null && id !== undefined && id !== '');
       if (selectedBrandIds.length > 0) params['brand.id'] = selectedBrandIds;
       if (selectedGoalIds.length > 0) params['goals.id'] = selectedGoalIds;
       if (priceMax < 500) params['price[lte]'] = priceMax;
@@ -71,14 +82,26 @@ export const ShopPage = () => {
       else if (sortBy === 'recent') params['order[createdAt]'] = 'desc';
       else if (sortBy === 'featured') params['order[position]'] = 'asc';
 
-      const data = await productService.getAll(params, true);
-      const productsWithDetails = await Promise.all(
-        (data['hydra:member'] || []).map((product) =>
+      // The API can cap a response below itemsPerPage. Fetch the complete
+      // collection first, apply relation filters, then paginate it at 20.
+      const data = await productService.getAllPages(params, true);
+      const allProducts = data['hydra:member'] || [];
+      const allowedCategoryIds = new Set(categoryFilterIds.map(String));
+      const filteredProducts = categoryFilterIds.length === 0
+        ? allProducts
+        : allProducts.filter((product) => {
+            const categoryId = getProductCategoryId(product);
+            return allowedCategoryIds.has(String(categoryId));
+          });
+
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      const currentProducts = await Promise.all(
+        filteredProducts.slice(start, start + ITEMS_PER_PAGE).map((product) =>
           productService.getOne(product.id, true).catch(() => product)
         )
       );
-      setProducts(productsWithDetails);
-      setTotalCount(data['hydra:totalItems'] || 0);
+      setProducts(await hydrateProductsWithImages(currentProducts));
+      setTotalCount(filteredProducts.length);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -95,13 +118,15 @@ export const ShopPage = () => {
   }, [fetchProducts]);
 
   const toggleId = (list, setList, id) => {
-    setList(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setList(prev => prev.some((item) => sameId(item, id))
+      ? prev.filter((item) => !sameId(item, id))
+      : [...prev, id]);
   };
 
   const renderCategoryTree = (items, depth = 0) => (
     <div className="space-y-2">
       {items.map((cat) => {
-        const isChecked = selectedShopCategoryIds.includes(cat.id);
+        const isChecked = selectedShopCategoryIds.some((id) => sameId(id, cat.id));
         return (
           <div key={cat.id} className={depth > 0 ? "pl-4 border-l border-white/10" : ""}>
             <button
@@ -109,22 +134,22 @@ export const ShopPage = () => {
               className="w-full flex items-start gap-3 text-left cursor-pointer hover:text-white transition-colors"
               onClick={() =>
                 setSelectedShopCategoryIds(prev =>
-                  prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
+                  prev.some((id) => sameId(id, cat.id))
+                    ? prev.filter((id) => !sameId(id, cat.id))
+                    : [...prev, cat.id]
                 )
               }
             >
               <div className={`mt-0.5 w-4 h-4 rounded-xs border flex items-center justify-center transition-colors flex-shrink-0 ${isChecked ? "bg-[#d90429] border-[#d90429] text-white" : "border-white/30 bg-[#1c1b1b]"}`}>
                 {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
               </div>
-              <div className="min-w-0">
-                <span className={`text-xs font-semibold ${isChecked ? "text-white" : "text-gray-300"}`}>{cat.name}</span>
-                {cat.children?.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {renderCategoryTree(cat.children, depth + 1)}
-                  </div>
-                )}
-              </div>
+              <span className={`min-w-0 text-xs font-semibold ${isChecked ? "text-white" : "text-gray-300"}`}>{cat.name}</span>
             </button>
+            {cat.children?.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {renderCategoryTree(cat.children, depth + 1)}
+              </div>
+            )}
           </div>
         );
       })}
@@ -277,7 +302,7 @@ export const ShopPage = () => {
                 </button>
 
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const page = i + 1;
+                  const page = Math.min(Math.max(1, currentPage - 2), Math.max(1, totalPages - 4)) + i;
                   return (
                     <button key={page} onClick={() => setCurrentPage(page)}
                       className={`w-9 h-9 rounded-xs font-bold text-xs flex items-center justify-center transition-colors ${currentPage === page ? "bg-[#d90429] text-white shadow-md" : "bg-[#1c1b1b] text-gray-300 hover:bg-white/10 border border-white/10"}`}

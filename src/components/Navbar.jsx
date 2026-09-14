@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { CATEGORY_ARCHITECTURE } from "../data/categoryArchitecture";
+import { useAdmin } from "../context/AdminContext";
+import { categoryService } from "../services/api";
+import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
 import logo from "../assets/logo.png";
 import {
   Search,
@@ -11,6 +13,16 @@ import {
   Sparkles,
 } from "lucide-react";
 
+const CategoryNavLabel = ({ label }) => {
+  const words = String(label || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 2) return label;
+
+  return <span className="inline-flex flex-col leading-tight text-center">
+    <span>{words.slice(0, 2).join(" ")}</span>
+    <span>{words.slice(2).join(" ")}</span>
+  </span>;
+};
+
 export const Navbar = () => {
   const {
     activeTab,
@@ -20,10 +32,12 @@ export const Navbar = () => {
     setSearchQuery,
     setSelectedShopCategoryIds,
   } = useCart();
+  const { categoryNavigation } = useAdmin();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [openCategoryId, setOpenCategoryId] = useState(null);
+  const [categories, setCategories] = useState([]);
 
   const promoMessage = "Livraison offerte dès 60€";
 
@@ -77,14 +91,47 @@ export const Navbar = () => {
     []
   );
 
-  const navigationCategories = useMemo(
-    () => CATEGORY_ARCHITECTURE.map((category) => ({
-      id: category.name,
+  useEffect(() => {
+    let mounted = true;
+
+    categoryService.getMain(true)
+      .then((data) => {
+        if (!mounted) return;
+
+        // `/categories/main` already contains exactly the seven root records.
+        // Each root contains its direct children, matching parent_id in the DB.
+        const roots = extractCategoryItems(data?.member || data?.['hydra:member'] || data)
+          .map((category) => ({
+            ...category,
+            children: (category.children || [])
+              .map(normalizeCategoryRecord)
+              .filter((child) => child.id !== null && child.id !== undefined)
+              .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, 'fr')),
+          }))
+          .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, 'fr'));
+
+        setCategories(roots);
+      })
+      .catch(() => {
+        if (mounted) setCategories([]);
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  const navigationCategories = useMemo(() => {
+    const hiddenIds = new Set((categoryNavigation?.hiddenTopLevelCategoryIds || []).map(String));
+    const orderedIds = (categoryNavigation?.topLevelOrder || []).map(String);
+    const topLevel = categories.filter((category) => !hiddenIds.has(String(category.id)));
+    const byId = new Map(topLevel.map((category) => [String(category.id), category]));
+    const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+    const remaining = topLevel.filter((category) => !orderedIds.includes(String(category.id)));
+    return [...ordered, ...remaining].map((category) => ({
+      ...category,
+      // The category entity exposes `name`; the original navbar expected `label`.
       label: category.name,
-      children: category.children,
-    })),
-    []
-  );
+    }));
+  }, [categories, categoryNavigation]);
 
   const secondaryDesktopLinks = useMemo(
     () => [
@@ -104,6 +151,24 @@ export const Navbar = () => {
     navigateTo("shop");
     setMobileMenuOpen(false);
     setShowSearchModal(false);
+  };
+
+  const navigateToCategory = (categoryId) => {
+    setSearchQuery("");
+    setSelectedShopCategoryIds([categoryId]);
+    navigateTo("shop");
+    setMobileMenuOpen(false);
+    setShowSearchModal(false);
+  };
+
+  // Root categories (parent = null) are dropdown triggers. Their children are
+  // the actual catalogue filters, matching the parent_id relationship in DB.
+  const handleRootCategoryClick = (category) => {
+    if (category.children?.length > 0) {
+      setOpenCategoryId((current) => current === category.id ? null : category.id);
+      return;
+    }
+    navigateToCategory(category.id);
   };
 
   const handleSectionClick = (sectionId) => {
@@ -185,8 +250,8 @@ export const Navbar = () => {
     }
   };
 
-  const handleSubCategoryClick = (name) => {
-    navigateShop(name);
+  const handleSubCategoryClick = (category) => {
+    navigateToCategory(category.id);
     setOpenCategoryId(null);
   };
 
@@ -195,6 +260,14 @@ export const Navbar = () => {
     if (searchQuery.trim()) {
       navigateShop(searchQuery.trim());
     }
+  };
+
+  const handleSearchChange = (value) => {
+    // Search results update as the customer types; ShopPage already applies
+    // its name filter to the catalogue request.
+    setSelectedShopCategoryIds([]);
+    setSearchQuery(value);
+    if (activeTab !== "shop") navigateTo("shop");
   };
 
   return (
@@ -306,7 +379,7 @@ export const Navbar = () => {
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-20 w-auto sm:h-24 object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-200" 
+              className="h-24 w-auto sm:h-28 object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-200" 
             />
           </button>
 
@@ -332,18 +405,18 @@ export const Navbar = () => {
 
           <div className="hidden xl:flex flex-1 justify-center">
             <div className="relative w-full max-w-xl">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ff6a2b]" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#d90429]" />
               <input
                 type="text"
                 placeholder="Rechercher"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     handleSearchSubmit(e);
                   }
                 }}
-                className="w-full rounded-lg bg-[#11100e] text-white placeholder:text-white/60 border border-white/25 px-12 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-white/50 focus:border-white"
+                className="w-full rounded-lg bg-[#11100e] text-white placeholder:text-white/60 border border-[#d90429] px-12 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#d90429] focus:border-[#d90429]"
               />
             </div>
           </div>
@@ -377,20 +450,20 @@ export const Navbar = () => {
             </button>
           </div>
 
-          <div className="ml-auto flex items-center gap-3 xl:hidden">
+          <div className="ml-auto mr-3 flex items-center gap-3 xl:hidden">
             <button
               onClick={() => setShowSearchModal(!showSearchModal)}
-              className="p-2 text-white hover:text-[#ff7f3f] transition-colors"
+              className="p-2.5 text-white hover:text-[#ff7f3f] transition-colors"
               title="Rechercher"
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-6 h-6" />
             </button>
             <button
               onClick={() => navigateTo("cart")}
-              className="relative p-2.5 text-white hover:text-[#ff7f3f] transition-colors"
+              className="relative p-3 text-white hover:text-[#ff7f3f] transition-colors"
               title="Panier"
             >
-              <ShoppingBag className="w-5 h-5" />
+              <ShoppingBag className="w-6 h-6" />
               {totalItems > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-[#d90429] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-lg">
                   {totalItems}
@@ -418,16 +491,16 @@ export const Navbar = () => {
                 <button
                   type="button"
                   aria-expanded={item.children ? openCategoryId === item.id : undefined}
-                  onClick={() => !item.children && handleCategoryClick(item.id)}
+                  onClick={() => handleRootCategoryClick(item)}
                   className={`whitespace-nowrap rounded-md px-1.5 py-2 text-[11px] 2xl:px-2.5 2xl:text-sm font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
                 >
-                  {item.label}{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
+                  <CategoryNavLabel label={item.label} />{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
                 </button>
                 {item.children && openCategoryId === item.id && (
                   <div className="absolute right-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
                     {item.children.map((child) => (
-                      <button key={child} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
-                        {child}
+                      <button key={child.id} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
+                        {child.name}
                       </button>
                     ))}
                   </div>
@@ -444,7 +517,7 @@ export const Navbar = () => {
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-28 w-auto max-w-none 2xl:h-32 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.24)] group-hover:scale-105 transition-transform duration-200" 
+              className="h-48 w-auto max-w-none 2xl:h-56 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.24)] group-hover:scale-105 transition-transform duration-200" 
             />
           </button>
 
@@ -459,16 +532,16 @@ export const Navbar = () => {
                 <button
                   type="button"
                   aria-expanded={item.children ? openCategoryId === item.id : undefined}
-                  onClick={() => !item.children && handleCategoryClick(item.id)}
+                  onClick={() => handleRootCategoryClick(item)}
                   className={`whitespace-nowrap rounded-md px-1.5 py-2 text-[11px] 2xl:px-2.5 2xl:text-sm font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
                 >
-                  {item.label}{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
+                  <CategoryNavLabel label={item.label} />{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
                 </button>
                 {item.children && openCategoryId === item.id && (
                   <div className="absolute left-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
                     {item.children.map((child) => (
-                      <button key={child} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
-                        {child}
+                      <button key={child.id} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
+                        {child.name}
                       </button>
                     ))}
                   </div>
@@ -477,13 +550,13 @@ export const Navbar = () => {
             ))}
           </nav>
 
-          <div className="absolute right-4 sm:right-6 lg:right-8 flex items-center gap-2">
-            <button onClick={() => setShowSearchModal(!showSearchModal)} className="p-2.5 text-white hover:bg-white/10 rounded-md transition-colors" title="Rechercher">
+          <div className="absolute right-6 2xl:right-8 flex items-center gap-2 border-l border-white/25 pl-3" aria-label="Actions rapides">
+            <button onClick={() => setShowSearchModal(!showSearchModal)} className="p-2 text-white/85 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Rechercher" aria-label="Rechercher">
               <Search className="w-6 h-6" />
             </button>
-            <button onClick={() => navigateTo("cart")} className="relative p-2.5 text-white hover:bg-white/10 rounded-md transition-colors" title="Panier">
+            <button onClick={() => navigateTo("cart")} className="relative p-2 text-white/85 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Panier" aria-label="Panier">
               <ShoppingBag className="w-6 h-6" />
-              {totalItems > 0 && <span className="absolute -top-0.5 -right-0.5 bg-white text-black text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>}
+              {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-white text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">{totalItems}</span>}
             </button>
           </div>
         </div>
@@ -513,7 +586,7 @@ export const Navbar = () => {
                 <button
                   type="button"
                   aria-expanded={openCategoryId === item.id}
-                  onClick={() => setOpenCategoryId(item.id)}
+                  onClick={() => handleRootCategoryClick(item)}
                   className={`whitespace-nowrap rounded-md px-3 py-2 transition-all border ${openCategoryId === item.id ? "border-white bg-white/10 text-white" : "border-transparent text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white"}`}
                 >
                   {item.label} <span className="ml-1 text-[10px]">{openCategoryId === item.id ? "▲" : "▼"}</span>
@@ -521,8 +594,8 @@ export const Navbar = () => {
                 {openCategoryId === item.id && (
                   <div className="absolute left-0 top-full z-50 min-w-[250px] rounded-xl border border-[#3a3a3a] bg-[#111] p-2 shadow-2xl">
                     {item.children.map((child) => (
-                      <button key={child} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold normal-case tracking-normal text-[#d0d0d0] transition-colors hover:bg-[#252525] hover:text-[#ff6a2b]">
-                        {child}
+                      <button key={child.id} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold normal-case tracking-normal text-[#d0d0d0] transition-colors hover:bg-[#252525] hover:text-[#ff6a2b]">
+                        {child.name}
                       </button>
                     ))}
                   </div>
@@ -547,12 +620,12 @@ export const Navbar = () => {
               type="text"
               placeholder="Rechercher un produit"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-[#171717] border border-[#3a3a3a] rounded-lg px-4 py-2.5 text-xs text-white placeholder-white/50 focus:outline-none focus:border-[#ff6a2b]"
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="flex-1 bg-[#171717] border border-[#d90429] rounded-lg px-4 py-2.5 text-xs text-white placeholder-white/50 focus:outline-none focus:border-[#d90429]"
             />
             <button
               type="submit"
-              className="bg-[#ff6a2b] text-white text-xs font-bold px-5 py-2.5 rounded-lg uppercase"
+              className="bg-[#d90429] hover:bg-[#b0021f] text-white text-xs font-bold px-5 py-2.5 rounded-lg uppercase"
             >
               Rechercher
             </button>
@@ -603,14 +676,14 @@ export const Navbar = () => {
             <div className="grid grid-cols-2 gap-3">
               {navigationCategories.map((item) => (
                 <div key={item.id}>
-                  <button onClick={() => setOpenCategoryId((current) => current === item.id ? null : item.id)} className="w-full bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left normal-case tracking-normal font-semibold">
+                  <button onClick={() => handleRootCategoryClick(item)} className="w-full bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left normal-case tracking-normal font-semibold">
                     {item.label} <span className="float-right text-[#ff6a2b]">{openCategoryId === item.id ? "▲" : "▼"}</span>
                   </button>
                   {openCategoryId === item.id && (
                     <div className="mt-1 space-y-1 border-l border-[#ff6a2b] pl-3">
                       {item.children.map((child) => (
-                        <button key={child} onClick={() => handleSubCategoryClick(child)} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold normal-case tracking-normal text-[#bdbdbd] hover:bg-[#1f1f1f] hover:text-[#ff6a2b]">
-                          {child}
+                        <button key={child.id} onClick={() => handleSubCategoryClick(child)} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold normal-case tracking-normal text-[#bdbdbd] hover:bg-[#1f1f1f] hover:text-[#ff6a2b]">
+                          {child.name}
                         </button>
                       ))}
                     </div>

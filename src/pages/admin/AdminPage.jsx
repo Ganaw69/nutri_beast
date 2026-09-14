@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AdminLayout } from '../../components/admin/AdminLayout';
 import { DashboardOverview } from './DashboardOverview';
 import { BannerManager } from './BannerManager';
+import { CouvertureManager } from './CouvertureManager';
 import { CategoryManager } from './CategoryManager';
 import { ProductManager } from './ProductManager';
 import { OrderManager } from './OrderManager';
@@ -23,6 +24,7 @@ export const AdminPage = ({ onLogout }) => {
     switch (activeAdminTab) {
       case 'dashboard':    return <DashboardOverview />;
       case 'banner':       return <BannerManager />;
+      case 'couvertures':  return <CouvertureManager />;
       case 'categories':   return <CategoryManager />;
       case 'products':     return <ProductManager />;
       case 'orders':       return <OrderManager />;

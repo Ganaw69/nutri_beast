@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, reviewService, flavorService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors } from "../services/api";
+import { productService, reviewService, flavorService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
   ChevronLeft, Zap, Loader2, Send
 } from "lucide-react";
+
+const formatMonthYear = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})/);
+  return match ? `${match[2]}/${match[1]}` : '';
+};
 
 const normalizeProduct = (p, flavorCatalog = []) => ({
   id: p.id,
@@ -22,6 +27,7 @@ const normalizeProduct = (p, flavorCatalog = []) => ({
   sku: p.sku,
   shortDescription: p.shortDescription || '',
   longDescription: p.longDescription || p.description || p.shortDescription || '',
+  dateProduit: p.dateProduit || '',
   nutritionFact: p.nutritionFact || null,
   productImages: p.productImages || [],
   '@id': p['@id'],
@@ -50,18 +56,47 @@ export const ProductDetailPage = () => {
 
     Promise.all([
     productService.getOne(selectedProductId, true),
+    // The image API filters by `product` (the same query used in back office).
+    productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
     productService.getAll({ isActive: true, itemsPerPage: 4 }, true).catch(() => ({ 'hydra:member': [] })),
     reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
-    flavorService.getAll(true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([prod, relData, revData, flavorData]) => {
+    flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+    ]).then(async ([prod, imageData, relData, revData, flavorData]) => {
+      const fetchedImages = imageData['hydra:member'] || imageData.member || imageData.items || [];
+      const imagesById = new Map(fetchedImages.map((image) => [String(image.id), image]));
+      const embeddedImages = (prod.productImages || [])
+        .map((image) => {
+          if (typeof image !== 'string') return image;
+          const imageId = image.split('/').pop();
+          return imagesById.get(String(imageId)) || image;
+        })
+        .filter((image) => typeof image !== 'string');
+      // Some product responses only contain image IRIs (or none at all), while
+      // /product_images returns the full records. Keep both sources so the
+      // storefront resolves exactly the same images as the back office.
+      const seenImageKeys = new Set();
+      const productImages = [...embeddedImages, ...fetchedImages].filter((image, index) => {
+        const key = image?.id ?? image?.['@id'] ?? image?.image ?? image?.path ?? image?.url ?? index;
+        if (seenImageKeys.has(String(key))) return false;
+        seenImageKeys.add(String(key));
+        return true;
+      });
+      const productWithImages = { ...prod, productImages };
       const flavorCatalog = flavorData['hydra:member'] || [];
-      const norm = normalizeProduct(prod, flavorCatalog);
+      const norm = normalizeProduct(productWithImages, flavorCatalog);
       setProduct(norm);
-      const primaryImageUrl = (prod?.productImages || [])
-        .find((img) => isPrimaryProductImage(img));
-      setActiveImage(resolveProductImage(prod, norm.image) || productImageUrl(primaryImageUrl));
+      setActiveImage(
+        resolveProductImage(productWithImages, norm.image) ||
+        productImageUrl(productImages[0]?.image || productImages[0]?.path || productImages[0]?.url)
+      );
       setSelectedFlavor(norm.flavors[0] || '');
-      const relProds = (relData['hydra:member'] || []).filter(p => p.id !== prod.id).slice(0, 3).map((item) => normalizeProduct(item, flavorCatalog));
+      // Related products are returned as lightweight records. Hydrate their
+      // images exactly like product cards elsewhere in the storefront.
+      const relatedWithImages = await hydrateProductsWithImages(
+        (relData['hydra:member'] || []).filter((item) => item.id !== prod.id).slice(0, 3),
+        true
+      );
+      const relProds = relatedWithImages.map((item) => normalizeProduct(item, flavorCatalog));
       setRelated(relProds);
       setReviews(revData['hydra:member'] || []);
       setLoading(false);
@@ -111,28 +146,28 @@ export const ProductDetailPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
         {/* Left Image */}
-        <div className="lg:col-span-6 bg-[#1a1a1a] border border-white/10 p-8 rounded-2xl relative flex items-center justify-center">
+        <div className="lg:col-span-7 bg-[#1a1a1a] border border-white/10 p-6 sm:p-8 rounded-2xl relative flex items-center justify-center">
           {product.badge && (
             <div className="absolute top-4 left-4 bg-[#d90429] text-white text-xs font-black px-3 py-1 rounded shadow-lg uppercase">
               {product.badge}
             </div>
           )}
           <div className="w-full space-y-4">
-            <div className="w-full h-96 flex items-center justify-center">
+            <div className="w-full h-[30rem] sm:h-[34rem] flex items-center justify-center">
               {activeImage || product.image ? (
                 <img
                   src={activeImage || product.image}
                   alt={product.name}
-                  className="w-full h-96 object-contain py-4 transform hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-contain p-2 sm:p-4 transform hover:scale-105 transition-transform duration-500"
                 />
               ) : (
-                <div className="w-full h-96 flex items-center justify-center rounded-xl border border-white/10 bg-[#111] text-gray-500 text-sm font-bold uppercase tracking-widest">
+                <div className="w-full h-full flex items-center justify-center rounded-xl border border-white/10 bg-[#111] text-gray-500 text-sm font-bold uppercase tracking-widest">
                   No picture
                 </div>
               )}
             </div>
             {product.productImages.length > 1 && (
-              <div className="grid grid-cols-4 gap-3">
+              <div className="flex flex-wrap gap-2">
                 {product.productImages.map((img, index) => {
                   const imageSrc = productImageUrl(img) || product.image;
                   return (
@@ -140,7 +175,7 @@ export const ProductDetailPage = () => {
                       key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
                       type="button"
                       onClick={() => setActiveImage(imageSrc)}
-                      className={`bg-[#111] border rounded-lg p-2 aspect-square overflow-hidden transition-colors ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
+                      className={`w-16 h-16 sm:w-20 sm:h-20 bg-[#111] border rounded-lg p-1.5 overflow-hidden transition-colors ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
                     >
                       {imageSrc ? (
                         <img src={imageSrc} alt="" className="w-full h-full object-contain" />
@@ -156,7 +191,7 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* Right Info */}
-        <div className="lg:col-span-6 space-y-6">
+        <div className="lg:col-span-5 space-y-6">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-xs font-bold text-[#d90429] tracking-widest uppercase font-heading">{product.brand}</span>
@@ -179,37 +214,32 @@ export const ProductDetailPage = () => {
             </div>
           </div>
 
-          {(product.shortDescription || product.longDescription) && (
-            <div className="space-y-4 border-t border-b border-white/10 py-4">
-              {product.shortDescription && (
-                <div>
-                  <h2 className="text-[10px] font-heading font-black uppercase tracking-widest text-[#d90429] mb-1">Description courte</h2>
-                  <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{product.shortDescription}</p>
-                </div>
-              )}
-              {product.longDescription && product.longDescription !== product.shortDescription && (
-                <div>
-                  <h2 className="text-[10px] font-heading font-black uppercase tracking-widest text-[#d90429] mb-1">Description longue</h2>
-                  <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">
-                    {product.longDescription}
-                  </p>
-                </div>
-              )}
+          {product.shortDescription && (
+            <div className="border-t border-b border-white/10 py-4">
+              <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{product.shortDescription}</p>
             </div>
           )}
 
-          {product.flavors.length > 0 && (
+          {(formatMonthYear(product.dateProduit) || product.flavors.length > 0) && (
             <div className="space-y-2">
-              <label className="text-xs font-heading font-bold text-gray-300 block uppercase">
-                Saveur: <span className="text-[#d90429]">{selectedFlavor}</span>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {product.flavors.map((f, index) => (
-                  <button key={`${f}-${index}`} onClick={() => setSelectedFlavor(f)}
-                    className={`px-4 py-2 rounded-lg border text-xs font-bold transition-all ${selectedFlavor === f ? 'bg-[#d90429] text-white border-[#d90429]' : 'bg-[#1a1a1a] border-white/10 text-gray-300 hover:border-white/30'}`}
-                  >{f}</button>
-                ))}
-              </div>
+              {formatMonthYear(product.dateProduit) && (
+                <div className="inline-flex items-center rounded-md border border-[#d90429] bg-[#d90429]/10 px-3 py-2">
+                  <span className="text-xs font-heading font-bold text-gray-300 uppercase">Date produit : </span>
+                  <span className="text-sm font-bold text-white">{formatMonthYear(product.dateProduit)}</span>
+                </div>
+              )}
+              {product.flavors.length > 0 && (
+                <>
+                  <label className="text-xs font-heading font-bold text-gray-300 block uppercase">Saveur:</label>
+                  <div className="flex flex-wrap gap-2">
+                    {product.flavors.map((f, index) => (
+                      <button key={`${f}-${index}`} onClick={() => setSelectedFlavor(f)}
+                        className={`px-4 py-2 rounded-lg border text-xs font-bold transition-all ${selectedFlavor === f ? 'bg-[#d90429] text-white border-[#d90429]' : 'bg-[#1a1a1a] border-white/10 text-gray-300 hover:border-white/30'}`}
+                      >{f}</button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -258,6 +288,16 @@ export const ProductDetailPage = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Long Description */}
+      {product.longDescription && product.longDescription !== product.shortDescription && (
+        <section className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-3">
+          <h2 className="font-heading font-black text-xl text-white uppercase">Description du produit</h2>
+          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">
+            {product.longDescription}
+          </p>
+        </section>
       )}
 
       {/* Reviews */}
