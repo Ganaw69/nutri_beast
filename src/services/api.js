@@ -341,6 +341,15 @@ function applyFilters(items, path) {
     });
   }
 
+  const parentIds = idsFrom('parent.id[]', 'parent.id', 'parent[]');
+  if (parentIds.length) {
+    next = next.filter((item) => {
+      const parent = item.parent;
+      const itemParentId = toNumber(parent?.id ?? item.parentId ?? parent?.['@id']?.split('/').pop() ?? parent?.split?.('/').pop(), NaN);
+      return parentIds.includes(itemParentId);
+    });
+  }
+
   const brandIds = idsFrom('brand.id[]', 'brand.id', 'brand[]');
   if (brandIds.length) {
     next = next.filter((item) => {
@@ -421,6 +430,9 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   }
   if (pathname === '/product_images' && method === 'GET') return buildHydraCollection([]);
 
+  if (pathname === '/categories/main' && method === 'GET') {
+    return buildHydraCollection(demoStore.categories.filter((item) => !item.parent && !item.parentId));
+  }
   if (pathname === '/categories' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.categories, path));
   if (pathname.startsWith('/categories/') && method === 'GET') return clone(findDemoEntity('categories', pathname.split('/').pop()));
   if (pathname === '/brands' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.brands, path));
@@ -1044,16 +1056,21 @@ export const productService = {
     }
 
     const pageCount = Math.ceil(total / firstItems.length);
-    const remainingPages = await Promise.all(
+    // A failed later page must not hide the first valid results. Some API
+    // deployments can reject a deep page while page 1 is perfectly usable.
+    const remainingResults = await Promise.allSettled(
       Array.from({ length: pageCount - 1 }, (_, index) =>
         this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
       )
     );
+    const remainingPages = remainingResults
+      .filter((result) => result.status === 'fulfilled')
+      .map((result) => result.value);
 
     return {
       ...firstPage,
       'hydra:member': [...firstItems, ...remainingPages.flatMap((data) => data['hydra:member'] || [])],
-      'hydra:totalItems': total,
+      'hydra:totalItems': firstItems.length + remainingPages.flatMap((data) => data['hydra:member'] || []).length,
     };
   },
   async getOne(id, skipAuth = true) {
@@ -1121,9 +1138,19 @@ export const productService = {
 // CATEGORIES
 // ============================================================
 export const categoryService = {
-  // Public menu endpoint: returns only root categories with their children.
-  async getMain(skipAuth = true) {
-    return apiFetch('/categories/main', {}, false, skipAuth);
+  // Category reading endpoints are public; never send an admin JWT with them.
+  async getMain() {
+    return apiFetch('/categories/main', {}, false, true);
+  },
+  async getChildren(parentId, params = {}) {
+    if (parentId === null || parentId === undefined || parentId === '') {
+      return normalizeCollectionResponse({ 'hydra:member': [] });
+    }
+    const data = await apiFetch(`/categories${buildQuery({
+      ...params,
+      'parent.id': parentId,
+    })}`, {}, false, true);
+    return normalizeCollectionResponse(data);
   },
   async getAll(params = {}, skipAuth = false) {
     const data = await apiFetch(`/categories${buildQuery(params)}`, {}, false, skipAuth);
@@ -1360,6 +1387,69 @@ export const couponService = {
   },
   async delete(id) {
     return apiFetch(`/coupons/${id}`, { method: 'DELETE' });
+  },
+};
+
+// ============================================================
+// PACKS
+// ============================================================
+export const packService = {
+  async getAll(params = {}, skipAuth = false) {
+    const data = await apiFetch(`/packs${buildQuery(params)}`, {}, false, skipAuth);
+    return normalizeCollectionResponse(data);
+  },
+  async getOne(id, skipAuth = false) {
+    return apiFetch(`/packs/${id}`, {}, false, skipAuth);
+  },
+  async create(data) {
+    return apiFetch('/packs', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async update(id, data) {
+    return apiFetch(`/packs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
+  },
+  async delete(id) {
+    return apiFetch(`/packs/${id}`, { method: 'DELETE' });
+  },
+  async uploadImage(id, file) {
+    const formData = new FormData();
+    formData.append('image', file);
+    return apiFetch(`/packs/${id}/upload-image`, { method: 'POST', body: formData }, true);
+  },
+};
+
+export const packProductService = {
+  async getAll(params = {}, skipAuth = false) {
+    const query = { ...params };
+    if (query.pack !== undefined) {
+      query['pack.id'] = query.pack;
+      delete query.pack;
+    }
+    if (query.product !== undefined) {
+      query['product.id'] = query.product;
+      delete query.product;
+    }
+    const data = await apiFetch(`/pack_products${buildQuery(query)}`, {}, false, skipAuth);
+    return normalizeCollectionResponse(data);
+  },
+  async getOne(id, skipAuth = false) {
+    return apiFetch(`/pack_products/${id}`, {}, false, skipAuth);
+  },
+  async create(data) {
+    return apiFetch('/pack_products', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async update(id, data) {
+    return apiFetch(`/pack_products/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
+  },
+  async delete(id) {
+    return apiFetch(`/pack_products/${id}`, { method: 'DELETE' });
   },
 };
 

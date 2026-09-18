@@ -42,6 +42,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
       icon: Store,
       subItems: [
         { id: 'products', label: 'Produits' },
+        { id: 'packs', label: 'Packs' },
         { id: 'categories', label: 'Catégories' },
         { id: 'orders', label: 'Commandes' },
         { id: 'coupons', label: 'Codes Promo' },

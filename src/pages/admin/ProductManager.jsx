@@ -25,6 +25,12 @@ const relationToIri = (value, resource) => {
 
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || data?.items || [];
 const displayName = (item) => item?.name || item?.title || item?.label || '';
+const normalizeComparableName = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .replace(/\s+/g, ' ')
+  .toLocaleLowerCase('fr');
 const displayRelationNames = (items = []) => (Array.isArray(items) ? items : [])
   .map((item) => typeof item === 'string' ? item.split('/').pop() : displayName(item))
   .filter(Boolean)
@@ -47,6 +53,8 @@ const getProductImageId = (img) => {
     null
   );
 };
+
+const fileKey = (file) => `${file.name}-${file.size}-${file.lastModified}`;
 
 const getProductImageSource = (img) => {
   if (!img) return null;
@@ -147,6 +155,7 @@ export const ProductManager = () => {
   const [brands, setBrands] = useState([]);
   const [goals, setGoals] = useState([]);
   const [flavors, setFlavors] = useState([]);
+  const [flavorSearch, setFlavorSearch] = useState('');
   const [brandSearch, setBrandSearch] = useState('');
   const [newFlavorName, setNewFlavorName] = useState('');
   const [creatingFlavor, setCreatingFlavor] = useState(false);
@@ -196,6 +205,21 @@ export const ProductManager = () => {
     const parent = productCategoryTree.find((category) => String(entityId(category)) === String(selectedFormParentCategoryId));
     return [...(parent?.children || [])].sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
   }, [productCategoryTree, selectedFormParentCategoryId]);
+
+  // Hide legacy duplicates and make search insensitive to case, accents, and spaces.
+  const visibleFlavors = useMemo(() => {
+    const seenNames = new Set();
+    const search = normalizeComparableName(flavorSearch);
+
+    return [...flavors]
+      .sort((a, b) => displayName(a).localeCompare(displayName(b), 'fr'))
+      .filter((flavor) => {
+        const normalizedName = normalizeComparableName(displayName(flavor));
+        if (!normalizedName || seenNames.has(normalizedName)) return false;
+        seenNames.add(normalizedName);
+        return !search || normalizedName.includes(search);
+      });
+  }, [flavors, flavorSearch]);
 
   const getFormParentCategoryId = useCallback((category) => {
     const categoryId = typeof category === 'object' ? entityId(category) : iriToId(category);
@@ -312,11 +336,12 @@ export const ProductManager = () => {
     setPage(1);
   }, [searchTerm, selectedParentCategoryId, selectedSubCategoryId]);
 
-  const openAdd = () => { setError(''); setFlavorError(''); setNewFlavorName(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setError(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
     setFlavorError('');
     setNewFlavorName('');
+    setFlavorSearch('');
     setImageFiles([]);
     setImagePreviews([]);
     setPrimaryImageIndex(0);
@@ -392,8 +417,23 @@ export const ProductManager = () => {
       const savedId = saved?.id ?? iriToId(saved?.['@id']) ?? modal.id;
       if (savedId && imageFiles.length > 0) {
         const selectedPrimaryIndex = Math.max(0, Math.min(primaryImageIndex, imageFiles.length - 1));
+        let selectedPrimaryImage = null;
         for (let i = 0; i < imageFiles.length; i += 1) {
-          await productService.uploadImage(savedId, imageFiles[i], productImages.length + i, i === selectedPrimaryIndex);
+          const uploadedImage = await productService.uploadImage(
+            savedId,
+            imageFiles[i],
+            productImages.length + i,
+            i === selectedPrimaryIndex
+          );
+          if (i === selectedPrimaryIndex) selectedPrimaryImage = uploadedImage;
+        }
+
+        // The API may treat multipart boolean fields differently depending on
+        // its serializer. Confirm the chosen image through the dedicated
+        // endpoint after every upload so exactly that image becomes primary.
+        const selectedPrimaryId = getProductImageId(selectedPrimaryImage);
+        if (selectedPrimaryId != null) {
+          await productService.setImagePrimary(selectedPrimaryId);
         }
       }
 
@@ -463,6 +503,21 @@ export const ProductManager = () => {
   const handleCreateFlavor = async () => {
     const name = newFlavorName.trim();
     if (!name || creatingFlavor) return;
+
+    const existingFlavor = flavors.find((flavor) =>
+      normalizeComparableName(displayName(flavor)) === normalizeComparableName(name)
+    );
+    if (existingFlavor) {
+      const iri = relationToIri(existingFlavor, 'flavors');
+      if (iri) {
+        setForm((current) => ({
+          ...current,
+          flavors: current.flavors.includes(iri) ? current.flavors : [...current.flavors, iri],
+        }));
+      }
+      setFlavorError('Cette saveur existe déjà et a été sélectionnée.');
+      return;
+    }
 
     setCreatingFlavor(true);
     setFlavorError('');
@@ -684,8 +739,20 @@ export const ProductManager = () => {
                     className="hidden"
                     onChange={e => {
                       const nextFiles = Array.from(e.target.files || []);
-                      setImageFiles(nextFiles);
-                      setPrimaryImageIndex(0);
+                      if (nextFiles.length === 0) return;
+
+                      // Keep images chosen in earlier picker openings. This
+                      // lets an admin add several batches without silently
+                      // losing the first batch or its primary-image choice.
+                      setImageFiles((currentFiles) => {
+                        const knownFiles = new Set(currentFiles.map(fileKey));
+                        const filesToAdd = nextFiles.filter((file) => !knownFiles.has(fileKey(file)));
+                        if (currentFiles.length === 0 && filesToAdd.length > 0) setPrimaryImageIndex(0);
+                        return [...currentFiles, ...filesToAdd];
+                      });
+                      // Allow selecting the same file again after removing it
+                      // or reopening the file picker.
+                      e.target.value = '';
                     }}
                   />
                 </label>
@@ -782,15 +849,26 @@ export const ProductManager = () => {
                     value={selectedFormParentCategoryId}
                     onChange={(e) => {
                       const parentId = e.target.value;
+                      const selectedParent = productCategoryTree.find(
+                        (category) => String(entityId(category)) === String(parentId)
+                      );
+                      const children = selectedParent?.children || [];
                       setSelectedFormParentCategoryId(parentId);
-                      // Prevent keeping a sub-category from a different parent.
-                      setForm((p) => ({ ...p, category: '' }));
+                      // A root category without children is itself the product
+                      // category. Previously this cleared `category`, causing
+                      // the API to receive null for the last root categories.
+                      setForm((p) => ({
+                        ...p,
+                        category: children.length > 0
+                          ? ''
+                          : relationToIri(selectedParent, 'categories'),
+                      }));
                     }}
                     className={inputCls}
                   >
                     <option value="">— Choisir —</option>
-                    {productCategoryTree.map((category) => (
-                      <option key={`parent-category-form-${category.id}`} value={category.id}>
+                    {productCategoryTree.map((category, index) => (
+                      <option key={`parent-category-form-${entityId(category) ?? category.slug ?? 'unknown'}-${index}`} value={entityId(category) ?? ''}>
                         {category.name}
                       </option>
                     ))}
@@ -811,8 +889,8 @@ export const ProductManager = () => {
                           ? 'Aucune sous-catégorie disponible'
                           : '— Choisir —'}
                     </option>
-                    {formSubCategories.map((category) => (
-                      <option key={`sub-category-form-${category.id}`} value={relationToIri(category, 'categories')}>
+                    {formSubCategories.map((category, index) => (
+                      <option key={`sub-category-form-${entityId(category) ?? category.slug ?? 'unknown'}-${index}`} value={relationToIri(category, 'categories')}>
                         {category.name}
                       </option>
                     ))}
@@ -900,14 +978,26 @@ export const ProductManager = () => {
                   </button>
                 </div>
                 {flavorError && <p className="mb-3 text-xs text-red-400">{flavorError}</p>}
+                {flavors.length > 0 && <div className="relative mb-3">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                  <input
+                    type="search"
+                    value={flavorSearch}
+                    onChange={(e) => setFlavorSearch(e.target.value)}
+                    className={`${inputCls} pl-10`}
+                    placeholder="Rechercher une saveur..."
+                    aria-label="Rechercher une saveur"
+                  />
+                </div>}
                 <div className="flex flex-wrap gap-2">
-                  {flavors.map((f) => {
+                  {visibleFlavors.map((f) => {
                     const iri = relationToIri(f, 'flavors');
                     return <button type="button" key={f['@id'] ?? f.id} onClick={() => toggleMulti('flavors', iri)}
                       className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${form.flavors.includes(iri) ? 'bg-[#d90429]/10 border-[#d90429] text-[#d90429]' : 'bg-[#111] border-[#333] text-gray-400'}`}
                     >{f.name}</button>;
                   })}
                 </div>
+                {flavors.length > 0 && visibleFlavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur trouvée.</p>}
                 {flavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur. Ajoutez la première ci-dessus.</p>}
               </div>
 

@@ -5,6 +5,7 @@ import { BannerManager } from './BannerManager';
 import { CouvertureManager } from './CouvertureManager';
 import { CategoryManager } from './CategoryManager';
 import { ProductManager } from './ProductManager';
+import { PackManager } from './PackManager';
 import { OrderManager } from './OrderManager';
 import { CustomerManager } from './CustomerManager';
 import { AnalyticsManager } from './AnalyticsManager';
@@ -27,6 +28,7 @@ export const AdminPage = ({ onLogout }) => {
       case 'couvertures':  return <CouvertureManager />;
       case 'categories':   return <CategoryManager />;
       case 'products':     return <ProductManager />;
+      case 'packs':        return <PackManager />;
       case 'orders':       return <OrderManager />;
       case 'customers':    return <CustomerManager />;
       case 'analytics':    return <AnalyticsManager />;
