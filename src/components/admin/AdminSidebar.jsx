@@ -11,9 +11,10 @@ import {
   Dumbbell,
   Store,
   Image,
+  X,
 } from 'lucide-react';
 
-export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
+export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile = false, onClose }) => {
   const [expandedMenus, setExpandedMenus] = useState({
     shop: true,
     website: false,
@@ -28,6 +29,11 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
     if (item.subItems?.length) {
       setActiveTab(item.subItems[0].id);
     }
+  };
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    onClose?.();
   };
 
   const menuItems = [
@@ -84,8 +90,8 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
   ];
 
   return (
-    <aside className="w-64 bg-[#161616] border-r border-[#2a2a2a] flex flex-col h-screen sticky top-0 shrink-0">
-      <div className="h-20 flex items-center px-6 border-b border-[#2a2a2a]">
+    <aside className={`w-64 bg-[#161616] border-r border-[#2a2a2a] flex-col shrink-0 ${mobile ? 'flex h-[100dvh] shadow-2xl' : 'hidden h-screen sticky top-0 lg:flex'}`}>
+      <div className="h-16 lg:h-20 flex items-center justify-between px-5 lg:px-6 border-b border-[#2a2a2a]">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-[#d90429] rounded flex items-center justify-center">
             <Dumbbell size={16} className="text-white" />
@@ -95,6 +101,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
             <span className="text-[10px] text-white/60 font-mono">Admin Console</span>
           </div>
         </div>
+        {mobile && <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-[#222] hover:text-white" aria-label="Fermer le menu"><X size={18} /></button>}
       </div>
 
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
@@ -112,7 +119,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
                   type="button"
                   onClick={() => {
                     toggleMenu(item.id);
-                    openDefaultChild(item);
+                    if (!mobile) openDefaultChild(item);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-bold ${
                     hasActiveChild && !isExpanded
@@ -133,7 +140,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
                       <button
                         type="button"
                         key={sub.id}
-                        onClick={() => setActiveTab(sub.id)}
+                        onClick={() => selectTab(sub.id)}
                         className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 text-xs font-semibold ${
                           activeTab === sub.id
                             ? 'bg-[#d90429] text-white font-bold'
@@ -153,7 +160,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
             <button
               type="button"
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => selectTab(item.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-bold ${
                 isDirectlyActive
                   ? 'bg-[#d90429] text-white'
@@ -169,13 +176,13 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout }) => {
 
       <div className="p-4 space-y-3 border-t border-[#2a2a2a]">
         <button
-          onClick={onExit}
+          onClick={() => { onExit(); onClose?.(); }}
           className="w-full flex items-center justify-center px-3 py-2.5 rounded-lg border border-[#333] text-sm font-bold text-white/85 hover:bg-[#222] hover:text-white bg-[#1a1a1a] transition-all"
         >
           Vue Boutique
         </button>
         <button
-          onClick={onLogout}
+          onClick={() => { onLogout(); onClose?.(); }}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/70 hover:bg-[#222] hover:text-red-300 transition-all"
         >
           <LogOut size={16} className="text-white/50" />

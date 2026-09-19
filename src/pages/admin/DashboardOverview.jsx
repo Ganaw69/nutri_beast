@@ -85,65 +85,65 @@ export const DashboardOverview = () => {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-[#111] overflow-y-auto custom-scrollbar pb-10">
-      <div className="flex justify-between items-center mb-8 px-2 pt-2">
+    <div className="flex min-h-full flex-col bg-[#111] pb-6 sm:pb-10">
+      <div className="mb-6 flex flex-col gap-4 px-0 pt-1 sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:px-2 sm:pt-2">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Sales Analytics</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight sm:text-3xl">Sales Analytics</h1>
           <p className="text-gray-500 text-sm">Derived from live orders and products.</p>
         </div>
-        <div className="flex items-center bg-[#161616] border border-[#2a2a2a] rounded overflow-hidden">
-          <button className="px-5 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors">Today</button>
-          <button className="px-5 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors border-l border-[#2a2a2a]">Month</button>
-          <button className="px-5 py-2 text-xs font-bold text-white bg-[#e60033] border-l border-[#e60033]">Year</button>
-          <button className="px-5 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors border-l border-[#2a2a2a] flex items-center gap-2">
+        <div className="flex w-full items-center overflow-x-auto rounded border border-[#2a2a2a] bg-[#161616] sm:w-auto">
+          <button className="shrink-0 px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors sm:px-5">Today</button>
+          <button className="shrink-0 border-l border-[#2a2a2a] px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors sm:px-5">Month</button>
+          <button className="shrink-0 border-l border-[#e60033] bg-[#e60033] px-4 py-2 text-xs font-bold text-white sm:px-5">Year</button>
+          <button className="flex shrink-0 items-center gap-2 border-l border-[#2a2a2a] px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors sm:px-5">
             Custom <CalendarIcon size={14} />
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-5">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:mb-6 lg:grid-cols-4 lg:gap-6">
+        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-5">
           <div className="flex justify-between items-start mb-2">
             <h3 className="text-gray-400 text-[11px] font-mono font-bold tracking-widest uppercase">Gross Revenue</h3>
             <TrendingUp size={16} className="text-emerald-500" />
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">{formatMoney(metrics.totalRevenue)}</h2>
+          <h2 className="text-3xl font-black text-white tracking-tighter sm:text-4xl">{formatMoney(metrics.totalRevenue)}</h2>
           <div className="flex items-center gap-2 text-[11px] font-mono mt-4">
             <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Live</span>
             <span className="text-gray-500">from orders API</span>
           </div>
         </div>
 
-        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-5">
+        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-5">
           <div className="flex justify-between items-start mb-2">
             <h3 className="text-gray-400 text-[11px] font-mono font-bold tracking-widest uppercase">Net Sales</h3>
             <TrendingUp size={16} className="text-emerald-500" />
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">{formatMoney(metrics.totalNetSales)}</h2>
+          <h2 className="text-3xl font-black text-white tracking-tighter sm:text-4xl">{formatMoney(metrics.totalNetSales)}</h2>
           <div className="flex items-center gap-2 text-[11px] font-mono mt-4">
             <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Live</span>
             <span className="text-gray-500">subtotal / total</span>
           </div>
         </div>
 
-        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-5">
+        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-5">
           <div className="flex justify-between items-start mb-2">
             <h3 className="text-gray-400 text-[11px] font-mono font-bold tracking-widest uppercase">Avg Order Value</h3>
             <TrendingDown size={16} className="text-red-400" />
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">{formatMoney(metrics.avgOrderValue)}</h2>
+          <h2 className="text-3xl font-black text-white tracking-tighter sm:text-4xl">{formatMoney(metrics.avgOrderValue)}</h2>
           <div className="flex items-center gap-2 text-[11px] font-mono mt-4">
             <span className="text-gray-400 font-bold bg-[#333] px-1.5 py-0.5 rounded">API</span>
             <span className="text-gray-500">{metrics.totalOrders} orders</span>
           </div>
         </div>
 
-        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-5">
+        <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-5">
           <div className="flex justify-between items-start mb-2">
             <h3 className="text-gray-400 text-[11px] font-mono font-bold tracking-widest uppercase">Total Orders</h3>
             <TrendingUp size={16} className="text-emerald-500" />
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">{metrics.totalOrders.toLocaleString("fr-FR")}</h2>
+          <h2 className="text-3xl font-black text-white tracking-tighter sm:text-4xl">{metrics.totalOrders.toLocaleString("fr-FR")}</h2>
           <div className="flex items-center gap-2 text-[11px] font-mono mt-4">
             <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Live</span>
             <span className="text-gray-500">current dataset</span>
@@ -151,14 +151,14 @@ export const DashboardOverview = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="lg:col-span-2 bg-[#161616] border border-[#2a2a2a] rounded-lg p-6">
-          <div className="flex justify-between items-start mb-8">
+      <div className="mb-5 grid grid-cols-1 gap-5 lg:mb-6 lg:grid-cols-3 lg:gap-6">
+        <div className="lg:col-span-2 bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-6">
+          <div className="mb-5 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-white mb-1">Revenue vs Net Sales</h2>
               <p className="text-gray-500 text-sm">Monthly revenue built from orders</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <div className="flex items-center gap-2 text-xs font-bold text-white">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#e60033]"></span> Gross
               </div>
@@ -169,7 +169,7 @@ export const DashboardOverview = () => {
             </div>
           </div>
 
-          <div className="h-72">
+          <div className="h-60 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={metrics.monthly} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                 <defs>
@@ -190,26 +190,26 @@ export const DashboardOverview = () => {
         </div>
 
         <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg flex flex-col">
-          <div className="p-6 border-b border-[#2a2a2a] flex justify-between items-center">
+          <div className="flex items-center justify-between border-b border-[#2a2a2a] p-4 sm:p-6">
             <h2 className="text-lg font-bold text-white">Top Performers</h2>
             <button className="text-[10px] font-bold text-[#e60033] tracking-widest uppercase">View All</button>
           </div>
 
-          <div className="px-6 py-3 border-b border-[#2a2a2a] grid grid-cols-4 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest">
+          <div className="grid grid-cols-4 border-b border-[#2a2a2a] px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-500 sm:px-6">
             <div className="col-span-3">Product</div>
             <div className="text-right">Revenue</div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {metrics.topPerformers.length > 0 ? metrics.topPerformers.map((item, idx) => (
-              <div key={idx} className="px-6 py-4 border-b border-[#2a2a2a] last:border-0 flex items-center justify-between hover:bg-[#1a1a1a] transition-colors cursor-pointer">
-                <div className="flex items-center gap-4">
+              <div key={idx} className="flex cursor-pointer items-center justify-between border-b border-[#2a2a2a] px-4 py-4 last:border-0 hover:bg-[#1a1a1a] sm:px-6">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                   <div className="w-8 h-8 rounded border border-[#333] bg-[#111] flex items-center justify-center text-gray-400">
                     <item.icon size={16} />
                   </div>
                   <span className="text-sm font-bold text-gray-300 truncate max-w-[140px]">{item.name}</span>
                 </div>
-                <span className="text-sm font-mono text-gray-400">{item.revenue}</span>
+                <span className="shrink-0 text-xs font-mono text-gray-400 sm:text-sm">{item.revenue}</span>
               </div>
             )) : (
               <div className="px-6 py-8 text-gray-500 text-sm">No product sales data yet.</div>
@@ -218,11 +218,11 @@ export const DashboardOverview = () => {
         </div>
       </div>
 
-      <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-6">
-        <h2 className="text-lg font-bold text-white mb-6">Category Performance Heatmap</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-6">
+        <h2 className="text-lg font-bold text-white mb-4 sm:mb-6">Category Performance Heatmap</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
           {metrics.heatmap.map((item) => (
-            <div key={item.name} className="rounded px-4 py-3 aspect-square flex flex-col justify-between" style={{ backgroundColor: item.color }}>
+            <div key={item.name} className="flex aspect-square min-h-28 flex-col justify-between rounded px-3 py-3 sm:px-4" style={{ backgroundColor: item.color }}>
               <span className="text-[10px] font-mono font-bold text-white uppercase tracking-widest">{item.name}</span>
               <span className="text-2xl font-black text-white">{Math.round((item.value / maxHeatValue) * 100)}%</span>
             </div>
