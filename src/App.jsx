@@ -1,22 +1,37 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { CartProvider, useCart } from "./context/CartContext";
 import { AdminProvider, useAdmin } from "./context/AdminContext";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { Toast } from "./components/Toast";
 import { HomePage } from "./pages/HomePage";
-import { ShopPage } from "./pages/ShopPage";
-import { ProductDetailPage } from "./pages/ProductDetailPage";
-import { CalculatorPage } from "./pages/CalculatorPage";
-import { NutritionistAIPage } from "./pages/NutritionistAIPage";
-import { CoachIaPage } from "./pages/CoachIaPage";
-import { CartPage } from "./pages/CartPage";
-import { CheckoutPage } from "./pages/CheckoutPage";
-import { BlogPage } from "./pages/BlogPage";
-import { BlogArticlePage } from "./pages/BlogArticlePage";
-import { RecipesPage } from "./pages/RecipesPage";
-import { AdminPage } from "./pages/admin/AdminPage";
-import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
+
+const lazyPage = (loader, exportName) => lazy(async () => {
+  const module = await loader();
+  return { default: module[exportName] };
+});
+
+// Keep the landing page in the initial bundle, but load feature screens only
+// when a visitor opens them. The admin and AI dependencies were otherwise
+// delaying the first storefront paint for every visitor.
+const ShopPage = lazyPage(() => import("./pages/ShopPage"), "ShopPage");
+const ProductDetailPage = lazyPage(() => import("./pages/ProductDetailPage"), "ProductDetailPage");
+const CalculatorPage = lazyPage(() => import("./pages/CalculatorPage"), "CalculatorPage");
+const NutritionistAIPage = lazyPage(() => import("./pages/NutritionistAIPage"), "NutritionistAIPage");
+const CoachIaPage = lazyPage(() => import("./pages/CoachIaPage"), "CoachIaPage");
+const CartPage = lazyPage(() => import("./pages/CartPage"), "CartPage");
+const CheckoutPage = lazyPage(() => import("./pages/CheckoutPage"), "CheckoutPage");
+const BlogPage = lazyPage(() => import("./pages/BlogPage"), "BlogPage");
+const BlogArticlePage = lazyPage(() => import("./pages/BlogArticlePage"), "BlogArticlePage");
+const RecipesPage = lazyPage(() => import("./pages/RecipesPage"), "RecipesPage");
+const AdminPage = lazyPage(() => import("./pages/admin/AdminPage"), "AdminPage");
+const AdminLoginPage = lazyPage(() => import("./pages/admin/AdminLoginPage"), "AdminLoginPage");
+
+const PageLoader = () => (
+  <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Chargement">
+    <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#d90429] border-t-transparent" />
+  </div>
+);
 
 // Check if the current URL path is /admin
 const isAdminRoute = () => {
@@ -28,11 +43,11 @@ const isAdminRoute = () => {
 const AdminApp = () => {
   const { isAuthenticated, logout } = useAdmin();
 
-  if (!isAuthenticated) {
-    return <AdminLoginPage onLoginSuccess={() => {}} />;
-  }
-
-  return <AdminPage onLogout={logout} />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {isAuthenticated ? <AdminPage onLogout={logout} /> : <AdminLoginPage onLoginSuccess={() => {}} />}
+    </Suspense>
+  );
 };
 
 // Client App
@@ -41,17 +56,19 @@ const MainContent = () => {
 
   return (
     <main className="min-h-screen">
-      {activeTab === "home" && <HomePage />}
-      {activeTab === "shop" && <ShopPage />}
-      {activeTab === "product-detail" && <ProductDetailPage />}
-      {activeTab === "calculator" && <CalculatorPage />}
-      {activeTab === "nutritionist-ai" && <NutritionistAIPage />}
-      {activeTab === "coach-ia" && <CoachIaPage />}
-      {activeTab === "cart" && <CartPage />}
-      {activeTab === "checkout" && <CheckoutPage />}
-      {activeTab === "blog" && <BlogPage />}
-      {activeTab === "blog-article" && <BlogArticlePage />}
-      {activeTab === "recipes" && <RecipesPage />}
+      <Suspense fallback={<PageLoader />}>
+        {activeTab === "home" && <HomePage />}
+        {activeTab === "shop" && <ShopPage />}
+        {activeTab === "product-detail" && <ProductDetailPage />}
+        {activeTab === "calculator" && <CalculatorPage />}
+        {activeTab === "nutritionist-ai" && <NutritionistAIPage />}
+        {activeTab === "coach-ia" && <CoachIaPage />}
+        {activeTab === "cart" && <CartPage />}
+        {activeTab === "checkout" && <CheckoutPage />}
+        {activeTab === "blog" && <BlogPage />}
+        {activeTab === "blog-article" && <BlogArticlePage />}
+        {activeTab === "recipes" && <RecipesPage />}
+      </Suspense>
     </main>
   );
 };

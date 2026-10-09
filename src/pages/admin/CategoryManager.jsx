@@ -43,12 +43,18 @@ export const CategoryManager = () => {
   const fetchCategories = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await categoryService.getAll({
-        itemsPerPage: 100,
-        'order[position]': 'asc',
-        'order[name]': 'asc',
+      // These are public endpoints: the root list is loaded first, then each
+      // parent's children are fetched through `?parent.id=<id>`.
+      const mainData = await categoryService.getMain();
+      const rootCategories = extractCategoryItems(mainData);
+      const childResponses = await Promise.all(
+        rootCategories.map((category) => categoryService.getChildren(category.id))
+      );
+      const categoryById = new Map();
+      [...rootCategories, ...childResponses.flatMap(extractCategoryItems)].forEach((category) => {
+        categoryById.set(String(category.id), category);
       });
-      setCategories(extractCategoryItems(data));
+      setCategories([...categoryById.values()]);
     } catch (e) {
       setError(e.message);
     } finally {

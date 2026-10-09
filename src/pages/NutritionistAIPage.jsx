@@ -28,14 +28,9 @@ export const NutritionistAIPage = () => {
   useEffect(() => {
     productService
       .getAll({ isActive: true, itemsPerPage: 100 }, true)
-      .then((data) =>
-        Promise.all(
-          (data?.["hydra:member"] || []).map((product) =>
-            productService.getOne(product.id, true).catch(() => product)
-          )
-        )
-      )
-      .then((detailedProducts) => setCatalog(detailedProducts.map(normalizeProduct)))
+      // Recommendations need only card fields, which the collection already
+      // supplies. Fetching every product individually delayed the chat page.
+      .then((data) => setCatalog((data?.["hydra:member"] || []).map(normalizeProduct)))
       .catch(() => setCatalog([]));
   }, []);
 

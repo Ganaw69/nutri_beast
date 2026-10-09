@@ -247,6 +247,8 @@ const demoBanners = [
   },
 ];
 
+const demoCouvertures = [];
+
 const demoStore = {
   products: demoProducts,
   categories: demoCategories,
@@ -259,6 +261,7 @@ const demoStore = {
   blogCategories: demoBlogCategories,
   blogArticles: demoBlogArticles,
   banners: demoBanners,
+  couvertures: demoCouvertures,
   recipes: demoRecipes,
   settings: { 1: { id: 1, siteName: 'NutriBeast', currency: 'TND' } },
   users: [],
@@ -335,6 +338,15 @@ function applyFilters(items, path) {
     next = next.filter((item) => {
       const itemCategoryId = toNumber(item.category?.id ?? item.categoryId ?? item.category?.['@id']?.split('/').pop(), NaN);
       return categoryIds.includes(itemCategoryId);
+    });
+  }
+
+  const parentIds = idsFrom('parent.id[]', 'parent.id', 'parent[]');
+  if (parentIds.length) {
+    next = next.filter((item) => {
+      const parent = item.parent;
+      const itemParentId = toNumber(parent?.id ?? item.parentId ?? parent?.['@id']?.split('/').pop() ?? parent?.split?.('/').pop(), NaN);
+      return parentIds.includes(itemParentId);
     });
   }
 
@@ -418,10 +430,46 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   }
   if (pathname === '/product_images' && method === 'GET') return buildHydraCollection([]);
 
+  if (pathname === '/categories/main' && method === 'GET') {
+    return buildHydraCollection(demoStore.categories.filter((item) => !item.parent && !item.parentId));
+  }
   if (pathname === '/categories' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.categories, path));
   if (pathname.startsWith('/categories/') && method === 'GET') return clone(findDemoEntity('categories', pathname.split('/').pop()));
   if (pathname === '/brands' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.brands, path));
   if (pathname.startsWith('/brands/') && method === 'GET') return clone(findDemoEntity('brands', pathname.split('/').pop()));
+  if (pathname === '/brands' && method === 'POST') {
+    const id = nextNumericId(demoStore.brands);
+    const item = {
+      id,
+      '@id': makeIri('brands', id),
+      name: body.name || 'Nouvelle marque',
+      slug: body.slug || slugify(body.name || 'nouvelle-marque'),
+      description: body.description || '',
+      website: body.website || '',
+      isActive: String(body.isActive ?? 'true') !== 'false',
+      logo: body.logoFile?.name || '',
+    };
+    demoStore.brands.unshift(item);
+    return clone(item);
+  }
+  if (pathname.startsWith('/brands/') && method === 'PATCH') {
+    const item = findDemoEntity('brands', pathname.split('/').pop());
+    if (!item) return null;
+    Object.assign(item, {
+      name: body.name ?? item.name,
+      slug: body.slug ?? item.slug,
+      description: body.description ?? item.description,
+      website: body.website ?? item.website,
+      isActive: body.isActive == null ? item.isActive : String(body.isActive) !== 'false',
+      logo: body.logoFile?.name || item.logo,
+    });
+    return clone(item);
+  }
+  if (pathname.startsWith('/brands/') && method === 'DELETE') {
+    const id = pathname.split('/').pop();
+    demoStore.brands = demoStore.brands.filter((item) => String(item.id) !== String(id));
+    return null;
+  }
   if (pathname === '/goals' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.goals, path));
   if (pathname === '/flavors' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.flavors, path));
 
@@ -449,6 +497,9 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   if (pathname === '/banners/active' && method === 'GET') return buildHydraCollection(demoStore.banners.filter((banner) => banner.enabled !== false));
   if (pathname === '/banners' && method === 'GET') return buildHydraCollection(demoStore.banners);
   if (pathname.startsWith('/banners/') && method === 'GET') return clone(findDemoEntity('banners', pathname.split('/').pop()));
+
+  if (pathname === '/couvertures' && method === 'GET') return buildHydraCollection(demoStore.couvertures);
+  if (pathname.startsWith('/couvertures/') && method === 'GET') return clone(findDemoEntity('couvertures', pathname.split('/').pop()));
 
   if (pathname === '/recipes' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.recipes, path));
   if (pathname.startsWith('/recipes/') && method === 'GET') return clone(findDemoEntity('recipes', pathname.split('/').pop()));
@@ -542,6 +593,52 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   if (pathname.startsWith('/blog_articles/') && method === 'DELETE') {
     const id = pathname.split('/').pop();
     demoStore.blogArticles = demoStore.blogArticles.filter((item) => String(item.id) !== String(id));
+    return null;
+  }
+
+  if (pathname === '/couvertures' && method === 'POST') {
+    const id = nextNumericId(demoStore.couvertures);
+    const item = {
+      id,
+      '@id': makeIri('couvertures', id),
+      name: body.name || 'Nouvelle couverture',
+      title: body.title || '',
+      subtitle: body.subtitle || '',
+      buttonText: body.buttonText || '',
+      navigationType: body.navigationType || 'url',
+      navigation: body.navigation || '',
+      index: toNumber(body.index, 0),
+      active: String(body.active ?? 'true') !== 'false',
+      startDate: body.startDate || null,
+      endDate: body.endDate || null,
+      image: body.image?.name || '',
+      imageMobile: body.imageMobile?.name || '',
+    };
+    demoStore.couvertures.unshift(item);
+    return clone(item);
+  }
+  if (pathname.startsWith('/couvertures/') && method === 'PATCH') {
+    const item = findDemoEntity('couvertures', pathname.split('/').pop());
+    if (!item) return null;
+    Object.assign(item, {
+      name: body.name ?? item.name,
+      title: body.title ?? item.title,
+      subtitle: body.subtitle ?? item.subtitle,
+      buttonText: body.buttonText ?? item.buttonText,
+      navigationType: body.navigationType ?? item.navigationType,
+      navigation: body.navigation ?? item.navigation,
+      index: body.index == null ? item.index : toNumber(body.index, item.index),
+      active: body.active == null ? item.active : String(body.active) !== 'false',
+      startDate: body.startDate ?? item.startDate,
+      endDate: body.endDate ?? item.endDate,
+      image: body.image?.name || item.image,
+      imageMobile: body.imageMobile?.name || item.imageMobile,
+    });
+    return clone(item);
+  }
+  if (pathname.startsWith('/couvertures/') && method === 'DELETE') {
+    const id = pathname.split('/').pop();
+    demoStore.couvertures = demoStore.couvertures.filter((item) => String(item.id) !== String(id));
     return null;
   }
 
@@ -747,6 +844,48 @@ export const productImageUrl = (filename) => {
   return MEDIA_BASE ? `${MEDIA_BASE}/uploads/products/${normalized}` : `/uploads/products/${normalized}`;
 };
 
+const hasEmbeddedProductImage = (product) => {
+  const directImage = resolveUploadUrl(
+    'products',
+    product?.image ?? product?.imagePath ?? product?.mainImage ?? product?.mainImagePath ?? product?.thumbnail ?? product?.thumbnailPath
+  );
+  if (directImage) return true;
+
+  return [
+    ...(Array.isArray(product?.productImages) ? product.productImages : []),
+    ...(Array.isArray(product?.images) ? product.images : []),
+    ...(Array.isArray(product?.media) ? product.media : []),
+  ].some((image) => {
+    const source = getProductImageSource(image);
+    return source && !String(source).startsWith('/api/');
+  });
+};
+
+export const hydrateProductsWithImages = async (products = [], skipAuth = true) => {
+  if (!products.length) return products;
+
+  // Do not fetch a single, paginated image collection here.  When that
+  // collection is capped by the API, images belonging to products after its
+  // first page are absent on the storefront (while they still work in admin).
+  // The API already supports filtering images by product, so use it just as
+  // the back-office does. A failed image request remains non-blocking.
+  return Promise.all(products.map(async (product) => {
+    const productId = product?.id ?? iriToId(product?.['@id'] || product?.iri);
+    // List responses that already carry an image are ready to render. Avoid a
+    // second API request for every visible card in that common case.
+    if (productId == null || hasEmbeddedProductImage(product)) return product;
+
+    const data = await productService
+      .getImages({ product: productId, itemsPerPage: 100 }, skipAuth)
+      .catch(() => ({ 'hydra:member': [] }));
+    const fetchedImages = data?.['hydra:member'] || data?.member || data?.items || [];
+    const embeddedImages = Array.isArray(product.productImages) ? product.productImages : [];
+    const productImages = [...embeddedImages, ...fetchedImages];
+
+    return productImages.length > 0 ? { ...product, productImages } : product;
+  }));
+};
+
 /** Pick the primary product image if present, otherwise the first image. */
 export const isPrimaryProductImage = (img) =>
   typeof img === 'string' ||
@@ -915,61 +1054,151 @@ export const authService = {
 // ============================================================
 // PRODUCTS
 // ============================================================
+// Multiple pages use the same public product data. Keeping short-lived
+// promises here deduplicates requests (including React Strict Mode's dev-only
+// remount) without persisting stale catalogue data between sessions.
+const PRODUCT_READ_CACHE_TTL = 30 * 1000;
+const PRODUCT_IMAGE_CACHE_TTL = 5 * 60 * 1000;
+const productReadCache = new Map();
+
+const readCachedProductData = (key, loader, ttl = PRODUCT_READ_CACHE_TTL) => {
+  const now = Date.now();
+  const cached = productReadCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+
+  const promise = Promise.resolve().then(loader);
+  productReadCache.set(key, { promise, expiresAt: now + ttl });
+  promise.catch(() => {
+    if (productReadCache.get(key)?.promise === promise) productReadCache.delete(key);
+  });
+  return promise;
+};
+
+const clearProductReadCache = () => productReadCache.clear();
+
 export const productService = {
-  async getAll(params = {}, skipAuth = false) {
-    const data = await apiFetch(`/products${buildQuery(params)}`, {}, false, skipAuth);
-    return normalizeCollectionResponse(data);
+  // Product reads are public: do not depend on an admin JWT being present.
+  getAll(params = {}, skipAuth = true) {
+    const path = `/products${buildQuery(params)}`;
+    return readCachedProductData(
+      `collection:${skipAuth}:${path}`,
+      async () => normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth))
+    );
   },
-  async getOne(id, skipAuth = false) {
-    return apiFetch(`/products/${id}`, {}, false, skipAuth);
+  /**
+   * Return the complete filtered collection even when the API applies a
+   * server-side maximum to `itemsPerPage`.  Consumers can then paginate after
+   * any client-side relation filtering without creating empty pages.
+   */
+  async getAllPages(params = {}, skipAuth = true) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth);
+    const firstItems = firstPage['hydra:member'] || [];
+    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
+
+    if (firstItems.length === 0 || firstItems.length >= total) {
+      return { ...firstPage, 'hydra:member': firstItems, 'hydra:totalItems': total };
+    }
+
+    const pageCount = Math.ceil(total / firstItems.length);
+    // A failed later page must not hide the first valid results. Some API
+    // deployments can reject a deep page while page 1 is perfectly usable.
+    const remainingResults = await Promise.allSettled(
+      Array.from({ length: pageCount - 1 }, (_, index) =>
+        this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
+      )
+    );
+    const remainingPages = remainingResults
+      .filter((result) => result.status === 'fulfilled')
+      .map((result) => result.value);
+
+    return {
+      ...firstPage,
+      'hydra:member': [...firstItems, ...remainingPages.flatMap((data) => data['hydra:member'] || [])],
+      'hydra:totalItems': firstItems.length + remainingPages.flatMap((data) => data['hydra:member'] || []).length,
+    };
   },
-  async getImages(params = {}, skipAuth = false) {
-    const data = await apiFetch(`/product_images${buildQuery(params)}`, {}, false, skipAuth);
-    return normalizeCollectionResponse(data);
+  getOne(id, skipAuth = true) {
+    const path = `/products/${id}`;
+    return readCachedProductData(`item:${skipAuth}:${path}`, () => apiFetch(path, {}, false, skipAuth));
+  },
+  getImages(params = {}, skipAuth = true) {
+    const path = `/product_images${buildQuery(params)}`;
+    return readCachedProductData(
+      `images:${skipAuth}:${path}`,
+      async () => normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth)),
+      PRODUCT_IMAGE_CACHE_TTL
+    );
   },
   async create(data) {
-    return apiFetch('/products', { method: 'POST', body: JSON.stringify(data) });
+    const product = await apiFetch('/products', { method: 'POST', body: JSON.stringify(data) });
+    clearProductReadCache();
+    return product;
   },
   async update(id, data) {
-    return apiFetch(`/products/${id}`, {
+    const product = await apiFetch(`/products/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json' },
       body: JSON.stringify(data),
     });
+    clearProductReadCache();
+    return product;
   },
   async delete(id) {
-    return apiFetch(`/products/${id}`, { method: 'DELETE' });
+    const result = await apiFetch(`/products/${id}`, { method: 'DELETE' });
+    clearProductReadCache();
+    return result;
   },
   async activate(id) {
-    return apiFetch(`/products/${id}/activate`, { method: 'PATCH' });
+    const product = await apiFetch(`/products/${id}/activate`, { method: 'PATCH' });
+    clearProductReadCache();
+    return product;
   },
   async deactivate(id) {
-    return apiFetch(`/products/${id}/deactivate`, { method: 'PATCH' });
+    const product = await apiFetch(`/products/${id}/deactivate`, { method: 'PATCH' });
+    clearProductReadCache();
+    return product;
   },
   async duplicate(id) {
-    return apiFetch(`/products/${id}/duplicate`, { method: 'POST' });
+    const product = await apiFetch(`/products/${id}/duplicate`, { method: 'POST' });
+    clearProductReadCache();
+    return product;
   },
   async adjustStock(id, operation, quantity, reason = '') {
     // operation: 'add' | 'remove' | 'adjust' | 'return'
-    return apiFetch(`/products/${id}/stock/${operation}`, {
+    const product = await apiFetch(`/products/${id}/stock/${operation}`, {
       method: 'PATCH',
       body: JSON.stringify({ quantity, reason }),
     });
+    clearProductReadCache();
+    return product;
   },
   async uploadImage(productId, file, position = 0, isPrimary = false) {
     const fd = new FormData();
+    // The ProductImageInput DTO receives the product identifier, not an IRI.
     fd.append('productId', String(productId));
     fd.append('position', String(position));
     fd.append('isPrimary', isPrimary ? 'true' : 'false');
     fd.append('is_primary', isPrimary ? 'true' : 'false');
     fd.append('imageFile', file);
-    return apiFetch('/product_images', { method: 'POST', body: fd }, true);
+    const image = await apiFetch('/product_images', { method: 'POST', body: fd }, true);
+
+    const assignedProductId = getProductImageProductId(image);
+    if (assignedProductId != null && String(assignedProductId) !== String(productId)) {
+      throw new Error("L'image a été associée au mauvais produit.");
+    }
+
+    clearProductReadCache();
+    return image;
   },
   async deleteImage(imageId) {
-    return apiFetch(`/product_images/${imageId}`, { method: 'DELETE' });
+    const result = await apiFetch(`/product_images/${imageId}`, { method: 'DELETE' });
+    clearProductReadCache();
+    return result;
   },
   async setImagePrimary(imageId) {
-    return apiFetch(`/product_images/${imageId}/primary`, { method: 'PATCH' });
+    const result = await apiFetch(`/product_images/${imageId}/primary`, { method: 'PATCH' });
+    clearProductReadCache();
+    return result;
   },
 };
 
@@ -977,6 +1206,20 @@ export const productService = {
 // CATEGORIES
 // ============================================================
 export const categoryService = {
+  // Category reading endpoints are public; never send an admin JWT with them.
+  async getMain() {
+    return apiFetch('/categories/main', {}, false, true);
+  },
+  async getChildren(parentId, params = {}) {
+    if (parentId === null || parentId === undefined || parentId === '') {
+      return normalizeCollectionResponse({ 'hydra:member': [] });
+    }
+    const data = await apiFetch(`/categories${buildQuery({
+      ...params,
+      'parent.id': parentId,
+    })}`, {}, false, true);
+    return normalizeCollectionResponse(data);
+  },
   async getAll(params = {}, skipAuth = false) {
     const data = await apiFetch(`/categories${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
@@ -1055,14 +1298,16 @@ export const brandService = {
     return apiFetch(`/brands/${id}`, {}, false, skipAuth);
   },
   async create(data) {
-    return apiFetch('/brands', { method: 'POST', body: JSON.stringify(data) });
+    const isMultipart = data instanceof FormData;
+    return apiFetch('/brands', { method: 'POST', body: isMultipart ? data : JSON.stringify(data) }, isMultipart);
   },
   async update(id, data) {
+    const isMultipart = data instanceof FormData;
     return apiFetch(`/brands/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/merge-patch+json' },
-      body: JSON.stringify(data),
-    });
+      ...(isMultipart ? {} : { headers: { 'Content-Type': 'application/merge-patch+json' } }),
+      body: isMultipart ? data : JSON.stringify(data),
+    }, isMultipart);
   },
   async delete(id) {
     return apiFetch(`/brands/${id}`, { method: 'DELETE' });
@@ -1096,8 +1341,14 @@ export const goalService = {
 // FLAVORS
 // ============================================================
 export const flavorService = {
-  async getAll(skipAuth = false) {
-    const data = await apiFetch('/flavors', {}, false, skipAuth);
+  // The flavor catalogue is public: never require or attach an admin JWT by default.
+  async getAll(params = {}, skipAuth = true) {
+    // Preserve the former `getAll(true)` shorthand for public calls.
+    if (typeof params === 'boolean') {
+      skipAuth = params;
+      params = {};
+    }
+    const data = await apiFetch(`/flavors${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
   },
   async create(data) {
@@ -1208,6 +1459,69 @@ export const couponService = {
 };
 
 // ============================================================
+// PACKS
+// ============================================================
+export const packService = {
+  async getAll(params = {}, skipAuth = false) {
+    const data = await apiFetch(`/packs${buildQuery(params)}`, {}, false, skipAuth);
+    return normalizeCollectionResponse(data);
+  },
+  async getOne(id, skipAuth = false) {
+    return apiFetch(`/packs/${id}`, {}, false, skipAuth);
+  },
+  async create(data) {
+    return apiFetch('/packs', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async update(id, data) {
+    return apiFetch(`/packs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
+  },
+  async delete(id) {
+    return apiFetch(`/packs/${id}`, { method: 'DELETE' });
+  },
+  async uploadImage(id, file) {
+    const formData = new FormData();
+    formData.append('image', file);
+    return apiFetch(`/packs/${id}/upload-image`, { method: 'POST', body: formData }, true);
+  },
+};
+
+export const packProductService = {
+  async getAll(params = {}, skipAuth = false) {
+    const query = { ...params };
+    if (query.pack !== undefined) {
+      query['pack.id'] = query.pack;
+      delete query.pack;
+    }
+    if (query.product !== undefined) {
+      query['product.id'] = query.product;
+      delete query.product;
+    }
+    const data = await apiFetch(`/pack_products${buildQuery(query)}`, {}, false, skipAuth);
+    return normalizeCollectionResponse(data);
+  },
+  async getOne(id, skipAuth = false) {
+    return apiFetch(`/pack_products/${id}`, {}, false, skipAuth);
+  },
+  async create(data) {
+    return apiFetch('/pack_products', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async update(id, data) {
+    return apiFetch(`/pack_products/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
+  },
+  async delete(id) {
+    return apiFetch(`/pack_products/${id}`, { method: 'DELETE' });
+  },
+};
+
+// ============================================================
 // BLOG CATEGORIES
 // ============================================================
 export const blogCategoryService = {
@@ -1293,6 +1607,30 @@ export const bannerService = {
       method: 'PATCH',
       body: JSON.stringify({ position }),
     });
+  },
+};
+
+// ============================================================
+// COUVERTURES
+// ============================================================
+export const couvertureService = {
+  async getAll() {
+    const data = await apiFetch('/couvertures');
+    // The Couverture API returns API Platform's compact `member` key,
+    // while other endpoints in this application often return `hydra:member`.
+    return normalizeCollectionResponse(data);
+  },
+  async getOne(id) {
+    return apiFetch(`/couvertures/${id}`);
+  },
+  async create(formData) {
+    return apiFetch('/couvertures', { method: 'POST', body: formData }, true);
+  },
+  async update(id, formData) {
+    return apiFetch(`/couvertures/${id}`, { method: 'PATCH', body: formData }, true);
+  },
+  async delete(id) {
+    return apiFetch(`/couvertures/${id}`, { method: 'DELETE' });
   },
 };
 
