@@ -21,7 +21,7 @@ const normalizeProduct = (p) => ({
 });
 
 export const HomePage = () => {
-  const { navigateTo, viewProductDetails } = useCart();
+  const { navigateTo } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
@@ -29,23 +29,31 @@ export const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+
     Promise.all([
       productService.getAll({ isFeatured: true, isActive: true, itemsPerPage: 3 }, true).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(async ([prodData, couvertureData, brandData]) => {
+    ]).then(([prodData, couvertureData, brandData]) => {
+      if (!active) return;
       const prods = prodData['hydra:member'] || [];
-      const detailed = await hydrateProductsWithImages(
-        await Promise.all(prods.map((product) => productService.getOne(product.id, true).catch(() => product)))
-      );
-      setBestSellers(detailed.map(normalizeProduct));
+      // The collection already includes everything a product card needs.
+      // Render it immediately; image enrichment is non-blocking below.
+      setBestSellers(prods.map(normalizeProduct));
       const couvertures = (couvertureData['hydra:member'] || couvertureData.member || [])
         .filter((couverture) => couverture.active !== false)
         .sort((first, second) => (first.index ?? 0) - (second.index ?? 0));
       setHeroCouvertures(couvertures);
       setBrands((brandData['hydra:member'] || []).filter((brand) => brand.active !== false && brand.isActive !== false && brand.logo));
       setLoading(false);
+
+      void hydrateProductsWithImages(prods).then((productsWithImages) => {
+        if (active) setBestSellers(productsWithImages.map(normalizeProduct));
+      });
     });
+
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -64,39 +72,19 @@ export const HomePage = () => {
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
   const heroMobileBgImage = heroCouverture?.imageMobile ? mediaUrl(`couvertures/${heroCouverture.imageMobile}`) : heroBgImage;
 
-  const handleHeroNavigation = () => {
-    const type = heroCouverture?.navigationType;
-    const target = String(heroCouverture?.navigation || '').trim();
-    if (!target) return navigateTo('shop');
-
-    if (type === 'product') {
-      const productId = Number(target.split('/').filter(Boolean).pop());
-      if (Number.isInteger(productId) && productId > 0) return viewProductDetails(productId);
-    }
-    if (type === 'category') {
-      // The homepage has no category selector; category targets open the shop.
-      return navigateTo('shop');
-    }
-    if (type === 'page') {
-      const page = target.replace(/^\/+|\/+$/g, '');
-      const supportedPages = ['home', 'shop', 'blog', 'recipes', 'calculator', 'nutritionist-ai', 'coach-ia', 'cart'];
-      if (supportedPages.includes(page)) return navigateTo(page);
-    }
-    if (type === 'url') {
-      window.location.assign(target);
-      return;
-    }
-    navigateTo('shop');
+  const showNextHeroCouverture = () => {
+    if (heroCouvertures.length < 2) return;
+    setActiveHeroIndex((current) => (current + 1) % heroCouvertures.length);
   };
 
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading pb-20 space-y-16">
       {/* ================= 1. HERO SECTION ================= */}
       <section className="relative w-full aspect-[3/2] bg-[#0c0c0c] border-b border-white/10 overflow-hidden">
-        <button type="button" onClick={handleHeroNavigation} className="absolute inset-0 w-full h-full cursor-pointer" aria-label={heroCouverture?.buttonText || heroCouverture?.name || 'Voir la couverture'}>
+        <button type="button" onClick={showNextHeroCouverture} className="absolute inset-0 w-full h-full cursor-pointer" aria-label="Afficher la couverture suivante">
           <picture className="block w-full h-full">
             <source media="(max-width: 639px)" srcSet={heroMobileBgImage} />
-            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} className="w-full h-full object-cover object-center animate-[pulse_0.35s_ease-out]" />
+            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchPriority="high" decoding="async" className="w-full h-full object-cover object-center animate-[pulse_0.35s_ease-out]" />
           </picture>
         </button>
         <div className="absolute inset-0 bg-black/30 pointer-events-none" />

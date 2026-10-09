@@ -52,16 +52,32 @@ export const ProductDetailPage = () => {
 
   useEffect(() => {
     if (!selectedProductId) return;
+    let active = true;
     setLoading(true);
 
-    Promise.all([
-    productService.getOne(selectedProductId, true),
-    // The image API filters by `product` (the same query used in back office).
-    productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    productService.getAll({ isActive: true, itemsPerPage: 4 }, true).catch(() => ({ 'hydra:member': [] })),
-    reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
-    flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(async ([prod, imageData, relData, revData, flavorData]) => {
+    const loadProduct = async () => {
+      try {
+        // Show the product as soon as its fast, single-resource request
+        // finishes. Reviews, flavour labels and related cards can arrive after
+        // the above-the-fold product information is already visible.
+        const prod = await productService.getOne(selectedProductId, true);
+        if (!active) return;
+
+        const immediateProduct = normalizeProduct(prod);
+        setProduct(immediateProduct);
+        setActiveImage(resolveProductImage(prod, immediateProduct.image));
+        setSelectedFlavor(immediateProduct.flavors[0] || '');
+        setLoading(false);
+
+        const [imageData, relData, revData, flavorData] = await Promise.all([
+          // The image API filters by `product` (the same query used in back office).
+          productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+          productService.getAll({ isActive: true, itemsPerPage: 4 }, true).catch(() => ({ 'hydra:member': [] })),
+          reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
+          flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+        ]);
+        if (!active) return;
+
       const fetchedImages = imageData['hydra:member'] || imageData.member || imageData.items || [];
       const imagesById = new Map(fetchedImages.map((image) => [String(image.id), image]));
       const embeddedImages = (prod.productImages || [])
@@ -96,11 +112,17 @@ export const ProductDetailPage = () => {
         (relData['hydra:member'] || []).filter((item) => item.id !== prod.id).slice(0, 3),
         true
       );
+      if (!active) return;
       const relProds = relatedWithImages.map((item) => normalizeProduct(item, flavorCatalog));
       setRelated(relProds);
       setReviews(revData['hydra:member'] || []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+      } catch {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadProduct();
+    return () => { active = false; };
   }, [selectedProductId]);
 
   const handleReviewSubmit = async (e) => {

@@ -38,8 +38,9 @@ export const CalculatorPage = () => {
 
   useEffect(() => {
     productService.getAll({ isActive: true, itemsPerPage: 100 }, true)
-      .then((data) => Promise.all((data?.["hydra:member"] || []).map((product) => productService.getOne(product.id, true).catch(() => product))))
-      .then((detailedProducts) => setCatalog(detailedProducts.map(normalizeProduct)))
+      // Recommendation cards only use fields included in the collection.
+      // Avoid requesting a full product document for every catalogue entry.
+      .then((data) => setCatalog((data?.["hydra:member"] || []).map(normalizeProduct)))
       .catch(() => setCatalog([]));
   }, []);
 

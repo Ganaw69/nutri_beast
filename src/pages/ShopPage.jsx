@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages, iriToId } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
@@ -33,6 +33,7 @@ export const ShopPage = () => {
   const [priceMax, setPriceMax] = useState(500);
   const [sortBy, setSortBy] = useState("recent");
   const [currentPage, setCurrentPage] = useState(1);
+  const requestVersionRef = useRef(0);
   const categoryTree = buildCategoryTree(categories.filter(cat => cat.isActive !== false));
   const brands = useMemo(() => {
     const seen = new Set();
@@ -58,6 +59,7 @@ export const ShopPage = () => {
   }, []);
 
   const fetchProducts = useCallback(async () => {
+    const requestVersion = ++requestVersionRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -82,30 +84,51 @@ export const ShopPage = () => {
       else if (sortBy === 'recent') params['order[createdAt]'] = 'desc';
       else if (sortBy === 'featured') params['order[position]'] = 'asc';
 
-      // The API can cap a response below itemsPerPage. Fetch the complete
-      // collection first, apply relation filters, then paginate it at 20.
-      const data = await productService.getAllPages(params, true);
-      const allProducts = data['hydra:member'] || [];
-      const allowedCategoryIds = new Set(categoryFilterIds.map(String));
-      const filteredProducts = categoryFilterIds.length === 0
-        ? allProducts
-        : allProducts.filter((product) => {
-            const categoryId = getProductCategoryId(product);
-            return allowedCategoryIds.has(String(categoryId));
-          });
+      let currentProducts;
+      let total;
 
-      const start = (currentPage - 1) * ITEMS_PER_PAGE;
-      const currentProducts = await Promise.all(
-        filteredProducts.slice(start, start + ITEMS_PER_PAGE).map((product) =>
-          productService.getOne(product.id, true).catch(() => product)
-        )
-      );
-      setProducts(await hydrateProductsWithImages(currentProducts));
-      setTotalCount(filteredProducts.length);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+      if (categoryFilterIds.length === 0) {
+        // The normal catalogue and search paths can be fully paginated by the
+        // API. Previously they downloaded every catalogue page, then made a
+        // detail request for every visible product before showing anything.
+        const data = await productService.getAll({
+          ...params,
+          page: currentPage,
+          itemsPerPage: ITEMS_PER_PAGE,
+        }, true);
+        currentProducts = data['hydra:member'] || [];
+        total = Number(data['hydra:totalItems'] ?? currentProducts.length);
+      } else {
+        // Root categories can expand to several child category ids, so retain
+        // the client-side fallback only for that specialised filter path.
+        const data = await productService.getAllPages(params, true);
+        const allProducts = data['hydra:member'] || [];
+        const allowedCategoryIds = new Set(categoryFilterIds.map(String));
+        const filteredProducts = allProducts.filter((product) => {
+          const categoryId = getProductCategoryId(product);
+          return allowedCategoryIds.has(String(categoryId));
+        });
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        currentProducts = filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+        total = filteredProducts.length;
+      }
+
+      if (requestVersion !== requestVersionRef.current) return;
+
+      // Render product information immediately. Images that are not embedded
+      // in the collection response are filled in afterwards, without holding
+      // the whole catalogue view behind a spinner.
+      setProducts(currentProducts);
+      setTotalCount(total);
       setLoading(false);
+
+      void hydrateProductsWithImages(currentProducts).then((productsWithImages) => {
+        if (requestVersion === requestVersionRef.current) setProducts(productsWithImages);
+      });
+    } catch (err) {
+      if (requestVersion === requestVersionRef.current) setError(err.message);
+    } finally {
+      if (requestVersion === requestVersionRef.current) setLoading(false);
     }
   }, [currentPage, searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, priceMax, sortBy, categories]);
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useAdmin } from "../context/AdminContext";
-import { categoryService } from "../services/api";
+import { categoryService, productService } from "../services/api";
 import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
 import logo from "../assets/logo.png";
 import {
@@ -23,6 +23,49 @@ const CategoryNavLabel = ({ label }) => {
   </span>;
 };
 
+const normaliseSearchText = (value) => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLocaleLowerCase("fr");
+
+const ProductSearchSuggestions = ({ products, loading, onSelect, visible }) => {
+  if (!visible) return null;
+
+  return (
+    <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-lg border border-[#3a3a3a] bg-[#121212] shadow-2xl">
+      {loading ? (
+        <p className="px-4 py-3 text-xs text-gray-400">Recherche des produits…</p>
+      ) : products.length > 0 ? (
+        <ul role="listbox" aria-label="Suggestions de produits" className="max-h-80 overflow-y-auto py-1">
+          {products.map((product) => (
+            <li key={product.id}>
+              <button
+                type="button"
+                role="option"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onSelect(product)}
+                className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold text-white">{product.name}</span>
+                  {(product.brand?.name || product.category?.name) && (
+                    <span className="block truncate text-[11px] text-gray-400">{[product.brand?.name, product.category?.name].filter(Boolean).join(" · ")}</span>
+                  )}
+                </span>
+                {product.price !== undefined && product.price !== null && (
+                  <span className="shrink-0 text-xs font-bold text-[#ff526d]">{Number(product.salePrice ?? product.price).toFixed(2)} €</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-3 text-xs text-gray-400">Aucun produit trouvé.</p>
+      )}
+    </div>
+  );
+};
+
 export const Navbar = () => {
   const {
     activeTab,
@@ -31,6 +74,7 @@ export const Navbar = () => {
     searchQuery,
     setSearchQuery,
     setSelectedShopCategoryIds,
+    viewProductDetails,
   } = useCart();
   const { categoryNavigation } = useAdmin();
 
@@ -38,6 +82,9 @@ export const Navbar = () => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [openCategoryId, setOpenCategoryId] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchSurface, setSearchSurface] = useState(null);
 
   const promoMessage = "Livraison offerte dès 60€";
 
@@ -118,6 +165,45 @@ export const Navbar = () => {
 
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    const enteredQuery = searchQuery.trim();
+    const normalisedQuery = normaliseSearchText(enteredQuery);
+    if (!normalisedQuery) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      return undefined;
+    }
+
+    let current = true;
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        // Suggestions need only a handful of matching records.  Fetching every
+        // catalogue page here made the first keystroke wait for the complete
+        // product catalogue to download.
+        const data = await productService.getAll({
+          isActive: true,
+          name: enteredQuery,
+          itemsPerPage: 7,
+        }, true);
+        const suggestions = (data["hydra:member"] || [])
+          .filter((product) => product?.isActive !== false && product?.active !== false)
+          .filter((product) => normaliseSearchText(product.name).includes(normalisedQuery))
+          .slice(0, 7);
+        if (current) setSearchSuggestions(suggestions);
+      } catch {
+        if (current) setSearchSuggestions([]);
+      } finally {
+        if (current) setSearchLoading(false);
+      }
+    }, 150);
+
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const navigationCategories = useMemo(() => {
     const hiddenIds = new Set((categoryNavigation?.hiddenTopLevelCategoryIds || []).map(String));
@@ -263,11 +349,18 @@ export const Navbar = () => {
   };
 
   const handleSearchChange = (value) => {
-    // Search results update as the customer types; ShopPage already applies
-    // its name filter to the catalogue request.
+    // Keep the visitor on the current page while they choose from suggestions.
+    // Pressing Enter still opens the full filtered shop catalogue.
     setSelectedShopCategoryIds([]);
     setSearchQuery(value);
-    if (activeTab !== "shop") navigateTo("shop");
+  };
+
+  const selectSearchSuggestion = (product) => {
+    setSearchQuery(product.name);
+    setSearchSuggestions([]);
+    setSearchSurface(null);
+    setShowSearchModal(false);
+    viewProductDetails(product.id);
   };
 
   return (
@@ -411,12 +504,20 @@ export const Navbar = () => {
                 placeholder="Rechercher"
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setSearchSurface("desktop")}
+                onBlur={() => window.setTimeout(() => setSearchSurface(null), 150)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     handleSearchSubmit(e);
                   }
                 }}
                 className="w-full rounded-lg bg-[#11100e] text-white placeholder:text-white/60 border border-[#d90429] px-12 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#d90429] focus:border-[#d90429]"
+              />
+              <ProductSearchSuggestions
+                products={searchSuggestions}
+                loading={searchLoading}
+                visible={searchSurface === "desktop" && Boolean(searchQuery.trim())}
+                onSelect={selectSearchSuggestion}
               />
             </div>
           </div>
@@ -615,21 +716,31 @@ export const Navbar = () => {
 
       {showSearchModal && (
         <div className="bg-black border-t border-b border-[#2b2b2b] p-4 animate-fadeIn relative z-10">
-          <form onSubmit={handleSearchSubmit} className="max-w-xl mx-auto flex gap-2">
-            <input
-              type="text"
-              placeholder="Rechercher un produit"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="flex-1 bg-[#171717] border border-[#d90429] rounded-lg px-4 py-2.5 text-xs text-white placeholder-white/50 focus:outline-none focus:border-[#d90429]"
+          <div className="relative max-w-xl mx-auto">
+            <form onSubmit={handleSearchSubmit} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Rechercher un produit"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setSearchSurface("modal")}
+                onBlur={() => window.setTimeout(() => setSearchSurface(null), 150)}
+                className="flex-1 bg-[#171717] border border-[#d90429] rounded-lg px-4 py-2.5 text-xs text-white placeholder-white/50 focus:outline-none focus:border-[#d90429]"
+              />
+              <button
+                type="submit"
+                className="bg-[#d90429] hover:bg-[#b0021f] text-white text-xs font-bold px-5 py-2.5 rounded-lg uppercase"
+              >
+                Rechercher
+              </button>
+            </form>
+            <ProductSearchSuggestions
+              products={searchSuggestions}
+              loading={searchLoading}
+              visible={searchSurface === "modal" && Boolean(searchQuery.trim())}
+              onSelect={selectSearchSuggestion}
             />
-            <button
-              type="submit"
-              className="bg-[#d90429] hover:bg-[#b0021f] text-white text-xs font-bold px-5 py-2.5 rounded-lg uppercase"
-            >
-              Rechercher
-            </button>
-          </form>
+          </div>
         </div>
       )}
 

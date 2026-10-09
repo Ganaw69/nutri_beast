@@ -844,6 +844,23 @@ export const productImageUrl = (filename) => {
   return MEDIA_BASE ? `${MEDIA_BASE}/uploads/products/${normalized}` : `/uploads/products/${normalized}`;
 };
 
+const hasEmbeddedProductImage = (product) => {
+  const directImage = resolveUploadUrl(
+    'products',
+    product?.image ?? product?.imagePath ?? product?.mainImage ?? product?.mainImagePath ?? product?.thumbnail ?? product?.thumbnailPath
+  );
+  if (directImage) return true;
+
+  return [
+    ...(Array.isArray(product?.productImages) ? product.productImages : []),
+    ...(Array.isArray(product?.images) ? product.images : []),
+    ...(Array.isArray(product?.media) ? product.media : []),
+  ].some((image) => {
+    const source = getProductImageSource(image);
+    return source && !String(source).startsWith('/api/');
+  });
+};
+
 export const hydrateProductsWithImages = async (products = [], skipAuth = true) => {
   if (!products.length) return products;
 
@@ -854,7 +871,9 @@ export const hydrateProductsWithImages = async (products = [], skipAuth = true) 
   // the back-office does. A failed image request remains non-blocking.
   return Promise.all(products.map(async (product) => {
     const productId = product?.id ?? iriToId(product?.['@id'] || product?.iri);
-    if (productId == null) return product;
+    // List responses that already carry an image are ready to render. Avoid a
+    // second API request for every visible card in that common case.
+    if (productId == null || hasEmbeddedProductImage(product)) return product;
 
     const data = await productService
       .getImages({ product: productId, itemsPerPage: 100 }, skipAuth)
@@ -1035,11 +1054,36 @@ export const authService = {
 // ============================================================
 // PRODUCTS
 // ============================================================
+// Multiple pages use the same public product data. Keeping short-lived
+// promises here deduplicates requests (including React Strict Mode's dev-only
+// remount) without persisting stale catalogue data between sessions.
+const PRODUCT_READ_CACHE_TTL = 30 * 1000;
+const PRODUCT_IMAGE_CACHE_TTL = 5 * 60 * 1000;
+const productReadCache = new Map();
+
+const readCachedProductData = (key, loader, ttl = PRODUCT_READ_CACHE_TTL) => {
+  const now = Date.now();
+  const cached = productReadCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.promise;
+
+  const promise = Promise.resolve().then(loader);
+  productReadCache.set(key, { promise, expiresAt: now + ttl });
+  promise.catch(() => {
+    if (productReadCache.get(key)?.promise === promise) productReadCache.delete(key);
+  });
+  return promise;
+};
+
+const clearProductReadCache = () => productReadCache.clear();
+
 export const productService = {
   // Product reads are public: do not depend on an admin JWT being present.
-  async getAll(params = {}, skipAuth = true) {
-    const data = await apiFetch(`/products${buildQuery(params)}`, {}, false, skipAuth);
-    return normalizeCollectionResponse(data);
+  getAll(params = {}, skipAuth = true) {
+    const path = `/products${buildQuery(params)}`;
+    return readCachedProductData(
+      `collection:${skipAuth}:${path}`,
+      async () => normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth))
+    );
   },
   /**
    * Return the complete filtered collection even when the API applies a
@@ -1073,41 +1117,60 @@ export const productService = {
       'hydra:totalItems': firstItems.length + remainingPages.flatMap((data) => data['hydra:member'] || []).length,
     };
   },
-  async getOne(id, skipAuth = true) {
-    return apiFetch(`/products/${id}`, {}, false, skipAuth);
+  getOne(id, skipAuth = true) {
+    const path = `/products/${id}`;
+    return readCachedProductData(`item:${skipAuth}:${path}`, () => apiFetch(path, {}, false, skipAuth));
   },
-  async getImages(params = {}, skipAuth = true) {
-    const data = await apiFetch(`/product_images${buildQuery(params)}`, {}, false, skipAuth);
-    return normalizeCollectionResponse(data);
+  getImages(params = {}, skipAuth = true) {
+    const path = `/product_images${buildQuery(params)}`;
+    return readCachedProductData(
+      `images:${skipAuth}:${path}`,
+      async () => normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth)),
+      PRODUCT_IMAGE_CACHE_TTL
+    );
   },
   async create(data) {
-    return apiFetch('/products', { method: 'POST', body: JSON.stringify(data) });
+    const product = await apiFetch('/products', { method: 'POST', body: JSON.stringify(data) });
+    clearProductReadCache();
+    return product;
   },
   async update(id, data) {
-    return apiFetch(`/products/${id}`, {
+    const product = await apiFetch(`/products/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json' },
       body: JSON.stringify(data),
     });
+    clearProductReadCache();
+    return product;
   },
   async delete(id) {
-    return apiFetch(`/products/${id}`, { method: 'DELETE' });
+    const result = await apiFetch(`/products/${id}`, { method: 'DELETE' });
+    clearProductReadCache();
+    return result;
   },
   async activate(id) {
-    return apiFetch(`/products/${id}/activate`, { method: 'PATCH' });
+    const product = await apiFetch(`/products/${id}/activate`, { method: 'PATCH' });
+    clearProductReadCache();
+    return product;
   },
   async deactivate(id) {
-    return apiFetch(`/products/${id}/deactivate`, { method: 'PATCH' });
+    const product = await apiFetch(`/products/${id}/deactivate`, { method: 'PATCH' });
+    clearProductReadCache();
+    return product;
   },
   async duplicate(id) {
-    return apiFetch(`/products/${id}/duplicate`, { method: 'POST' });
+    const product = await apiFetch(`/products/${id}/duplicate`, { method: 'POST' });
+    clearProductReadCache();
+    return product;
   },
   async adjustStock(id, operation, quantity, reason = '') {
     // operation: 'add' | 'remove' | 'adjust' | 'return'
-    return apiFetch(`/products/${id}/stock/${operation}`, {
+    const product = await apiFetch(`/products/${id}/stock/${operation}`, {
       method: 'PATCH',
       body: JSON.stringify({ quantity, reason }),
     });
+    clearProductReadCache();
+    return product;
   },
   async uploadImage(productId, file, position = 0, isPrimary = false) {
     const fd = new FormData();
@@ -1124,13 +1187,18 @@ export const productService = {
       throw new Error("L'image a été associée au mauvais produit.");
     }
 
+    clearProductReadCache();
     return image;
   },
   async deleteImage(imageId) {
-    return apiFetch(`/product_images/${imageId}`, { method: 'DELETE' });
+    const result = await apiFetch(`/product_images/${imageId}`, { method: 'DELETE' });
+    clearProductReadCache();
+    return result;
   },
   async setImagePrimary(imageId) {
-    return apiFetch(`/product_images/${imageId}/primary`, { method: 'PATCH' });
+    const result = await apiFetch(`/product_images/${imageId}/primary`, { method: 'PATCH' });
+    clearProductReadCache();
+    return result;
   },
 };
 
