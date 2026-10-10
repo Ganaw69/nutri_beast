@@ -5,6 +5,8 @@ const CartContext = createContext();
 const CLIENT_TABS = new Set([
   "home",
   "shop",
+  "packs",
+  "pack-builder",
   "calculator",
   "nutritionist-ai",
   "coach-ia",
@@ -24,6 +26,9 @@ const readClientRoute = () => {
   if ((tab === "product" || tab === "product-detail") && validId(id)) {
     return { tab: "product-detail", productId: id };
   }
+  if (tab === "pack" && validId(id)) {
+    return { tab: "pack-detail", packId: id };
+  }
   if ((tab === "article" || tab === "blog-article") && validId(id)) {
     return { tab: "blog-article", articleId: id };
   }
@@ -36,6 +41,7 @@ const readClientRoute = () => {
 const routeHash = (tab, id) => {
   if (tab === "home") return "";
   if (tab === "product-detail" && validId(id)) return `#product/${id}`;
+  if (tab === "pack-detail" && validId(id)) return `#pack/${id}`;
   if (tab === "blog-article" && validId(id)) return `#article/${id}`;
   if (tab === "recipes" && validId(id)) return `#recipes/${id}`;
   return `#${tab}`;
@@ -46,6 +52,10 @@ export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [activeTab, setActiveTab] = useState(initialRoute.tab);
   const [selectedProductId, setSelectedProductId] = useState(initialRoute.productId || null);
+  const [selectedPackId, setSelectedPackId] = useState(initialRoute.packId || null);
+  const [customPackDraft, setCustomPackDraft] = useState([]);
+  const [selectedCustomPackId, setSelectedCustomPackId] = useState(null);
+  const [customPackQuote, setCustomPackQuote] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(initialRoute.articleId || null);
   const [selectedRecipeId, setSelectedRecipeId] = useState(initialRoute.recipeId || null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -68,6 +78,7 @@ export const CartProvider = ({ children }) => {
       const route = readClientRoute();
       setActiveTab(route.tab);
       setSelectedProductId(route.productId || null);
+      setSelectedPackId(route.packId || null);
       setSelectedArticleId(route.articleId || null);
       setSelectedRecipeId(route.recipeId || null);
     };
@@ -107,6 +118,66 @@ export const CartProvider = ({ children }) => {
       }
     });
     showToast(`🛒 Ajouté au panier: ${product.name}`);
+  };
+
+  const addCustomPackToCart = (pack, quote, quantity = 1) => {
+    if (!pack?.id || !quote || Number(quote.finalPrice) < 0 || !Array.isArray(quote.items)) {
+      showToast("Le serveur n’a pas confirmé le prix de ce pack.");
+      return false;
+    }
+    const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const cartItem = {
+      id: `custom-pack-${pack.id}-${randomPart}`,
+      itemType: "custom-pack",
+      name: pack.name,
+      image: pack.imageUrl || pack.image || null,
+      price: Number(quote.finalPrice),
+      originalPrice: Number(quote.basePrice),
+      quantity: Math.max(1, Number(quantity) || 1),
+      customPack: {
+        packId: pack.id,
+        items: quote.items.map((item) => ({
+          productId: item.productId,
+          name: item.productName || item.name,
+          sku: item.sku,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+        })),
+        discountAmount: Number(quote.discountAmount || 0),
+        discountPercentage: Number(quote.discountPercentage || 0),
+      },
+    };
+    setCart((prevCart) => [...prevCart, cartItem]);
+    showToast(`Pack personnalisé ajouté : ${pack.name}`);
+    return true;
+  };
+
+  const addProductBundleToCart = (products) => {
+    if (!Array.isArray(products) || products.length === 0 || products.some((product) => !product?.sku || Number(product.quantity) < 1)) {
+      showToast("La composition doit contenir des produits avec un SKU valide.");
+      return false;
+    }
+    const items = products.map((product) => ({
+      productId: product.productId,
+      sku: product.sku,
+      name: product.name,
+      image: product.image || null,
+      quantity: Number(product.quantity),
+      unitPrice: Number(product.unitPrice || 0),
+    }));
+    const estimate = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+    const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setCart((previous) => [...previous, {
+      id: `product-bundle-${randomPart}`,
+      itemType: "product-bundle",
+      name: "Ma composition personnalisée",
+      image: items.find((item) => item.image)?.image || null,
+      price: estimate,
+      quantity: 1,
+      productBundle: { items },
+    }]);
+    showToast("Votre composition a été ajoutée au panier. Les prix et stocks seront revérifiés à la commande.");
+    return true;
   };
 
   const updateQuantity = (idOrIndex, newQty) => {
@@ -159,6 +230,13 @@ export const CartProvider = ({ children }) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const viewPackDetails = (packId) => {
+    setSelectedPackId(packId);
+    setActiveTab("pack-detail");
+    updateRoute("pack-detail", packId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const viewBlogArticle = (articleId) => {
     setSelectedArticleId(articleId);
     setActiveTab("blog-article");
@@ -197,7 +275,7 @@ export const CartProvider = ({ children }) => {
     }
   }
 
-  const shippingFee = subtotal > 150 || subtotal === 0 ? 0 : 7;
+  const shippingFee = subtotal >= 300 || subtotal === 0 ? 0 : 7;
   const totalPrice = Math.max(0, subtotal - discountAmount) + shippingFee;
   const totalItems = cart.reduce((acc, item) => acc + (item.quantity || 1), 0);
 
@@ -206,6 +284,8 @@ export const CartProvider = ({ children }) => {
       value={{
         cart,
         addToCart,
+        addCustomPackToCart,
+        addProductBundleToCart,
         updateQuantity,
         removeFromCart,
         clearCart,
@@ -213,6 +293,14 @@ export const CartProvider = ({ children }) => {
         navigateTo,
         selectedProductId,
         viewProductDetails,
+        selectedPackId,
+        viewPackDetails,
+        customPackDraft,
+        setCustomPackDraft,
+        selectedCustomPackId,
+        setSelectedCustomPackId,
+        customPackQuote,
+        setCustomPackQuote,
         selectedArticleId,
         viewBlogArticle,
       selectedRecipeId,

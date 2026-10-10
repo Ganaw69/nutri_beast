@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages, iriToId } from "../services/api";
+import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems } from "../utils/categoryTree";
@@ -9,11 +9,13 @@ const ITEMS_PER_PAGE = 20;
 
 const sameId = (first, second) => String(first) === String(second);
 
-const getProductCategoryId = (product) => {
-  const category = product?.category;
-  return typeof category === 'object'
-    ? category?.id ?? iriToId(category?.['@id'] || category?.iri)
-    : iriToId(category);
+const getRelatedId = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "object") {
+    return getRelatedId(value.id ?? value['@id'] ?? value.iri);
+  }
+  const iriMatch = String(value).match(/\/(?:api\/)?categories\/(\d+)\/?$/);
+  return iriMatch ? iriMatch[1] : String(value);
 };
 
 export const ShopPage = () => {
@@ -74,6 +76,7 @@ export const ShopPage = () => {
       const categoryFilterIds = expandedCategoryIds.length > 0
         ? expandedCategoryIds
         : selectedShopCategoryIds.filter((id) => id !== null && id !== undefined && id !== '');
+      if (categoryFilterIds.length > 0) params['category.id[]'] = categoryFilterIds;
       if (selectedBrandIds.length > 0) params['brand.id'] = selectedBrandIds;
       if (selectedGoalIds.length > 0) params['goals.id'] = selectedGoalIds;
       if (priceMax < 500) params['price[lte]'] = priceMax;
@@ -87,10 +90,22 @@ export const ShopPage = () => {
       let currentProducts;
       let total;
 
-      if (categoryFilterIds.length === 0) {
-        // The normal catalogue and search paths can be fully paginated by the
-        // API. Previously they downloaded every catalogue page, then made a
-        // detail request for every visible product before showing anything.
+      if (categoryFilterIds.length > 0) {
+        // Some API deployments ignore the category relation query and return
+        // the entire catalogue. Filter by the actual relation ID here so a
+        // selected category can never fall back to showing every product.
+        const nonCategoryParams = { ...params };
+        delete nonCategoryParams['category.id[]'];
+        const data = await productService.getAllPages(nonCategoryParams, true);
+        const allowedCategoryIds = new Set(categoryFilterIds.map((id) => String(id)));
+        const matchingProducts = (data['hydra:member'] || []).filter((product) => {
+          const productCategoryId = getRelatedId(product.category ?? product.categoryId);
+          return productCategoryId !== null && allowedCategoryIds.has(String(productCategoryId));
+        });
+        total = matchingProducts.length;
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        currentProducts = matchingProducts.slice(start, start + ITEMS_PER_PAGE);
+      } else {
         const data = await productService.getAll({
           ...params,
           page: currentPage,
@@ -98,19 +113,6 @@ export const ShopPage = () => {
         }, true);
         currentProducts = data['hydra:member'] || [];
         total = Number(data['hydra:totalItems'] ?? currentProducts.length);
-      } else {
-        // Root categories can expand to several child category ids, so retain
-        // the client-side fallback only for that specialised filter path.
-        const data = await productService.getAllPages(params, true);
-        const allProducts = data['hydra:member'] || [];
-        const allowedCategoryIds = new Set(categoryFilterIds.map(String));
-        const filteredProducts = allProducts.filter((product) => {
-          const categoryId = getProductCategoryId(product);
-          return allowedCategoryIds.has(String(categoryId));
-        });
-        const start = (currentPage - 1) * ITEMS_PER_PAGE;
-        currentProducts = filteredProducts.slice(start, start + ITEMS_PER_PAGE);
-        total = filteredProducts.length;
       }
 
       if (requestVersion !== requestVersionRef.current) return;

@@ -7,9 +7,23 @@
 
 import { PRODUCTS as DEMO_PRODUCTS_SOURCE } from '../data/products';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? '/api' : 'https://127.0.0.1:8000/api');
-const MEDIA_BASE = import.meta.env.VITE_MEDIA_BASE_URL || (import.meta.env.DEV ? '' : 'https://127.0.0.1:8000');
+// Use Vite's same-origin proxy in development. Direct browser calls to the
+// local HTTPS API fail when its self-signed certificate is not trusted.
+const BASE_URL = import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'https://127.0.0.1:8000/api');
 const USE_DEMO_API = import.meta.env.DEV && import.meta.env.VITE_FORCE_LIVE_API !== 'true';
+const API_ORIGIN = (() => {
+  if (typeof window === 'undefined') return '';
+  try {
+    return new URL(BASE_URL, window.location.origin).origin;
+  } catch {
+    return '';
+  }
+})();
+// In live-API development, uploads belong to the API host, not the Vite host.
+// Keep relative media URLs only when the app is deliberately using demo data.
+const MEDIA_BASE = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_MEDIA_BASE_URL || API_ORIGIN || 'https://127.0.0.1:8000');
 const DEMO_JWT = 'eyJhbGciOiJub25lIn0.eyJleHAiOjQ3OTk5OTk5OTl9.';
 
 const clone = (value) => {
@@ -847,7 +861,7 @@ export const productImageUrl = (filename) => {
 const hasEmbeddedProductImage = (product) => {
   const directImage = resolveUploadUrl(
     'products',
-    product?.image ?? product?.imagePath ?? product?.mainImage ?? product?.mainImagePath ?? product?.thumbnail ?? product?.thumbnailPath
+    product?.image ?? product?.imagePath ?? product?.mainImage ?? product?.mainImageUrl ?? product?.main_image_url ?? product?.mainImagePath ?? product?.thumbnail ?? product?.thumbnailPath
   );
   if (directImage) return true;
 
@@ -920,9 +934,14 @@ export const resolveProductImage = (product, fallback = null) => {
 
   const primary = sortedImages.find((img) => isPrimaryProductImage(img)) || sortedImages[0];
   const source = getProductImageSource(primary);
-  const resolved = source
-    ? productImageUrl(source)
-    : resolveUploadUrl('products', product?.image ?? product?.imagePath ?? product?.mainImage ?? product?.mainImagePath ?? product?.thumbnail ?? product?.thumbnailPath);
+  // A collection can expose productImages as API IRIs (for example
+  // /api/product_images/11) while also providing a directly usable
+  // mainImageUrl. The IRI is not an image URL, so fall back to the product's
+  // stored image instead of letting that reference hide a valid image.
+  const resolved = (source ? productImageUrl(source) : null) || resolveUploadUrl(
+    'products',
+    product?.image ?? product?.imagePath ?? product?.mainImage ?? product?.mainImageUrl ?? product?.main_image_url ?? product?.mainImagePath ?? product?.thumbnail ?? product?.thumbnailPath
+  );
   return resolved && !resolved.includes('/api/') ? resolved : fallback;
 };
 
@@ -1518,6 +1537,20 @@ export const packProductService = {
   },
   async delete(id) {
     return apiFetch(`/pack_products/${id}`, { method: 'DELETE' });
+  },
+};
+
+// Customer configuration is priced by the Symfony API; never use mock prices
+// or persist a customer's selection as a PackProduct record.
+export const customPackService = {
+  async quote(packId, items) {
+    if (USE_DEMO_API) {
+      throw new Error('La composition personnalisée nécessite l’API réelle. Activez VITE_FORCE_LIVE_API=true pour obtenir un devis serveur.');
+    }
+    return apiFetch('/custom-pack-quotes', {
+      method: 'POST',
+      body: JSON.stringify({ packId, items }),
+    }, false, true);
   },
 };
 

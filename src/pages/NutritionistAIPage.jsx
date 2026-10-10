@@ -1,37 +1,62 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useCart } from "../context/CartContext";
-import { productService, resolveProductImage } from "../services/api";
+import { nutritionApi } from "../services/nutritionApi";
 import { Bot, Send, User, RefreshCw } from "lucide-react";
 
-const normalizeProduct = (p) => ({
-  id: p.id,
-  name: p.name,
-  price: parseFloat(p.price || 0),
-  image: resolveProductImage(p, null),
+const CLIENT_ID_STORAGE_KEY = "nutri_beast_nutrition_client_id";
+const SESSION_STORAGE_KEY = "nutri_beast_nutrition_session";
+
+const getClientId = () => {
+  try {
+    const savedId = window.localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+    if (savedId) return savedId;
+
+    const clientId = typeof window.crypto?.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId);
+    return clientId;
+  } catch {
+    return `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+};
+
+const getStoredSession = () => {
+  try {
+    return JSON.parse(window.localStorage.getItem(SESSION_STORAGE_KEY) || "null");
+  } catch {
+    return null;
+  }
+};
+
+const createMessage = (sender, text) => ({
+  id: `${sender}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  sender,
+  text,
 });
 
 export const NutritionistAIPage = () => {
-  const { viewProductDetails } = useCart();
   const [messages, setMessages] = useState([
     {
       id: 1,
       sender: "ai",
-      text: "Bonjour Athlete ! Posez une question nutrition et je vous recommanderai les meilleurs produits du catalogue.",
-      recommendedProduct: null,
+      text: "Bonjour Athlete ! Posez-moi vos questions sur la nutrition sportive, les calories, les protéines ou la préparation des repas.",
     },
   ]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [catalog, setCatalog] = useState([]);
+  const [apiStatus, setApiStatus] = useState("checking");
+  const [session, setSession] = useState(getStoredSession);
   const messagesContainerRef = useRef(null);
+  const clientIdRef = useRef(null);
+  const requestControllerRef = useRef(null);
+  if (!clientIdRef.current) clientIdRef.current = getClientId();
 
   useEffect(() => {
-    productService
-      .getAll({ isActive: true, itemsPerPage: 100 }, true)
-      // Recommendations need only card fields, which the collection already
-      // supplies. Fetching every product individually delayed the chat page.
-      .then((data) => setCatalog((data?.["hydra:member"] || []).map(normalizeProduct)))
-      .catch(() => setCatalog([]));
+    const controller = new AbortController();
+    nutritionApi.health(controller.signal)
+      .then(() => setApiStatus("online"))
+      .catch(() => setApiStatus("offline"));
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -41,77 +66,75 @@ export const NutritionistAIPage = () => {
     }
   }, [messages, isTyping]);
 
-  const getRecommendation = (text) => {
-    const lower = text.toLowerCase();
-    const whey = catalog.find((p) => /whey|protein|proteine|protéine/i.test(p.name)) || catalog[0];
-    const gainer = catalog.find((p) => /gainer|mass|bulk/i.test(p.name)) || catalog[1] || catalog[0];
-    const recovery = catalog.find((p) => /recovery|creatine|créatine|force/i.test(p.name)) || catalog[2] || catalog[0];
-    const preWorkout = catalog.find((p) => /pre|pre-workout|booster|energy|energie/i.test(p.name)) || catalog[3] || catalog[0];
+  useEffect(() => () => requestControllerRef.current?.abort(), []);
 
-    if (lower.includes("masse") || lower.includes("grossir") || lower.includes("bulk")) {
-      return {
-        text: "Pour une prise de masse, visez un apport calorique cohérent et un support gainer ou protein plus nourrissant.",
-        product: gainer || whey,
-      };
-    }
+  const handleSendMessage = async (textToSend = null) => {
+    const text = String(textToSend ?? inputText).trim();
+    if (!text || isTyping) return;
 
-    if (lower.includes("créatine") || lower.includes("creatine") || lower.includes("force")) {
-      return {
-        text: "Pour la force, un support autour de la créatine et de la récupération est souvent pertinent.",
-        product: recovery || whey,
-      };
-    }
-
-    if (lower.includes("sèche") || lower.includes("seche") || lower.includes("maigrir") || lower.includes("isolat") || lower.includes("cut")) {
-      return {
-        text: "En sèche, privilégiez une protéine propre avec peu de calories inutiles.",
-        product: whey || catalog[0],
-      };
-    }
-
-    if (lower.includes("énergie") || lower.includes("energie") || lower.includes("preworkout") || lower.includes("booster") || lower.includes("fatigue")) {
-      return {
-        text: "Pour plus d'énergie avant l'entraînement, un pre-workout adapté peut aider.",
-        product: preWorkout || whey,
-      };
-    }
-
-    return {
-      text: "Pour optimiser vos résultats, gardez une routine constante, un apport protidique suffisant et un bon sommeil.",
-      product: whey || catalog[0],
-    };
-  };
-
-  const handleSendMessage = (textToSend = null) => {
-    const text = textToSend || inputText;
-    if (!text.trim()) return;
-
-    const userMsg = { id: Date.now(), sender: "user", text };
-    setMessages((prev) => [...prev, userMsg]);
-    if (!textToSend) setInputText("");
+    setMessages((previousMessages) => [...previousMessages, createMessage("user", text)]);
+    setInputText("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      const response = getRecommendation(text);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          sender: "ai",
-          text: response.text,
-          recommendedProduct: response.product,
-        },
-      ]);
-      setIsTyping(false);
-    }, 900);
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    try {
+      const response = await nutritionApi.sendMessage({
+        message: text,
+        clientId: clientIdRef.current,
+        session,
+        language: "auto",
+        signal: controller.signal,
+      });
+      if (response.session) {
+        setSession(response.session);
+        try {
+          window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(response.session));
+        } catch {}
+      }
+      setMessages((previousMessages) => [...previousMessages, createMessage("ai", response.reply)]);
+      setApiStatus("online");
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        setMessages((previousMessages) => [
+          ...previousMessages,
+          createMessage("ai", "Le Nutritionist AI est momentanément indisponible. Vérifiez la connexion au service, puis réessayez."),
+        ]);
+        setApiStatus("offline");
+      }
+    } finally {
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+        setIsTyping(false);
+      }
+    }
   };
 
   const sampleQuestions = [
-    "Quelle proteine pour prendre de la masse ?",
-    "Comment consommer la creatine ?",
-    "Quelle est la meilleure whey pour secher ?",
-    "Quand prendre mon pre-workout ?",
+    "Propose-moi un repas simple pour prendre de la masse",
+    "Comment estimer mes besoins en protéines ?",
+    "Une idée de menu pour une sèche ?",
+    "Que faut-il savoir sur la créatine ?",
   ];
+
+  const resetConversation = () => {
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    setIsTyping(false);
+    setInputText("");
+    setSession(null);
+    try {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {}
+    setMessages([createMessage("ai", "Conversation réinitialisée ! Quel est votre objectif nutritionnel aujourd'hui ?")]);
+  };
+
+  const statusStyles = {
+    online: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    checking: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+    offline: "bg-red-500/20 text-red-300 border-red-500/30",
+  };
+  const statusLabels = { online: "EN LIGNE", checking: "VÉRIFICATION", offline: "INDISPONIBLE" };
 
   return (
     <div className="w-full max-w-5xl mx-auto min-h-[calc(100dvh-11rem)] px-4 sm:px-6 lg:px-8 py-6 sm:py-10 flex flex-col justify-center gap-4 sm:gap-6">
@@ -123,25 +146,17 @@ export const NutritionistAIPage = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="font-heading font-black text-base sm:text-xl text-white uppercase truncate">NUTRITIONIST AI</h1>
-              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-500/30">
-                EN LIGNE
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusStyles[apiStatus]}`}>
+                {statusLabels[apiStatus]}
               </span>
             </div>
-            <p className="text-xs text-gray-300">Posez vos questions nutrition et recevez une recommandation du catalogue.</p>
+            <p className="text-xs text-gray-300">Conseils sur la nutrition sportive, les repas et les estimations nutritionnelles.</p>
           </div>
         </div>
 
         <button
-          onClick={() =>
-            setMessages([
-              {
-                id: 1,
-                sender: "ai",
-                text: "Conversation réinitialisée ! Quel est votre objectif aujourd'hui ?",
-                recommendedProduct: null,
-              },
-            ])
-          }
+          type="button"
+          onClick={resetConversation}
           className="text-gray-400 hover:text-white p-2 rounded-lg bg-surface border border-white/10"
           title="Réinitialiser le chat"
         >
@@ -154,8 +169,10 @@ export const NutritionistAIPage = () => {
         {sampleQuestions.map((q, idx) => (
           <button
             key={idx}
+            type="button"
+            disabled={isTyping}
             onClick={() => handleSendMessage(q)}
-            className="bg-surface-low border border-white/10 hover:border-accent-gold text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full shrink-0 transition-colors"
+            className="bg-surface-low border border-white/10 hover:border-accent-gold text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full shrink-0 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {q}
           </button>
@@ -176,37 +193,13 @@ export const NutritionistAIPage = () => {
               )}
 
               <div
-                className={`max-w-[85%] sm:max-w-lg p-3 sm:p-4 rounded-2xl text-xs sm:text-sm space-y-3 ${
+                className={`max-w-[85%] sm:max-w-lg p-3 sm:p-4 rounded-2xl text-xs sm:text-sm ${
                   msg.sender === "user"
                     ? "bg-primary text-white rounded-br-none shadow-md shadow-primary/20 font-medium"
                     : "bg-surface-high border border-white/10 text-on-surface rounded-bl-none"
                 }`}
               >
-                <p className="leading-relaxed">{msg.text}</p>
-
-                {msg.recommendedProduct && (
-                  <div className="bg-surface-dark border border-white/10 p-3 rounded-xl flex items-center justify-between gap-3 mt-3">
-                    <img
-                      src={msg.recommendedProduct.image}
-                      alt={msg.recommendedProduct.name}
-                      className="w-12 h-12 object-contain"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-heading font-bold text-xs text-white truncate">
-                        {msg.recommendedProduct.name}
-                      </h4>
-                      <span className="font-heading font-black text-xs text-primary">
-                        {msg.recommendedProduct.price.toFixed(2)} TND
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => viewProductDetails(msg.recommendedProduct.id)}
-                      className="bg-primary text-white text-[11px] font-heading font-bold px-3 py-1.5 rounded-lg hover:bg-primary-dark shrink-0"
-                    >
-                      VOIR
-                    </button>
-                  </div>
-                )}
+                <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
               </div>
 
               {msg.sender === "user" && (
@@ -243,10 +236,12 @@ export const NutritionistAIPage = () => {
             placeholder="Posez votre question nutrition au Nutritionist AI..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            disabled={isTyping}
             className="w-full flex-1 bg-surface border border-white/10 rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-gold"
           />
           <button
             type="submit"
+            disabled={isTyping || !inputText.trim()}
             className="w-full sm:w-auto bg-accent-gold hover:bg-yellow-400 text-background font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs"
           >
             <span>ENVOYER</span>

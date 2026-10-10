@@ -72,7 +72,11 @@ export const CartPage = () => {
                         {item.name}
                       </h3>
                       <p className="text-xs text-gray-400 font-body mt-0.5">
-                        {item.flavor || "Standard"}
+                        {item.itemType === "custom-pack"
+                          ? `Pack personnalisé · ${(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                          : item.itemType === "product-bundle"
+                            ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                          : item.flavor || "Standard"}
                       </p>
                     </div>
 

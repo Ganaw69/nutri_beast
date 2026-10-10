@@ -1,15 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, reviewService, flavorService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
-  ChevronLeft, Zap, Loader2, Send
+  ChevronLeft, Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen
 } from "lucide-react";
 
 const formatMonthYear = (value) => {
   const match = String(value || '').match(/^(\d{4})-(\d{2})/);
   return match ? `${match[2]}/${match[1]}` : '';
+};
+
+const getRelationId = (relation) => {
+  if (relation && typeof relation === 'object') {
+    return relation.id ?? (Number(String(relation['@id'] || relation.iri || '').split('/').pop()) || null);
+  }
+  return Number(String(relation || '').split('/').pop()) || null;
 };
 
 const normalizeProduct = (p, flavorCatalog = []) => ({
@@ -29,18 +36,22 @@ const normalizeProduct = (p, flavorCatalog = []) => ({
   longDescription: p.longDescription || p.description || p.shortDescription || '',
   dateProduit: p.dateProduit || '',
   nutritionFact: p.nutritionFact || null,
+  productOptions: p.productOptions || p.options || null,
   productImages: p.productImages || [],
   '@id': p['@id'],
 });
 
 export const ProductDetailPage = () => {
-  const { selectedProductId, addToCart, navigateTo, showToast } = useCart();
+  const { selectedProductId, addToCart, navigateTo, showToast, setSelectedShopCategoryIds } = useCart();
 
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState('');
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [descriptionHasMore, setDescriptionHasMore] = useState(false);
+  const descriptionRef = useRef(null);
 
   const [selectedFlavor, setSelectedFlavor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
@@ -54,6 +65,7 @@ export const ProductDetailPage = () => {
     if (!selectedProductId) return;
     let active = true;
     setLoading(true);
+    setDescriptionExpanded(false);
 
     const loadProduct = async () => {
       try {
@@ -69,10 +81,14 @@ export const ProductDetailPage = () => {
         setSelectedFlavor(immediateProduct.flavors[0] || '');
         setLoading(false);
 
+        const productCategoryId = getRelationId(prod.category);
+        const relatedParams = { isActive: true, itemsPerPage: 8 };
+        if (productCategoryId) relatedParams['category.id'] = productCategoryId;
+
         const [imageData, relData, revData, flavorData] = await Promise.all([
           // The image API filters by `product` (the same query used in back office).
           productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-          productService.getAll({ isActive: true, itemsPerPage: 4 }, true).catch(() => ({ 'hydra:member': [] })),
+          productService.getAll(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
           reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
           flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
         ]);
@@ -109,7 +125,7 @@ export const ProductDetailPage = () => {
       // Related products are returned as lightweight records. Hydrate their
       // images exactly like product cards elsewhere in the storefront.
       const relatedWithImages = await hydrateProductsWithImages(
-        (relData['hydra:member'] || []).filter((item) => item.id !== prod.id).slice(0, 3),
+        (relData['hydra:member'] || []).filter((item) => String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
         true
       );
       if (!active) return;
@@ -124,6 +140,19 @@ export const ProductDetailPage = () => {
     void loadProduct();
     return () => { active = false; };
   }, [selectedProductId]);
+
+  useLayoutEffect(() => {
+    const description = descriptionRef.current;
+    if (!description) return undefined;
+
+    const measure = () => {
+      if (!descriptionExpanded) setDescriptionHasMore(description.scrollHeight > description.clientHeight + 2);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(description);
+    return () => observer.disconnect();
+  }, [product?.longDescription, descriptionExpanded]);
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
@@ -159,16 +188,16 @@ export const ProductDetailPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-16">
+    <div className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-10 2xl:px-14 space-y-16">
       <button onClick={() => navigateTo("shop")}
         className="inline-flex items-center gap-2 text-xs font-heading font-bold text-gray-400 hover:text-[#d90429] transition-colors"
       >
         <ChevronLeft className="w-4 h-4" /> RETOUR À LA BOUTIQUE
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Image */}
-        <div className="lg:col-span-7 bg-[#1a1a1a] border border-white/10 p-6 sm:p-8 rounded-2xl relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 sm:p-8 lg:col-span-7 xl:col-span-6">
           {product.badge && (
             <div className="absolute top-4 left-4 bg-[#d90429] text-white text-xs font-black px-3 py-1 rounded shadow-lg uppercase">
               {product.badge}
@@ -213,7 +242,7 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* Right Info */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-xs font-bold text-[#d90429] tracking-widest uppercase font-heading">{product.brand}</span>
@@ -246,7 +275,6 @@ export const ProductDetailPage = () => {
             <div className="space-y-2">
               {formatMonthYear(product.dateProduit) && (
                 <div className="inline-flex items-center rounded-md border border-[#d90429] bg-[#d90429]/10 px-3 py-2">
-                  <span className="text-xs font-heading font-bold text-gray-300 uppercase">Date produit : </span>
                   <span className="text-sm font-bold text-white">{formatMonthYear(product.dateProduit)}</span>
                 </div>
               )}
@@ -280,11 +308,38 @@ export const ProductDetailPage = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-4 text-xs text-gray-400">
-            <div className="flex items-center gap-2"><Truck className="w-4 h-4 text-[#d90429] shrink-0" /><span>Livraison express (24-48h)</span></div>
-            <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /><span>Paiement sécurisé</span></div>
-          </div>
         </div>
+
+        <aside className="space-y-4 lg:col-span-12 xl:col-span-2" aria-label="Services et offres Protein Store Tunisia">
+          <div className="overflow-hidden rounded-2xl border border-white/15 bg-[#0d1013] shadow-xl shadow-black/30">
+            {[
+              { Icon: Truck, title: "Livraison offerte", detail: "dès 300 TND" },
+              { Icon: ShieldCheck, title: "Paiement", detail: "à la livraison" },
+              { Icon: Headphones, title: "Service client", detail: "à votre écoute" },
+              { Icon: BadgeCheck, title: "Produits", detail: "100% originaux" },
+            ].map(({ Icon, title, detail }, index) => (
+              <div key={title} className={`flex min-h-[82px] items-center gap-4 px-5 py-4 ${index > 0 ? "border-t border-white/10" : ""}`}>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/30 bg-[#d90429]/10"><Icon className="h-6 w-6 text-[#ff3457]" strokeWidth={1.9} /></span>
+                <p className="text-sm leading-snug text-gray-200"><span className="font-extrabold">{title}</span><br /><span className="text-gray-400">{detail}</span></p>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { setSelectedShopCategoryIds([151]); navigateTo("shop"); }}
+            className="group relative flex min-h-[205px] w-full items-center overflow-hidden rounded-2xl border border-[#ff2349]/80 bg-gradient-to-br from-[#4b0715] via-[#1c080e] to-[#080808] p-5 text-left shadow-xl shadow-[#d90429]/10 transition-all hover:-translate-y-1 hover:border-[#ff526d] hover:shadow-[#d90429]/20"
+            aria-label="Découvrir les packs exclusifs"
+          >
+            <div className="relative z-10 max-w-[78%]">
+              <p className="text-sm font-black uppercase leading-tight text-white">Composez<br />votre pack</p>
+              <p className="mt-3 text-[11px] font-bold uppercase leading-tight text-gray-200">Découvrez nos packs exclusifs</p>
+              <span className="mt-3 block text-3xl font-black leading-none text-[#ff3457]">JUSQU’À 20%</span>
+            </div>
+            <div className="absolute -right-3 top-4 text-[#ff2349]/25 transition-transform group-hover:scale-110"><PackageOpen size={132} strokeWidth={1.1} /></div>
+            <span className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#f0143c] text-white shadow-lg shadow-[#f0143c]/30"><ArrowRight size={20} /></span>
+          </button>
+        </aside>
       </div>
 
       {/* Nutrition Facts */}
@@ -316,9 +371,33 @@ export const ProductDetailPage = () => {
       {product.longDescription && product.longDescription !== product.shortDescription && (
         <section className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 sm:p-8 space-y-3">
           <h2 className="font-heading font-black text-xl text-white uppercase">Description du produit</h2>
-          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">
+          <p
+            ref={descriptionRef}
+            style={descriptionExpanded ? undefined : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 10, overflow: 'hidden' }}
+            className="text-sm text-gray-300 leading-relaxed whitespace-pre-line"
+          >
             {product.longDescription}
           </p>
+          {descriptionHasMore && (
+            <button type="button" onClick={() => setDescriptionExpanded((expanded) => !expanded)} className="text-sm font-bold text-[#ff526d] hover:text-white transition-colors">
+              {descriptionExpanded ? 'Afficher moins' : 'Lire la suite / Afficher la suite'}
+            </button>
+          )}
+
+          {product.productOptions && (
+            <div className="space-y-2">
+              {[
+                ['Pointures / tailles', product.productOptions.sizes],
+                ['Couleurs', product.productOptions.colors],
+                ['Styles', product.productOptions.styles],
+              ].filter(([, values]) => Array.isArray(values) && values.length > 0).map(([label, values]) => (
+                <p key={label} className="text-xs text-gray-300"><span className="font-bold text-white">{label} :</span> {values.join(', ')}</p>
+              ))}
+              {product.productOptions.capacityLiters !== '' && product.productOptions.capacityLiters != null && (
+                <p className="text-xs text-gray-300"><span className="font-bold text-white">Contenance :</span> {product.productOptions.capacityLiters} L</p>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -380,7 +459,7 @@ export const ProductDetailPage = () => {
       {/* Related Products */}
       {related.length > 0 && (
         <div className="space-y-6">
-          <h2 className="font-heading font-black text-xl text-white uppercase">PRODUITS COMPLÉMENTAIRES</h2>
+          <h2 className="font-heading font-black text-xl text-white uppercase">MÊME CATÉGORIE</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {related.map(p => <ProductCard key={p.id} product={p} />)}
           </div>

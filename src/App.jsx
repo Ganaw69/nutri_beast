@@ -15,6 +15,9 @@ const lazyPage = (loader, exportName) => lazy(async () => {
 // when a visitor opens them. The admin and AI dependencies were otherwise
 // delaying the first storefront paint for every visitor.
 const ShopPage = lazyPage(() => import("./pages/ShopPage"), "ShopPage");
+const PacksPage = lazyPage(() => import("./pages/PacksPage"), "PacksPage");
+const PackDetailPage = lazyPage(() => import("./pages/PacksPage"), "PackDetailPage");
+const PackBuilderPage = lazyPage(() => import("./pages/PackBuilderPage"), "PackBuilderPage");
 const ProductDetailPage = lazyPage(() => import("./pages/ProductDetailPage"), "ProductDetailPage");
 const CalculatorPage = lazyPage(() => import("./pages/CalculatorPage"), "CalculatorPage");
 const NutritionistAIPage = lazyPage(() => import("./pages/NutritionistAIPage"), "NutritionistAIPage");
@@ -24,6 +27,9 @@ const CheckoutPage = lazyPage(() => import("./pages/CheckoutPage"), "CheckoutPag
 const BlogPage = lazyPage(() => import("./pages/BlogPage"), "BlogPage");
 const BlogArticlePage = lazyPage(() => import("./pages/BlogArticlePage"), "BlogArticlePage");
 const RecipesPage = lazyPage(() => import("./pages/RecipesPage"), "RecipesPage");
+const FAQPage = lazyPage(() => import("./pages/FAQPage"), "FAQPage");
+const PrivacyPolicyPage = lazyPage(() => import("./pages/PrivacyPolicyPage"), "PrivacyPolicyPage");
+const TermsPage = lazyPage(() => import("./pages/TermsPage"), "TermsPage");
 const AdminPage = lazyPage(() => import("./pages/admin/AdminPage"), "AdminPage");
 const AdminLoginPage = lazyPage(() => import("./pages/admin/AdminLoginPage"), "AdminLoginPage");
 
@@ -32,6 +38,28 @@ const PageLoader = () => (
     <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#d90429] border-t-transparent" />
   </div>
 );
+
+class PageErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section role="alert" className="mx-auto my-10 max-w-3xl rounded-xl border border-red-500/30 bg-[#181818] p-6 text-center text-white">
+          <h1 className="text-xl font-black">Cette page n’a pas pu être affichée</h1>
+          <p className="mt-2 text-sm text-gray-400">Une erreur est survenue pendant le chargement. Rechargez la page pour réessayer.</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-lg bg-[#d90429] px-5 py-3 text-sm font-bold text-white">Recharger la page</button>
+        </section>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Check if the current URL path is /admin
 const isAdminRoute = () => {
@@ -56,19 +84,27 @@ const MainContent = () => {
 
   return (
     <main className="min-h-screen">
-      <Suspense fallback={<PageLoader />}>
-        {activeTab === "home" && <HomePage />}
-        {activeTab === "shop" && <ShopPage />}
-        {activeTab === "product-detail" && <ProductDetailPage />}
-        {activeTab === "calculator" && <CalculatorPage />}
-        {activeTab === "nutritionist-ai" && <NutritionistAIPage />}
-        {activeTab === "coach-ia" && <CoachIaPage />}
-        {activeTab === "cart" && <CartPage />}
-        {activeTab === "checkout" && <CheckoutPage />}
-        {activeTab === "blog" && <BlogPage />}
-        {activeTab === "blog-article" && <BlogArticlePage />}
-        {activeTab === "recipes" && <RecipesPage />}
-      </Suspense>
+      <PageErrorBoundary key={activeTab}>
+        <Suspense fallback={<PageLoader />}>
+          {activeTab === "home" && <HomePage />}
+          {activeTab === "shop" && <ShopPage />}
+          {activeTab === "packs" && <PacksPage />}
+          {activeTab === "pack-detail" && <PackDetailPage />}
+          {activeTab === "pack-builder" && <PackBuilderPage />}
+          {activeTab === "product-detail" && <ProductDetailPage />}
+          {activeTab === "calculator" && <CalculatorPage />}
+          {activeTab === "nutritionist-ai" && <NutritionistAIPage />}
+          {activeTab === "coach-ia" && <CoachIaPage />}
+          {activeTab === "cart" && <CartPage />}
+          {activeTab === "checkout" && <CheckoutPage />}
+          {activeTab === "blog" && <BlogPage />}
+          {activeTab === "blog-article" && <BlogArticlePage />}
+          {activeTab === "recipes" && <RecipesPage />}
+          {activeTab === "faq" && <FAQPage />}
+          {activeTab === "privacy-policy" && <PrivacyPolicyPage />}
+          {activeTab === "terms-of-service" && <TermsPage />}
+        </Suspense>
+      </PageErrorBoundary>
     </main>
   );
 };

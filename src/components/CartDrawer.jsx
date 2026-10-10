@@ -85,8 +85,12 @@ export const CartDrawer = () => {
                     <h4 className="font-heading font-bold text-sm text-white truncate">
                       {item.name}
                     </h4>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {item.selectedFlavor} • {item.selectedSize}
+                    <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">
+                      {item.itemType === "custom-pack"
+                        ? `Pack personnalise · ${(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                        : item.itemType === "product-bundle"
+                          ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                        : [item.selectedFlavor, item.selectedSize].filter(Boolean).join(" · ")}
                     </p>
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <span className="font-heading font-black text-sm text-white">
@@ -96,7 +100,7 @@ export const CartDrawer = () => {
                       {/* Qty controls */}
                       <div className="flex items-center gap-2 bg-surface-high px-2 py-1 rounded-md border border-white/5 self-center sm:self-auto">
                         <button
-                          onClick={() => updateQuantity(index, -1)}
+                          onClick={() => updateQuantity(item.id, (item.quantity || 1) - 1)}
                           className="text-gray-400 hover:text-white"
                         >
                           <Minus className="w-3.5 h-3.5" />
@@ -105,7 +109,7 @@ export const CartDrawer = () => {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(index, 1)}
+                          onClick={() => updateQuantity(item.id, (item.quantity || 1) + 1)}
                           className="text-gray-400 hover:text-white"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -115,7 +119,7 @@ export const CartDrawer = () => {
                   </div>
 
                   <button
-                    onClick={() => removeFromCart(index)}
+                    onClick={() => removeFromCart(item.id)}
                     className="absolute right-3 top-3 sm:static sm:ml-1 text-gray-500 hover:text-red-400 p-1.5 transition-colors"
                     title="Supprimer"
                   >

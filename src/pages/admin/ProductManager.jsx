@@ -5,10 +5,11 @@ import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, Tog
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_FORM = {
-  name: '', sku: '', barcode: '', shortDescription: '', description: '',
-  price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', expirationDate: '', dateProduit: '',
+  name: '', barcode: '', shortDescription: '', description: '',
+  price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', dateProduit: '',
   isActive: true, isFeatured: false, isNew: false, isBestSeller: false, isOnSale: false,
   category: '', brand: '', goals: [], flavors: [],
+  productOptions: { type: '', sizes: [], colors: [], styles: [], capacityLiters: '' },
   metaTitle: '', metaDescription: '',
 };
 
@@ -24,7 +25,13 @@ const relationToIri = (value, resource) => {
 };
 
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || data?.items || [];
-const displayName = (item) => item?.name || item?.title || item?.label || '';
+const displayName = (item) => item?.name || item?.brandName || item?.brand_name || item?.nom || item?.title || item?.label || '';
+const displayBrandName = (brand) => {
+  const name = displayName(brand);
+  if (name) return name;
+  const identifier = brand?.slug || brand?.['@id'] || brand?.iri || brand?.id;
+  return identifier ? String(identifier).split('/').filter(Boolean).pop().replace(/[-_]+/g, ' ') : '';
+};
 const normalizeComparableName = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -37,6 +44,14 @@ const displayRelationNames = (items = []) => (Array.isArray(items) ? items : [])
   .join(', ') || '—';
 const entityId = (item) => item?.id ?? iriToId(item?.['@id'] || item?.iri);
 const dateInputValue = (value) => (value ? String(value).slice(0, 10) : '');
+const normalizeProductOptions = (options = {}) => ({
+  type: options?.type || '',
+  sizes: Array.isArray(options?.sizes) ? options.sizes : [],
+  colors: Array.isArray(options?.colors) ? options.colors : [],
+  styles: Array.isArray(options?.styles) ? options.styles : [],
+  capacityLiters: options?.capacityLiters ?? '',
+});
+const splitOptionValues = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 
 const normalizeProductImages = (images = []) =>
   [...images].sort((a, b) => Number(isPrimaryProductImage(b)) - Number(isPrimaryProductImage(a)) || Number(a?.position ?? 0) - Number(b?.position ?? 0));
@@ -259,11 +274,25 @@ export const ProductManager = () => {
     [brands, form.brand]
   );
 
+  const selectedAccessoryContext = useMemo(() => {
+    const selectedId = String(iriToId(form.category) || selectedFormParentCategoryId || '');
+    const parent = productCategoryTree.find((category) => String(entityId(category)) === String(selectedFormParentCategoryId));
+    const child = (parent?.children || []).find((category) => String(entityId(category)) === selectedId)
+      || productCategoryTree.find((category) => String(entityId(category)) === selectedId);
+    const categoryText = normalizeComparableName(`${parent?.name || ''} ${child?.name || ''}`);
+    let inferredType = '';
+    if (/chauss|shoe|sneaker|basket/.test(categoryText)) inferredType = 'shoes';
+    else if (/vetement|clothing|textile|t-shirt|tshirt|pantalon|legging|short/.test(categoryText)) inferredType = 'clothes';
+    else if (/gourde|shaker|bouteille|bidon|cup|tumbler/.test(categoryText)) inferredType = 'cup';
+    const isAccessory = /accessoir|accessor/.test(categoryText) || Boolean(inferredType);
+    return { isAccessory, type: inferredType || form.productOptions?.type || '' };
+  }, [form.category, form.productOptions?.type, productCategoryTree, selectedFormParentCategoryId]);
+
   const filteredBrands = useMemo(() => {
     const term = brandSearch.trim().toLowerCase();
-    const sorted = [...brands].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr'));
+    const sorted = [...brands].sort((a, b) => displayBrandName(a).localeCompare(displayBrandName(b), 'fr'));
     if (!term) return sorted;
-    return sorted.filter((brand) => displayName(brand).toLowerCase().includes(term));
+    return sorted.filter((brand) => displayBrandName(brand).toLocaleLowerCase('fr').includes(term));
   }, [brands, brandSearch]);
 
   useEffect(() => {
@@ -349,11 +378,10 @@ export const ProductManager = () => {
     setModal({ mode: 'edit', id: p.id });
     setSelectedFormParentCategoryId(getFormParentCategoryId(p.category));
     setForm({
-      name: p.name || '', sku: p.sku || '', barcode: p.barcode || '',
+      name: p.name || '', barcode: p.barcode || '',
       shortDescription: p.shortDescription || '', description: p.description || '',
       price: p.price || '', salePrice: p.salePrice || '', stock: p.stock || '',
       minimumStock: p.minimumStock || '3', weight: p.weight != null ? String(p.weight) : '',
-      expirationDate: dateInputValue(p.expirationDate || p.expiryDate),
       dateProduit: dateInputValue(p.dateProduit),
       isActive: p.isActive ?? true, isFeatured: p.isFeatured ?? false,
       isNew: p.isNew ?? false, isBestSeller: p.isBestSeller ?? false, isOnSale: p.isOnSale ?? false,
@@ -361,17 +389,17 @@ export const ProductManager = () => {
       brand: relationToIri(p.brand, 'brands'),
       goals: (p.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
       flavors: (p.flavors || []).map((f) => relationToIri(f, 'flavors')).filter(Boolean),
+      productOptions: normalizeProductOptions(p.productOptions || p.options),
       metaTitle: p.metaTitle || '', metaDescription: p.metaDescription || '',
     });
 
     try {
       const fullProduct = await productService.getOne(p.id).catch(() => p);
       setForm({
-        name: fullProduct.name || '', sku: fullProduct.sku || '', barcode: fullProduct.barcode || '',
+        name: fullProduct.name || '', barcode: fullProduct.barcode || '',
         shortDescription: fullProduct.shortDescription || '', description: fullProduct.description || '',
         price: fullProduct.price || '', salePrice: fullProduct.salePrice || '', stock: fullProduct.stock || '',
       minimumStock: fullProduct.minimumStock || '3', weight: fullProduct.weight != null ? String(fullProduct.weight) : '',
-        expirationDate: dateInputValue(fullProduct.expirationDate || fullProduct.expiryDate),
         dateProduit: dateInputValue(fullProduct.dateProduit),
         isActive: fullProduct.isActive ?? true, isFeatured: fullProduct.isFeatured ?? false,
         isNew: fullProduct.isNew ?? false, isBestSeller: fullProduct.isBestSeller ?? false, isOnSale: fullProduct.isOnSale ?? false,
@@ -379,6 +407,7 @@ export const ProductManager = () => {
         brand: relationToIri(fullProduct.brand, 'brands'),
         goals: (fullProduct.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
         flavors: (fullProduct.flavors || []).map((f) => relationToIri(f, 'flavors')).filter(Boolean),
+        productOptions: normalizeProductOptions(fullProduct.productOptions || fullProduct.options),
         metaTitle: fullProduct.metaTitle || '', metaDescription: fullProduct.metaDescription || '',
       });
       setSelectedFormParentCategoryId(getFormParentCategoryId(fullProduct.category));
@@ -398,6 +427,8 @@ export const ProductManager = () => {
     try {
       const payload = {
         ...form,
+        sku: undefined,
+        expirationDate: undefined,
         price: form.price ? String(parseFloat(form.price).toFixed(2)) : undefined,
         salePrice: form.salePrice ? String(parseFloat(form.salePrice).toFixed(2)) : undefined,
         stock: form.stock !== '' ? parseInt(form.stock) : undefined,
@@ -406,6 +437,7 @@ export const ProductManager = () => {
         dateProduit: form.dateProduit ? `${form.dateProduit}T00:00:00+00:00` : null,
         category: form.category || undefined,
         brand: form.brand || undefined,
+        productOptions: form.productOptions,
       };
 
       const saved = modal.mode === 'add'
@@ -713,19 +745,13 @@ export const ProductManager = () => {
                 <label className={labelCls}>Nom *</label>
                 <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className={labelCls}>SKU</label><input value={form.sku} onChange={e => setForm(p => ({ ...p, sku: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Code-barres</label><input value={form.barcode} onChange={e => setForm(p => ({ ...p, barcode: e.target.value }))} className={inputCls} /></div>
-              </div>
+              <div><label className={labelCls}>Code-barres</label><input value={form.barcode} onChange={e => setForm(p => ({ ...p, barcode: e.target.value }))} className={inputCls} /></div>
               <div className="grid grid-cols-3 gap-4">
                 <div><label className={labelCls}>Prix (TND) *</label><input type="number" step="0.01" required value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Prix promo</label><input type="number" step="0.01" value={form.salePrice} onChange={e => setForm(p => ({ ...p, salePrice: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Stock</label><input type="number" min="0" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={inputCls} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
-                <div><label className={labelCls}>Date d'expiration</label><input type="date" value={form.expirationDate} onChange={e => setForm(p => ({ ...p, expirationDate: e.target.value }))} className={inputCls} /></div>
-              </div>
+              <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
               <div><label className={labelCls}>Date du produit</label><input type="date" value={form.dateProduit} onChange={e => setForm(p => ({ ...p, dateProduit: e.target.value }))} className={inputCls} /></div>
               <div>
                 <label className={labelCls}>Image produit</label>
@@ -896,6 +922,76 @@ export const ProductManager = () => {
                     ))}
                   </select>
                 </div>
+                {selectedAccessoryContext.isAccessory && (
+                  <div className="sm:col-span-2 rounded-xl border border-[#333] bg-[#111] p-4 space-y-4">
+                    <div>
+                      <p className="text-sm font-bold text-white">Options de l’accessoire</p>
+                      <p className="mt-1 text-xs text-gray-500">Ajoutez les choix disponibles, séparés par des virgules.</p>
+                    </div>
+                    {!selectedAccessoryContext.type && (
+                      <div>
+                        <label className={labelCls}>Type d’accessoire</label>
+                        <select
+                          value={form.productOptions.type}
+                          onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, type: event.target.value } }))}
+                          className={inputCls}
+                        >
+                          <option value="">Choisir un type</option>
+                          <option value="shoes">Chaussures</option>
+                          <option value="clothes">Vêtements</option>
+                          <option value="cup">Gourde / shaker / tasse</option>
+                        </select>
+                      </div>
+                    )}
+                    {(selectedAccessoryContext.type === 'shoes' || selectedAccessoryContext.type === 'clothes') && (
+                      <div>
+                        <label className={labelCls}>{selectedAccessoryContext.type === 'shoes' ? 'Pointures' : 'Tailles'}</label>
+                        <input
+                          value={form.productOptions.sizes.join(', ')}
+                          onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, sizes: splitOptionValues(event.target.value) } }))}
+                          className={inputCls}
+                          placeholder={selectedAccessoryContext.type === 'shoes' ? '38, 39, 40, 41' : 'S, M, L, XL'}
+                        />
+                      </div>
+                    )}
+                    {selectedAccessoryContext.type && (
+                      <div>
+                        <label className={labelCls}>Couleurs</label>
+                        <input
+                          value={form.productOptions.colors.join(', ')}
+                          onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, colors: splitOptionValues(event.target.value) } }))}
+                          className={inputCls}
+                          placeholder="Noir, rouge, bleu"
+                        />
+                      </div>
+                    )}
+                    {selectedAccessoryContext.type === 'cup' && (
+                      <>
+                        <div>
+                          <label className={labelCls}>Styles / modèles</label>
+                          <input
+                            value={form.productOptions.styles.join(', ')}
+                            onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, styles: splitOptionValues(event.target.value) } }))}
+                            className={inputCls}
+                            placeholder="Avec paille, sport, classique"
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Contenance (litres)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={form.productOptions.capacityLiters}
+                            onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, capacityLiters: event.target.value } }))}
+                            className={inputCls}
+                            placeholder="1.0"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>Marque</label>
                   <input
@@ -921,21 +1017,22 @@ export const ProductManager = () => {
                     {filteredBrands.map((b, index) => {
                       const iri = relationToIri(b, 'brands');
                       const active = form.brand === iri;
+                      const brandIsActive = b.isActive ?? b.active ?? true;
                       return (
                         <button
                           type="button"
                           key={b['@id'] ?? b.id ?? `brand-${index}`}
                           onClick={() => {
                             setForm((p) => ({ ...p, brand: iri }));
-                            setBrandSearch(displayName(b));
+                            setBrandSearch(displayBrandName(b));
                           }}
                           className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-3 border-b border-[#222] last:border-b-0 ${
                             active ? 'bg-[#d90429]/10 text-white' : 'text-gray-300 hover:bg-[#1a1a1a] hover:text-white'
                           }`}
                         >
-                          <span className="truncate">{displayName(b)}</span>
-                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${b.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>
-                            {b.isActive ? 'Active' : 'Inactive'}
+                          <span className="truncate">{displayBrandName(b) || 'Marque sans nom'}</span>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${brandIsActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>
+                            {brandIsActive ? 'Active' : 'Inactive'}
                           </span>
                         </button>
                       );

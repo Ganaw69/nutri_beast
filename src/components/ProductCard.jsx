@@ -7,11 +7,11 @@ export const ProductCard = ({ product }) => {
   const hasImage = !!product.image;
 
   return (
-    <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group font-heading">
-      {/* Top Image Canvas Container - Light grey background */}
+    <article className="group flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#111111] font-heading shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-xl hover:shadow-black/35">
+      {/* Uniform image canvas keeps the source image and its original background intact. */}
       <div
         onClick={() => viewProductDetails(product.id)}
-        className="relative bg-[#f4f4f6] aspect-square w-full flex items-center justify-center p-6 cursor-pointer overflow-hidden"
+        className="relative flex aspect-square w-full cursor-pointer items-center justify-center overflow-hidden bg-[#f0f0f0] p-5 sm:p-6"
       >
         {/* Badges on top right */}
         {product.badge && (
@@ -36,7 +36,7 @@ export const ProductCard = ({ product }) => {
             alt={product.name}
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500"
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.025]"
           />
         ) : (
           <div className="text-center px-4">
@@ -46,24 +46,24 @@ export const ProductCard = ({ product }) => {
       </div>
 
       {/* Details Box */}
-      <div className="p-5 flex-1 flex flex-col justify-between space-y-3 bg-white text-black">
+      <div className="flex flex-1 flex-col justify-between gap-3 bg-[#111111] p-4 text-white sm:p-5">
         <div>
-          <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest block mb-1">
+          <span className="mb-1 block min-h-4 text-[10px] font-extrabold uppercase tracking-widest text-gray-400">
             {product.category}
           </span>
           <h3
             onClick={() => viewProductDetails(product.id)}
-            className="font-black text-sm text-gray-900 uppercase hover:text-[#d90429] transition-colors cursor-pointer line-clamp-1"
+            className="line-clamp-2 min-h-10 cursor-pointer text-sm font-black uppercase leading-5 text-white transition-colors hover:text-[#ff526d]"
           >
             {product.name}
           </h3>
         </div>
 
         {/* Price & Red Square Action Button matching screenshot */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-2">
+        <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
           <div>
-            <div className="font-black text-base text-gray-900">
-              {product.price.toFixed(2)} <span className="text-xs font-black text-gray-900">TND</span>
+            <div className="text-base font-black text-white">
+              {product.price.toFixed(2)} <span className="text-xs font-black text-white">TND</span>
             </div>
             {product.originalPrice && (
               <div className="text-[10px] text-gray-400 line-through">
@@ -75,13 +75,13 @@ export const ProductCard = ({ product }) => {
           {/* Red Square Shopping Bag Button */}
           <button
             onClick={() => addToCart(product)}
-            className="w-9 h-9 bg-[#d90429] hover:bg-[#b0021f] text-white rounded-md flex items-center justify-center transition-all duration-200 shadow-md group-hover:scale-105 shrink-0"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#d90429] text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111]"
             title="Ajouter au panier"
           >
             <ShoppingBag className="w-4 h-4 text-white fill-white/20" />
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 };

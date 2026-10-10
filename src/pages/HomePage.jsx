@@ -23,6 +23,7 @@ const normalizeProduct = (p) => ({
 export const HomePage = () => {
   const { navigateTo } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
+  const [bestSellerOffset, setBestSellerOffset] = useState(0);
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
@@ -32,7 +33,7 @@ export const HomePage = () => {
     let active = true;
 
     Promise.all([
-      productService.getAll({ isFeatured: true, isActive: true, itemsPerPage: 3 }, true).catch(() => ({ 'hydra:member': [] })),
+      productService.getAll({ isFeatured: true, isActive: true, itemsPerPage: 12 }, true).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
     ]).then(([prodData, couvertureData, brandData]) => {
@@ -57,6 +58,14 @@ export const HomePage = () => {
   }, []);
 
   useEffect(() => {
+    if (bestSellers.length <= 3) return undefined;
+    const interval = window.setInterval(() => {
+      setBestSellerOffset((current) => (current + 3) % bestSellers.length);
+    }, 4500);
+    return () => window.clearInterval(interval);
+  }, [bestSellers.length]);
+
+  useEffect(() => {
     setActiveHeroIndex(0);
     if (heroCouvertures.length < 2) return undefined;
 
@@ -77,14 +86,18 @@ export const HomePage = () => {
     setActiveHeroIndex((current) => (current + 1) % heroCouvertures.length);
   };
 
+  const visibleBestSellers = bestSellers.length <= 3
+    ? bestSellers
+    : Array.from({ length: 3 }, (_, index) => bestSellers[(bestSellerOffset + index) % bestSellers.length]);
+
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading pb-20 space-y-16">
       {/* ================= 1. HERO SECTION ================= */}
-      <section className="relative w-full aspect-[3/2] bg-[#0c0c0c] border-b border-white/10 overflow-hidden">
-        <button type="button" onClick={showNextHeroCouverture} className="absolute inset-0 w-full h-full cursor-pointer" aria-label="Afficher la couverture suivante">
-          <picture className="block w-full h-full">
+      <section className="relative w-full bg-[#0c0c0c] border-b border-white/10 overflow-hidden">
+        <button type="button" onClick={showNextHeroCouverture} className="block w-full cursor-pointer" aria-label="Afficher la couverture suivante">
+          <picture className="block w-full">
             <source media="(max-width: 639px)" srcSet={heroMobileBgImage} />
-            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchPriority="high" decoding="async" className="w-full h-full object-cover object-center animate-[pulse_0.35s_ease-out]" />
+            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchPriority="high" decoding="async" className="block w-full h-auto animate-[pulse_0.35s_ease-out]" />
           </picture>
         </button>
         <div className="absolute inset-0 bg-black/30 pointer-events-none" />
@@ -148,8 +161,8 @@ export const HomePage = () => {
             <Loader2 className="w-8 h-8 text-[#d90429] animate-spin" />
           </div>
         ) : bestSellers.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {bestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
+          <div key={bestSellerOffset} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-[bestSellerVertical_0.55s_ease-out]">
+            {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500 text-sm">Aucun produit en vedette pour l'instant.</div>

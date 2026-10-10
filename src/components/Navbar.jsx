@@ -10,7 +10,10 @@ import {
   Menu,
   X,
   Dumbbell,
-  Sparkles,
+  Bot,
+  Calculator,
+  PackagePlus,
+  ArrowRight,
 } from "lucide-react";
 
 const CategoryNavLabel = ({ label }) => {
@@ -27,6 +30,12 @@ const normaliseSearchText = (value) => String(value || "")
   .normalize("NFD")
   .replace(/[\u0300-\u036f]/g, "")
   .toLocaleLowerCase("fr");
+
+const QUICK_CATEGORY_IDS = {
+  snacks: 150,
+  accessories: 154,
+  women: 153,
+};
 
 const ProductSearchSuggestions = ({ products, loading, onSelect, visible }) => {
   if (!visible) return null;
@@ -82,17 +91,17 @@ export const Navbar = () => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [openCategoryId, setOpenCategoryId] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [shopCategories, setShopCategories] = useState([]);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchSurface, setSearchSurface] = useState(null);
 
-  const promoMessage = "Livraison offerte dès 60€";
+  const promoMessage = "Livraison offerte dès 300DT d'achat !";
 
   const sectionTabs = useMemo(
     () => [
       { id: "shop", label: "Nutrition" },
       { id: "blog", label: "Blog" },
-      { id: "calculator", label: "Calculateur" },
     ],
     []
   );
@@ -140,6 +149,14 @@ export const Navbar = () => {
 
   useEffect(() => {
     let mounted = true;
+
+    categoryService.getAll({ isActive: true, itemsPerPage: 100 }, true)
+      .then((data) => {
+        if (mounted) setShopCategories(extractCategoryItems(data));
+      })
+      .catch(() => {
+        if (mounted) setShopCategories([]);
+      });
 
     categoryService.getMain(true)
       .then((data) => {
@@ -224,9 +241,6 @@ export const Navbar = () => {
       ...quickAccessStrip,
       { id: "recipes", label: "Recettes" },
       { id: "blog", label: "Blog" },
-      { id: "coach-ia", label: "Coach IA" },
-      { id: "nutritionist-ai", label: "Nutrition IA" },
-      { id: "calculator", label: "Calculateur" },
     ],
     [quickAccessStrip]
   );
@@ -247,14 +261,13 @@ export const Navbar = () => {
     setShowSearchModal(false);
   };
 
-  // Root categories (parent = null) are dropdown triggers. Their children are
-  // the actual catalogue filters, matching the parent_id relationship in DB.
+  // Parent categories filter the complete branch; the submenu still lets
+  // visitors narrow the results to a child category.
   const handleRootCategoryClick = (category) => {
+    navigateToCategory(category.id);
     if (category.children?.length > 0) {
       setOpenCategoryId((current) => current === category.id ? null : category.id);
-      return;
     }
-    navigateToCategory(category.id);
   };
 
   const handleSectionClick = (sectionId) => {
@@ -279,7 +292,41 @@ export const Navbar = () => {
     setMobileMenuOpen(false);
   };
 
-  const handleCategoryClick = (categoryId) => {
+  const handleCategoryClick = async (categoryId) => {
+    if (categoryId === "packs") {
+      navigateTo("packs");
+      setMobileMenuOpen(false);
+      return;
+    }
+
+    const fixedCategoryId = QUICK_CATEGORY_IDS[categoryId];
+    if (fixedCategoryId) {
+      navigateToCategory(fixedCategoryId);
+      return;
+    }
+
+    const quickLink = quickAccessStrip.find((item) => item.id === categoryId);
+    if (quickLink) {
+      let availableCategories = shopCategories;
+      if (availableCategories.length === 0) {
+        try {
+          const data = await categoryService.getAll({ isActive: true, itemsPerPage: 100 }, true);
+          availableCategories = extractCategoryItems(data);
+          setShopCategories(availableCategories);
+        } catch {
+          return;
+        }
+      }
+
+      const normaliseCategoryName = (value) => normaliseSearchText(value).replace(/[^a-z0-9]/g, "");
+      const targetName = normaliseCategoryName(quickLink.label);
+      const matchingCategory = availableCategories.find((category) =>
+        normaliseCategoryName(category.name) === targetName
+      );
+      if (matchingCategory) navigateToCategory(matchingCategory.id);
+      return;
+    }
+
     switch (categoryId) {
       case "protein":
         navigateShop("whey");
@@ -524,20 +571,6 @@ export const Navbar = () => {
 
           <div className="hidden xl:flex items-center gap-3 shrink-0">
             <button
-              onClick={() => navigateTo("nutritionist-ai")}
-              className="rounded-lg border border-white/40 bg-white/10 px-3 py-2.5 text-[10px] font-black tracking-[0.12em] uppercase text-white transition-colors hover:border-white hover:bg-white/15 flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4 text-white" />
-              Nutrition IA
-            </button>
-            <button
-              onClick={() => navigateTo("coach-ia")}
-              className="rounded-lg border border-white/25 bg-transparent px-3 py-2.5 text-[10px] font-black tracking-[0.12em] uppercase text-white/80 transition-colors hover:border-white hover:bg-white/10 hover:text-white flex items-center gap-2"
-            >
-              <Dumbbell className="w-4 h-4 text-white" />
-              Coach IA
-            </button>
-            <button
               onClick={() => navigateTo("cart")}
               className="relative p-2.5 text-white hover:text-white/70 transition-colors"
               title="Panier"
@@ -675,6 +708,27 @@ export const Navbar = () => {
           ))}
         </nav>
 
+        <nav className="mt-4 rounded-2xl border border-[#f0143c]/70 bg-[#070809]/95 p-2 shadow-[0_0_24px_rgba(240,20,60,0.18)]" aria-label="Services et outils">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.15fr]">
+            {[
+              { id: "coach-ia", title: "Coach IA", subtitle: "Votre coach personnel, 24/7", Icon: Bot, onClick: () => navigateTo("coach-ia") },
+              { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Des conseils adaptés à vos objectifs", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
+              { id: "calculator", title: "Calculateur", subtitle: "Calculez vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator") },
+            ].map(({ id, title, subtitle, Icon, onClick }) => (
+              <button key={id} type="button" onClick={onClick} className="group flex min-h-[76px] items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] sm:px-4 xl:border-r xl:border-[#f0143c]/35 xl:rounded-none">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/75 bg-[#10090b] text-[#ff2448] shadow-[0_0_14px_rgba(240,20,60,0.16)] transition group-hover:bg-[#f0143c]/15 group-hover:shadow-[0_0_20px_rgba(240,20,60,0.35)]"><Icon className="h-6 w-6" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">{title}</span><span className="mt-1 block text-[11px] font-medium text-gray-400">{subtitle}</span></span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f0143c]/50 text-[#ff526d] transition group-hover:bg-[#f0143c] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
+              </button>
+            ))}
+            <button type="button" onClick={() => navigateTo("pack-builder")} className="group flex min-h-[76px] items-center gap-3 rounded-xl bg-gradient-to-r from-[#f0143c] to-[#c9002d] px-3 py-3 text-left shadow-[0_0_20px_rgba(240,20,60,0.24)] transition hover:brightness-110 sm:px-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/35 bg-white/10 text-white"><PackagePlus className="h-6 w-6" /></span>
+              <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">Vos packs — Composez votre pack</span><span className="mt-1 block text-[11px] font-medium text-white/80">Créez votre sélection personnalisée</span></span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-[#d90429] transition group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
+            </button>
+          </div>
+        </nav>
+
         <div className="hidden lg:flex xl:hidden flex-col gap-3 mt-4 border-t border-white/25 pt-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] font-bold text-white">
             {navigationCategories.map((item) => (
@@ -763,24 +817,6 @@ export const Navbar = () => {
               Panier
             </button>
             
-            <button
-              onClick={() => navigateTo("calculator")}
-              className="bg-white/10 border border-white/40 p-3 rounded-lg text-left text-white"
-            >
-              Calculateur
-            </button>
-            <button
-              onClick={() => navigateTo("nutritionist-ai")}
-              className="bg-white/10 border border-white/40 p-3 rounded-lg text-left text-white"
-            >
-              Nutrition IA
-            </button>
-            <button
-              onClick={() => navigateTo("coach-ia")}
-              className="bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left"
-            >
-              Coach IA
-            </button>
           </div>
 
           <div className="border-t border-[#3a3a3a] pt-4">
