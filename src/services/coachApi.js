@@ -16,7 +16,7 @@ export const coachApi = {
     return readResponse(response);
   },
 
-  async sendMessage({ message, userId, language = "auto", signal }) {
+  async sendMessage({ message, userId, language = "auto", productContext = null, signal }) {
     const response = await fetch(`${COACH_API_BASE_URL}/v1/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -24,6 +24,10 @@ export const coachApi = {
         message,
         user_id: userId,
         language,
+        // The Coach API uses this catalogue context to validate the product
+        // card shown immediately before its reply. It remains optional so
+        // regular coaching questions keep the existing API contract.
+        ...(productContext ? { product_context: productContext } : {}),
       }),
       signal,
     });

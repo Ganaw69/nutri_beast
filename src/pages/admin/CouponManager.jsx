@@ -28,7 +28,7 @@ export const CouponManager = () => {
   const openEdit = (c) => {
     setForm({
       code: c.code || '', type: c.type || 'percentage', value: c.value || '',
-      minimumAmount: c.minimumAmount || '', usageLimit: c.usageLimit || '',
+      minimumAmount: c.minimumAmount || '', usageLimit: c.usageLimit ?? '',
       startDate: c.startDate ? c.startDate.slice(0, 10) : '',
       endDate: c.endDate ? c.endDate.slice(0, 10) : '',
       isActive: c.isActive ?? true,
@@ -42,7 +42,15 @@ export const CouponManager = () => {
     setSaving(true);
     setError('');
     try {
-      const payload = { ...form, value: String(parseFloat(form.value).toFixed(2)) };
+      const usageLimit = form.usageLimit === '' ? null : Number(form.usageLimit);
+      if (usageLimit !== null && (!Number.isInteger(usageLimit) || usageLimit < 1)) {
+        throw new Error('La limite d’utilisation doit être un nombre entier supérieur ou égal à 1.');
+      }
+      const payload = {
+        ...form,
+        value: String(parseFloat(form.value).toFixed(2)),
+        usageLimit,
+      };
       if (modal.mode === 'add') await couponService.create(payload);
       else await couponService.update(modal.id, payload);
       setModal(null);
@@ -130,7 +138,7 @@ export const CouponManager = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Montant min (TND)</label><input type="number" value={form.minimumAmount} onChange={e => setForm(p => ({ ...p, minimumAmount: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Limite utilisation</label><input type="number" value={form.usageLimit} onChange={e => setForm(p => ({ ...p, usageLimit: e.target.value }))} className={inputCls} /></div>
+                <div><label className={labelCls}>Limite utilisation</label><input type="number" min="1" step="1" value={form.usageLimit} onChange={e => setForm(p => ({ ...p, usageLimit: e.target.value }))} className={inputCls} /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Début</label><input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} className={inputCls} /></div>

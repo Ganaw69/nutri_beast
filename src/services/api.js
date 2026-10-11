@@ -500,8 +500,50 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   }
   if (pathname.startsWith('/reviews/') && method === 'GET') return clone(findDemoEntity('reviews', pathname.split('/').pop()));
 
-  if (pathname === '/coupons' && method === 'GET') return buildHydraCollection([]);
-  if (pathname.startsWith('/coupons/') && method === 'GET') return null;
+  if (pathname === '/coupons' && method === 'GET') {
+    const code = url.searchParams.get('code');
+    const coupons = code
+      ? demoStore.coupons.filter((coupon) => String(coupon.code).toUpperCase() === String(code).toUpperCase())
+      : demoStore.coupons;
+    return buildHydraCollection(applyFilters(coupons, path));
+  }
+  if (pathname.startsWith('/coupons/') && method === 'GET') {
+    return clone(findDemoEntity('coupons', pathname.split('/').pop()));
+  }
+  if (pathname === '/coupons' && method === 'POST') {
+    const id = nextNumericId(demoStore.coupons);
+    const item = {
+      id,
+      '@id': makeIri('coupons', id),
+      code: String(body.code || '').toUpperCase(),
+      type: body.type || 'percentage',
+      value: body.value || '0.00',
+      minimumAmount: body.minimumAmount || null,
+      usageLimit: body.usageLimit == null || body.usageLimit === '' ? null : toNumber(body.usageLimit),
+      startDate: body.startDate || null,
+      endDate: body.endDate || null,
+      isActive: normalizeBoolean(body.isActive, true),
+      usageCount: 0,
+    };
+    demoStore.coupons.unshift(item);
+    return clone(item);
+  }
+  if (pathname.startsWith('/coupons/') && method === 'PATCH') {
+    const item = findDemoEntity('coupons', pathname.split('/').pop());
+    if (!item) return null;
+    Object.assign(item, {
+      ...body,
+      code: body.code == null ? item.code : String(body.code).toUpperCase(),
+      usageLimit: body.usageLimit == null || body.usageLimit === '' ? item.usageLimit : toNumber(body.usageLimit),
+      isActive: body.isActive == null ? item.isActive : normalizeBoolean(body.isActive),
+    });
+    return clone(item);
+  }
+  if (pathname.startsWith('/coupons/') && method === 'DELETE') {
+    const id = pathname.split('/').pop();
+    demoStore.coupons = demoStore.coupons.filter((item) => String(item.id) !== String(id));
+    return null;
+  }
 
   if (pathname === '/blog_categories' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.blogCategories, path));
   if (pathname.startsWith('/blog_categories/') && method === 'GET') return clone(findDemoEntity('blogCategories', pathname.split('/').pop()));
@@ -1019,6 +1061,35 @@ function normalizeCollectionResponse(data) {
   };
 }
 
+const normalizeBoolean = (value, fallback = false) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return [true, 1, '1', 'true', 'yes', 'on'].includes(
+    typeof value === 'string' ? value.toLowerCase() : value
+  );
+};
+
+const normalizeCoupon = (coupon) => {
+  if (!coupon || typeof coupon !== 'object') return coupon;
+  return {
+    ...coupon,
+    isActive: normalizeBoolean(
+      coupon.isActive ?? coupon.is_active ?? coupon.is_Active ?? coupon.active,
+      true
+    ),
+  };
+};
+
+const normalizeProduct = (product) => {
+  if (!product || typeof product !== 'object') return product;
+  return {
+    ...product,
+    isActive: normalizeBoolean(
+      product.isActive ?? product.is_active ?? product.is_Active ?? product.active,
+      true
+    ),
+  };
+};
+
 /** Build a query string from a plain object (skips undefined/null) */
 function buildQuery(params = {}) {
   const parts = [];
@@ -1101,7 +1172,10 @@ export const productService = {
     const path = `/products${buildQuery(params)}`;
     return readCachedProductData(
       `collection:${skipAuth}:${path}`,
-      async () => normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth))
+      async () => {
+        const response = normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth));
+        return { ...response, 'hydra:member': response['hydra:member'].map(normalizeProduct) };
+      }
     );
   },
   /**
@@ -1138,7 +1212,10 @@ export const productService = {
   },
   getOne(id, skipAuth = true) {
     const path = `/products/${id}`;
-    return readCachedProductData(`item:${skipAuth}:${path}`, () => apiFetch(path, {}, false, skipAuth));
+    return readCachedProductData(
+      `item:${skipAuth}:${path}`,
+      async () => normalizeProduct(await apiFetch(path, {}, false, skipAuth))
+    );
   },
   getImages(params = {}, skipAuth = true) {
     const path = `/product_images${buildQuery(params)}`;
@@ -1453,14 +1530,15 @@ export const reviewService = {
 // ============================================================
 export const couponService = {
   async getAll(params = {}) {
-    return apiFetch(`/coupons${buildQuery(params)}`);
+    const response = normalizeCollectionResponse(await apiFetch(`/coupons${buildQuery(params)}`));
+    return { ...response, 'hydra:member': response['hydra:member'].map(normalizeCoupon) };
   },
   async getOne(id) {
-    return apiFetch(`/coupons/${id}`);
+    return normalizeCoupon(await apiFetch(`/coupons/${id}`));
   },
   async findByCode(code) {
-    const res = await apiFetch(`/coupons${buildQuery({ code })}`);
-    return res?.['hydra:member']?.[0] || null;
+    const res = normalizeCollectionResponse(await apiFetch(`/coupons${buildQuery({ code })}`));
+    return normalizeCoupon(res?.['hydra:member']?.[0]) || null;
   },
   async create(data) {
     return apiFetch('/coupons', { method: 'POST', body: JSON.stringify(data) });

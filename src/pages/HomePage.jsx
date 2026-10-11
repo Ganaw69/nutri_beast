@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, hydrateProductsWithImages } from "../services/api";
+import { productService, couvertureService, brandService, bannerService, resolveProductImage, mediaUrl, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
 import logo from "../assets/logo.png";
@@ -20,12 +20,29 @@ const normalizeProduct = (p) => ({
   sku: p.sku,
 });
 
+const FALLBACK_PROMO = {
+  title: 'PROTEIN',
+  subtitle: 'WATER',
+  description: 'ZÉRO SUCRE | 10 G DE PROTÉINES | RAFRAÎCHISSANT',
+  buttonLabel: 'JE DÉCOUVRE',
+  image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=800',
+};
+
+const collectionItems = (data) => data?.['hydra:member'] || data?.member || (Array.isArray(data) ? data : []);
+
+const bannerImageUrl = (filename, size) => {
+  if (!filename) return null;
+  if (typeof filename === 'string' && (filename.startsWith('http') || filename.startsWith('/uploads/'))) return filename;
+  return mediaUrl(`banners/${size}/${filename}`);
+};
+
 export const HomePage = () => {
   const { navigateTo } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
+  const [promoBanner, setPromoBanner] = useState(null);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +53,8 @@ export const HomePage = () => {
       productService.getAll({ isFeatured: true, isActive: true, itemsPerPage: 12 }, true).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([prodData, couvertureData, brandData]) => {
+      bannerService.getActive().catch(() => ({ 'hydra:member': [] })),
+    ]).then(([prodData, couvertureData, brandData, bannerData]) => {
       if (!active) return;
       const prods = prodData['hydra:member'] || [];
       // The collection already includes everything a product card needs.
@@ -47,6 +65,10 @@ export const HomePage = () => {
         .sort((first, second) => (first.index ?? 0) - (second.index ?? 0));
       setHeroCouvertures(couvertures);
       setBrands((brandData['hydra:member'] || []).filter((brand) => brand.active !== false && brand.isActive !== false && brand.logo));
+      const activeBanners = collectionItems(bannerData)
+        .filter((banner) => banner.isActive !== false && banner.enabled !== false)
+        .sort((first, second) => (first.position ?? 0) - (second.position ?? 0));
+      setPromoBanner(activeBanners[0] || null);
       setLoading(false);
 
       void hydrateProductsWithImages(prods).then((productsWithImages) => {
@@ -80,6 +102,27 @@ export const HomePage = () => {
     ? mediaUrl(`couvertures/${heroCouverture.image}`)
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
   const heroMobileBgImage = heroCouverture?.imageMobile ? mediaUrl(`couvertures/${heroCouverture.imageMobile}`) : heroBgImage;
+  const promoTitle = promoBanner?.title || FALLBACK_PROMO.title;
+  const promoSubtitle = promoBanner?.subtitle || FALLBACK_PROMO.subtitle;
+  const promoHighlights = (promoBanner?.description || FALLBACK_PROMO.description)
+    .split(/\r?\n|\|/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const promoDesktopImage = bannerImageUrl(promoBanner?.imageDesktop, 'desktop') || FALLBACK_PROMO.image;
+  const promoMobileImage = bannerImageUrl(promoBanner?.imageMobile, 'mobile') || promoDesktopImage;
+
+  const openPromoLink = () => {
+    const link = promoBanner?.buttonLink?.trim();
+    if (!link) {
+      navigateTo('shop');
+      return;
+    }
+    if (/^https?:\/\//i.test(link)) {
+      window.location.assign(link);
+      return;
+    }
+    navigateTo(link.replace(/^#?\/?/, '').split(/[/?#]/)[0] || 'shop');
+  };
 
   const showNextHeroCouverture = () => {
     if (heroCouvertures.length < 2) return;
@@ -97,7 +140,7 @@ export const HomePage = () => {
         <button type="button" onClick={showNextHeroCouverture} className="block w-full cursor-pointer" aria-label="Afficher la couverture suivante">
           <picture className="block w-full">
             <source media="(max-width: 639px)" srcSet={heroMobileBgImage} />
-            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchPriority="high" decoding="async" className="block w-full h-auto animate-[pulse_0.35s_ease-out]" />
+            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchpriority="high" decoding="async" className="block w-full h-auto animate-[pulse_0.35s_ease-out]" />
           </picture>
         </button>
         <div className="absolute inset-0 bg-black/30 pointer-events-none" />
@@ -106,36 +149,33 @@ export const HomePage = () => {
         </div>}
       </section>
 
-      {/* ================= 2. PROTEIN WATER PROMO BANNER ================= */}
+      {/* ================= 2. ADMIN-MANAGED PROMO BANNER ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-[#00a896] rounded-xl p-8 sm:p-12 text-white relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8">
           <div className="space-y-6 max-w-xl z-10">
             <div>
-              <h2 className="font-black text-4xl sm:text-6xl text-white uppercase leading-none tracking-tight block">PROTEIN</h2>
-              <span className="italic font-normal text-4xl sm:text-6xl text-white block mt-1">WATER</span>
+              <h2 className="font-black text-4xl sm:text-6xl text-white uppercase leading-none tracking-tight block">{promoTitle}</h2>
+              {promoSubtitle && <span className="italic font-normal text-4xl sm:text-6xl text-white block mt-1">{promoSubtitle}</span>}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
-              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">ZÉRO SUCRE</span>
-              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">10 G DE PROTÉINES</span>
-              <span className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">RAFRAÎCHISSANT</span>
+              {promoHighlights.map((highlight) => <span key={highlight} className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">{highlight}</span>)}
             </div>
             <div>
               <button
-                onClick={() => navigateTo("shop")}
+                onClick={openPromoLink}
                 className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase tracking-wider px-6 py-3.5 rounded-full shadow-lg inline-flex items-center gap-2 transition-transform hover:scale-105"
               >
-                JE DÉCOUVRE <ArrowRight className="w-4 h-4" />
+                {promoBanner?.buttonLabel || FALLBACK_PROMO.buttonLabel} <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           <div className="w-full lg:w-1/2 flex justify-center z-10">
             <div className="relative transform rotate-3 hover:rotate-0 transition-transform duration-500 bg-[#0c0c0c] border border-white/20 p-2 rounded-xl backdrop-blur-sm shadow-2xl w-full max-w-md">
-              <img
-                src="https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=800"
-                alt="Protein Water Splash Cans"
-                className="w-full h-64 object-cover rounded-lg"
-              />
+              <picture>
+                <source media="(max-width: 639px)" srcSet={promoMobileImage} />
+                <img src={promoDesktopImage} alt={promoTitle} className="w-full h-64 object-cover rounded-lg" />
+              </picture>
             </div>
           </div>
         </div>

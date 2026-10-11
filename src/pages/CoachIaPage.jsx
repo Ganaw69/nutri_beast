@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bot, Send, User, RefreshCw } from "lucide-react";
+import { Bot, Send, User, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { coachApi } from "../services/coachApi";
+import { findCoachProductRecommendation } from "../services/coachProductMatcher";
 
 const COACH_USER_ID_STORAGE_KEY = "nutri_beast_coach_user_id";
 
-const createMessage = (sender, text) => ({
+const createMessage = (sender, text, extra = {}) => ({
   id: `${sender}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   sender,
   text,
+  ...extra,
 });
 
 const getCoachUserId = () => {
@@ -68,10 +70,27 @@ export const CoachIaPage = () => {
     requestControllerRef.current = controller;
 
     try {
+      // Choose from our catalogue before the Coach request. The card is shown
+      // first and the same product description is sent as structured context
+      // so the AI can validate this exact recommendation.
+      const recommendation = await findCoachProductRecommendation(text).catch(() => null);
+      if (requestControllerRef.current !== controller) return;
+
+      if (recommendation) {
+        setMessages((previousMessages) => [
+          ...previousMessages,
+          createMessage("ai", `Produit du catalogue sélectionné pour votre demande : ${recommendation.name}. Coach Max va confirmer s'il vous convient.`, {
+            type: "product-recommendation",
+            product: recommendation,
+          }),
+        ]);
+      }
+
       const response = await coachApi.sendMessage({
         message: text,
         userId: userIdRef.current,
         language: "auto",
+        productContext: recommendation?.context || null,
         signal: controller.signal,
       });
       setMessages((previousMessages) => [...previousMessages, createMessage("ai", response.reply)]);
@@ -179,6 +198,31 @@ export const CoachIaPage = () => {
                 }`}
               >
                 <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                {message.type === "product-recommendation" && message.product && (
+                  <a
+                    href={message.product.href}
+                    className="mt-3 flex items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
+                    aria-label={`Voir le produit ${message.product.name}`}
+                  >
+                    {message.product.image ? (
+                      <img src={message.product.image} alt="" className="h-12 w-12 rounded-lg bg-white object-contain" />
+                    ) : (
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent-gold/15 text-accent-gold">
+                        <ShoppingBag className="h-5 w-5" />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-white">{message.product.name}</span>
+                      <span className="block truncate text-xs text-gray-400">
+                        {[message.product.brand, message.product.category].filter(Boolean).join(" · ") || "Produit Nutri Beast"}
+                      </span>
+                      {message.product.price !== null && (
+                        <span className="mt-1 block text-xs font-bold text-accent-gold">{message.product.price.toFixed(2)} TND</span>
+                      )}
+                    </span>
+                    <ExternalLink className="h-4 w-4 shrink-0 text-accent-gold" aria-hidden="true" />
+                  </a>
+                )}
               </div>
 
               {message.sender === "user" && (

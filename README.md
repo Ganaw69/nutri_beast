@@ -19,6 +19,8 @@ If you are developing a production application, we recommend using TypeScript wi
 
 Coach IA calls `https://represent-five-lynn-page.trycloudflare.com/v1/chat` by default and checks `GET /health` when the page opens. The API receives `{ message, user_id, language: "auto" }`; no OpenRouter key is ever sent by the browser.
 
+When a visitor asks which supplement to buy or use, the storefront selects a matching live-catalogue product, posts its link in the conversation, and additionally sends a `product_context` object to `/v1/chat`. The Coach API should add that object to its model context and confirm or correct the selected product using its supplied description and nutrition facts.
+
 For a deployed Coach API, set its public HTTPS base URL before building the storefront:
 
 ```ini

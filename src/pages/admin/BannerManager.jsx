@@ -85,7 +85,7 @@ export const BannerManager = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-white mb-1">Gestion Bannières</h1>
-          <p className="text-gray-400 text-sm">Bannières hero avec images desktop et mobile.</p>
+          <p className="text-gray-400 text-sm">La première bannière active est affichée dans le bloc promotionnel de l'accueil.</p>
         </div>
         <button onClick={openAdd} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-[#d90429]/20">
           <Plus size={16} /> Nouvelle Bannière
@@ -150,10 +150,10 @@ export const BannerManager = () => {
                 <div><label className={labelCls}>Sous-titre</label><input value={form.subtitle} onChange={e => setForm(p => ({ ...p, subtitle: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Position</label><input type="number" value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} className={inputCls} /></div>
               </div>
-              <div><label className={labelCls}>Description</label><textarea rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={`${inputCls} resize-none`} /></div>
+              <div><label className={labelCls}>Avantages (séparez-les avec |)</label><textarea rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={`${inputCls} resize-none`} placeholder="ZÉRO SUCRE | 10 G DE PROTÉINES | RAFRAÎCHISSANT" /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Label bouton</label><input value={form.buttonLabel} onChange={e => setForm(p => ({ ...p, buttonLabel: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Lien bouton</label><input value={form.buttonLink} onChange={e => setForm(p => ({ ...p, buttonLink: e.target.value }))} className={inputCls} /></div>
+                <div><label className={labelCls}>Lien bouton</label><input value={form.buttonLink} onChange={e => setForm(p => ({ ...p, buttonLink: e.target.value }))} className={inputCls} placeholder="shop ou https://..." /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Type de lien</label>
