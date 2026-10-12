@@ -1087,6 +1087,7 @@ const normalizeProduct = (product) => {
       product.isActive ?? product.is_active ?? product.is_Active ?? product.active,
       true
     ),
+    packing: normalizeBoolean(product.packing, false),
   };
 };
 
@@ -1260,10 +1261,14 @@ export const productService = {
     return product;
   },
   async adjustStock(id, operation, quantity, reason = '') {
-    // operation: 'add' | 'remove' | 'adjust' | 'return'
+    // StockProcessor operations are POST actions; never treat them as product patches.
+    // `reason` is optional only for additions according to the stock input contract.
+    const payload = operation === 'add'
+      ? { quantity, ...(reason.trim() ? { reason: reason.trim() } : {}) }
+      : { quantity, reason: reason.trim() };
     const product = await apiFetch(`/products/${id}/stock/${operation}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ quantity, reason }),
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
     clearProductReadCache();
     return product;
@@ -1319,6 +1324,21 @@ export const categoryService = {
   async getAll(params = {}, skipAuth = false) {
     const data = await apiFetch(`/categories${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
+  },
+  async getAllPages(params = {}, skipAuth = false) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth);
+    const firstItems = firstPage['hydra:member'] || [];
+    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
+    if (!firstItems.length || firstItems.length >= total) {
+      return { ...firstPage, 'hydra:member': firstItems, 'hydra:totalItems': total };
+    }
+
+    const pageCount = Math.ceil(total / firstItems.length);
+    const pages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+      this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
+    ));
+    const members = [...firstItems, ...pages.flatMap((page) => page['hydra:member'] || [])];
+    return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': total };
   },
   async getOne(id, skipAuth = false) {
     return apiFetch(`/categories/${id}`, {}, false, skipAuth);
@@ -1389,6 +1409,35 @@ export const brandService = {
   async getAll(params = {}, skipAuth = false) {
     const data = await apiFetch(`/brands${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
+  },
+  async getAllPages(params = {}, skipAuth = false) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth);
+    const firstItems = firstPage['hydra:member'] || [];
+    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
+    const hasNextLink = Boolean(firstPage['hydra:view']?.['hydra:next']);
+    if (!firstItems.length || (firstItems.length >= total && !hasNextLink)) {
+      return { ...firstPage, 'hydra:member': firstItems, 'hydra:totalItems': total };
+    }
+    const members = [...firstItems];
+    if (hasNextLink) {
+      let nextPage = 2;
+      let hasNext = true;
+      while (hasNext && nextPage <= 1000) {
+        const page = await this.getAll({ ...params, page: nextPage, itemsPerPage: 100 }, skipAuth);
+        const pageMembers = page['hydra:member'] || [];
+        if (!pageMembers.length) break;
+        members.push(...pageMembers);
+        hasNext = Boolean(page['hydra:view']?.['hydra:next']);
+        nextPage += 1;
+      }
+    } else {
+      const pageCount = Math.ceil(total / firstItems.length);
+      const remainingPages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+        this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
+      ));
+      members.push(...remainingPages.flatMap((page) => page['hydra:member'] || []));
+    }
+    return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
   },
   async getOne(id, skipAuth = false) {
     return apiFetch(`/brands/${id}`, {}, false, skipAuth);
@@ -1537,8 +1586,7 @@ export const couponService = {
     return normalizeCoupon(await apiFetch(`/coupons/${id}`));
   },
   async findByCode(code) {
-    const res = normalizeCollectionResponse(await apiFetch(`/coupons${buildQuery({ code })}`));
-    return normalizeCoupon(res?.['hydra:member']?.[0]) || null;
+    return normalizeCoupon(await apiFetch(`/coupons/lookup${buildQuery({ code })}`));
   },
   async create(data) {
     return apiFetch('/coupons', { method: 'POST', body: JSON.stringify(data) });
@@ -1562,6 +1610,20 @@ export const packService = {
   async getAll(params = {}, skipAuth = false) {
     const data = await apiFetch(`/packs${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
+  },
+  async getAllPages(params = {}, skipAuth = false) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth);
+    const firstItems = firstPage['hydra:member'] || [];
+    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
+    if (!firstItems.length || firstItems.length >= total) {
+      return { ...firstPage, 'hydra:member': firstItems, 'hydra:totalItems': total };
+    }
+    const pageCount = Math.ceil(total / firstItems.length);
+    const pages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+      this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
+    ));
+    const members = [...firstItems, ...pages.flatMap((page) => page['hydra:member'] || [])];
+    return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': total };
   },
   async getOne(id, skipAuth = false) {
     return apiFetch(`/packs/${id}`, {}, false, skipAuth);
@@ -1819,6 +1881,9 @@ export const stockMovementService = {
   async getAll(params = {}) {
     return apiFetch(`/stock_movements${buildQuery(params)}`);
   },
+  async getOne(id) {
+    return apiFetch(`/stock_movements/${id}`);
+  },
 };
 
 // ============================================================
@@ -1848,8 +1913,18 @@ export const promotionService = {
 // ============================================================
 export const iriToId = (iri) => {
   if (!iri) return null;
-  const parts = iri.split('/');
-  return parseInt(parts[parts.length - 1], 10);
+  // Relation fields may already contain an id or an expanded API object.
+  // Normalize those shapes before parsing an API IRI such as `/api/products/3`.
+  if (typeof iri === 'number') return Number.isFinite(iri) ? iri : null;
+  if (typeof iri === 'object') {
+    const nestedId = iri.id ?? iri['@id'] ?? iri.iri;
+    return nestedId == null || nestedId === iri ? null : iriToId(nestedId);
+  }
+  if (typeof iri !== 'string') return null;
+  const lastPart = iri.trim().split('/').filter(Boolean).at(-1);
+  if (!lastPart) return null;
+  const parsed = Number.parseInt(lastPart, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 export const idToIri = (resource, id) => `/api/${resource}/${id}`;

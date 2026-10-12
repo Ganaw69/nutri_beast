@@ -8,6 +8,7 @@ const EMPTY_FORM = {
   name: '', barcode: '', shortDescription: '', description: '',
   price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', dateProduit: '',
   isActive: true, isFeatured: false, isNew: false, isBestSeller: false, isOnSale: false,
+  packing: false,
   category: '', brand: '', goals: [], flavors: [],
   productOptions: { type: '', sizes: [], colors: [], styles: [], capacityLiters: '' },
   metaTitle: '', metaDescription: '',
@@ -179,12 +180,14 @@ export const ProductManager = () => {
   // Stock modal
   const [stockModal, setStockModal] = useState(null);
   const [stockForm, setStockForm] = useState({ operation: 'add', quantity: 1, reason: '' });
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockError, setStockError] = useState('');
 
   useEffect(() => {
     Promise.all([
       categoryService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
       categoryService.getMain(true).catch(() => ({ member: [] })),
-      brandService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
+      brandService.getAllPages().catch(() => ({ 'hydra:member': [] })),
       goalService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
       // The flavor list is a public endpoint and must not send the admin JWT.
       flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
@@ -385,6 +388,7 @@ export const ProductManager = () => {
       dateProduit: dateInputValue(p.dateProduit),
       isActive: p.isActive ?? true, isFeatured: p.isFeatured ?? false,
       isNew: p.isNew ?? false, isBestSeller: p.isBestSeller ?? false, isOnSale: p.isOnSale ?? false,
+      packing: p.packing ?? false,
       category: relationToIri(p.category, 'categories'),
       brand: relationToIri(p.brand, 'brands'),
       goals: (p.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
@@ -403,6 +407,7 @@ export const ProductManager = () => {
         dateProduit: dateInputValue(fullProduct.dateProduit),
         isActive: fullProduct.isActive ?? true, isFeatured: fullProduct.isFeatured ?? false,
         isNew: fullProduct.isNew ?? false, isBestSeller: fullProduct.isBestSeller ?? false, isOnSale: fullProduct.isOnSale ?? false,
+        packing: fullProduct.packing ?? false,
         category: relationToIri(fullProduct.category, 'categories'),
         brand: relationToIri(fullProduct.brand, 'brands'),
         goals: (fullProduct.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
@@ -525,11 +530,24 @@ export const ProductManager = () => {
   };
 
   const handleStockSave = async () => {
+    const quantity = Number(stockForm.quantity);
+    if (stockSaving) return;
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setStockError('Saisissez une quantité entière supérieure à zéro.');
+      return;
+    }
+    if (stockForm.operation !== 'add' && !stockForm.reason.trim()) {
+      setStockError('Le motif est obligatoire pour cette opération.');
+      return;
+    }
+    setStockSaving(true);
+    setStockError('');
     try {
-      await productService.adjustStock(stockModal.id, stockForm.operation, parseInt(stockForm.quantity), stockForm.reason);
+      await productService.adjustStock(stockModal.id, stockForm.operation, quantity, stockForm.reason);
       setStockModal(null);
-      fetchProducts();
-    } catch (e) { alert(e.message); }
+      await fetchProducts();
+    } catch (e) { setStockError(e.message || 'Échec de la mise à jour du stock.'); }
+    finally { setStockSaving(false); }
   };
 
   const handleCreateFlavor = async () => {
@@ -697,7 +715,7 @@ export const ProductManager = () => {
                       <AdminActionButton label="Voir les détails" onClick={() => openDetails(p)} className="p-1.5 text-gray-300 hover:text-sky-400 hover:bg-sky-400/10">
                         <Eye size={14} />
                       </AdminActionButton>
-                      <AdminActionButton label="Stock" onClick={() => setStockModal({ id: p.id, name: p.name })} className="p-1.5 text-gray-300 hover:text-blue-400 hover:bg-blue-400/10">
+                      <AdminActionButton label="Stock" onClick={() => { setStockError(''); setStockForm({ operation: 'add', quantity: 1, reason: '' }); setStockModal({ id: p.id, name: p.name }); }} className="p-1.5 text-gray-300 hover:text-blue-400 hover:bg-blue-400/10">
                         <Package size={14} />
                       </AdminActionButton>
                       <AdminActionButton label="Duplicate" onClick={() => handleDuplicate(p.id)} className="p-1.5 text-gray-300 hover:text-yellow-400 hover:bg-yellow-400/10">
@@ -1099,8 +1117,8 @@ export const ProductManager = () => {
               </div>
 
               {/* Booleans */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                {[['isActive','Actif'],['isFeatured','En Vedette'],['isNew','Nouveau'],['isBestSeller','Best seller'],['isOnSale','En Promo']].map(([key, label]) => (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[['isActive','Actif'],['isFeatured','En Vedette'],['isNew','Nouveau'],['isBestSeller','Best seller'],['isOnSale','En Promo'],['packing','Disponible dans « Composer votre pack »']].map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.checked }))} className="accent-[#d90429]" />
                     <span className="text-xs text-gray-300 font-bold">{label}</span>
@@ -1191,30 +1209,33 @@ export const ProductManager = () => {
           <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl w-full max-w-sm shadow-2xl">
             <div className="flex justify-between items-center p-5 border-b border-[#2a2a2a]">
               <h3 className="font-bold text-white">Ajuster le Stock — {stockModal.name}</h3>
-              <button onClick={() => setStockModal(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+              <button disabled={stockSaving} onClick={() => setStockModal(null)} className="text-gray-400 hover:text-white disabled:opacity-40"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
+              {stockError && <div role="alert" className="text-sm text-red-300 bg-red-900/20 border border-red-500/30 rounded-lg p-3">{stockError}</div>}
               <div>
                 <label className={labelCls}>Opération</label>
                 <select value={stockForm.operation} onChange={e => setStockForm(p => ({ ...p, operation: e.target.value }))} className={inputCls}>
                   <option value="add">Ajouter</option>
                   <option value="remove">Retirer</option>
-                  <option value="adjust">Ajuster (valeur absolue)</option>
+                  <option value="adjust">Ajuster (stock réel constaté)</option>
                   <option value="return">Retour</option>
                 </select>
               </div>
               <div>
                 <label className={labelCls}>Quantité</label>
-                <input type="number" min="1" value={stockForm.quantity} onChange={e => setStockForm(p => ({ ...p, quantity: e.target.value }))} className={inputCls} />
+                <input type="number" min="1" step="1" value={stockForm.quantity} onChange={e => setStockForm(p => ({ ...p, quantity: e.target.value }))} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Raison</label>
+                <label className={labelCls}>Motif {stockForm.operation === 'add' ? '(facultatif)' : '*'}</label>
                 <input value={stockForm.reason} onChange={e => setStockForm(p => ({ ...p, reason: e.target.value }))} className={inputCls} placeholder="ex: Réception fournisseur" />
               </div>
             </div>
             <div className="p-5 border-t border-[#2a2a2a] flex gap-3 justify-end">
-              <button onClick={() => setStockModal(null)} className="px-4 py-2 text-sm text-gray-300 hover:text-white">Annuler</button>
-              <button onClick={handleStockSave} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-5 py-2 rounded-lg text-sm font-bold">Confirmer</button>
+              <button disabled={stockSaving} onClick={() => setStockModal(null)} className="px-4 py-2 text-sm text-gray-300 hover:text-white disabled:opacity-40">Annuler</button>
+              <button disabled={stockSaving} onClick={handleStockSave} className="inline-flex items-center gap-2 bg-[#d90429] hover:bg-[#ff1a3c] text-white px-5 py-2 rounded-lg text-sm font-bold disabled:opacity-60">
+                {stockSaving && <Loader2 size={14} className="animate-spin" />}{stockSaving ? 'Enregistrement…' : 'Confirmer'}
+              </button>
             </div>
           </div>
         </div>

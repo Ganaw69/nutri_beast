@@ -121,7 +121,9 @@ export const CartProvider = ({ children }) => {
   };
 
   const addCustomPackToCart = (pack, quote, quantity = 1) => {
-    if (!pack?.id || !quote || Number(quote.finalPrice) < 0 || !Array.isArray(quote.items)) {
+    if (!pack?.id || !quote || !Number.isFinite(Number(quote.finalPrice)) || Number(quote.finalPrice) < 0 || !Array.isArray(quote.items)
+      || Number(quote.distinctProductCount ?? quote.items.length) < 2
+      || Number(quote.distinctProductCount ?? quote.items.length) > 5) {
       showToast("Le serveur n’a pas confirmé le prix de ce pack.");
       return false;
     }
@@ -140,6 +142,7 @@ export const CartProvider = ({ children }) => {
           productId: item.productId,
           name: item.productName || item.name,
           sku: item.sku,
+          variantSku: item.variantSku || null,
           quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice),
         })),

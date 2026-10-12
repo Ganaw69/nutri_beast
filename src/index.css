@@ -181,17 +181,6 @@
   max-width: 270px;
   max-height: 125px;
   object-fit: contain;
-  /* The API includes logos with baked-in white backgrounds. Convert every
-     logo to a clean light mark: white image backgrounds become black and
-     disappear through screen blending on the dark card. */
-  mix-blend-mode: screen;
-  filter: grayscale(1) contrast(250%) invert(1);
-  transition: transform 250ms ease, opacity 250ms ease;
-}
-
-.brand-logo-card:hover .brand-logo-image {
-  transform: scale(1.08);
-  opacity: 0.9;
 }
 
 @media (max-width: 640px) {

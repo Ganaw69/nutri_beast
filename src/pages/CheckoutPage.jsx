@@ -148,7 +148,11 @@ export const CheckoutPage = () => {
             return [{
               packId: item.customPack.packId,
               quantity: item.quantity || 1,
-              products: item.customPack.items.map(({ productId, quantity }) => ({ productId, quantity })),
+              products: item.customPack.items.map(({ productId, quantity, variantSku }) => ({
+                productId,
+                quantity,
+                ...(variantSku ? { variantSku } : {}),
+              })),
             }];
           }
           if (item.itemType === "product-bundle") {
