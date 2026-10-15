@@ -222,14 +222,14 @@ export const HomePage = () => {
 
       {/* ================= 2. ADMIN-MANAGED PROMO BANNER ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-[#00a896] rounded-xl p-8 sm:p-12 text-white relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8">
+        <div className="rounded-xl p-8 sm:p-12 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8" style={{ backgroundColor: promoBanner?.backgroundColor || '#00a896', color: promoBanner?.textColor || '#ffffff' }}>
           <div className="space-y-6 max-w-xl z-10">
             <div>
-              <h2 className="font-black text-4xl sm:text-6xl text-white uppercase leading-none tracking-tight block">{promoTitle}</h2>
-              {promoSubtitle && <span className="italic font-normal text-4xl sm:text-6xl text-white block mt-1">{promoSubtitle}</span>}
+              <h2 className="font-black text-4xl sm:text-6xl uppercase leading-none tracking-tight block" style={{ color: promoBanner?.textColor || '#ffffff' }}>{promoTitle}</h2>
+              {promoSubtitle && <span className="italic font-normal text-4xl sm:text-6xl block mt-1" style={{ color: promoBanner?.textColor || '#ffffff' }}>{promoSubtitle}</span>}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
-              {promoHighlights.map((highlight) => <span key={highlight} className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30">{highlight}</span>)}
+              {promoHighlights.map((highlight) => <span key={highlight} className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30" style={{ color: promoBanner?.textColor || '#ffffff' }}>{highlight}</span>)}
             </div>
             <div>
               <button

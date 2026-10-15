@@ -4,7 +4,7 @@ import { Plus, Trash2, Edit2, X, Loader2, Check, Upload, Image } from 'lucide-re
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const LINK_TYPES = ['PRODUCT', 'CATEGORY', 'CMS', 'EXTERNAL_URL'];
-const EMPTY = { title: '', subtitle: '', description: '', buttonLabel: '', buttonLink: '', linkType: 'EXTERNAL_URL', position: 0, isActive: true, startDate: '', endDate: '' };
+const EMPTY = { title: '', subtitle: '', description: '', buttonLabel: '', buttonLink: '', linkType: 'EXTERNAL_URL', position: 0, isActive: true, backgroundColor: '#00a896', textColor: '#ffffff', startDate: '', endDate: '' };
 
 export const BannerManager = () => {
   const [banners, setBanners] = useState([]);
@@ -34,6 +34,8 @@ export const BannerManager = () => {
       buttonLabel: b.buttonLabel || '', buttonLink: b.buttonLink || '',
       linkType: b.linkType || 'EXTERNAL_URL', position: b.position || 0,
       isActive: b.isActive ?? true,
+      backgroundColor: b.backgroundColor || '#00a896',
+      textColor: b.textColor || '#ffffff',
       startDate: b.startDate ? b.startDate.slice(0, 16) : '',
       endDate: b.endDate ? b.endDate.slice(0, 16) : '',
     });
@@ -98,7 +100,7 @@ export const BannerManager = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {banners.map(b => (
             <div key={b.id} className="bg-[#161616] border border-[#2a2a2a] rounded-xl overflow-hidden group">
-              <div className="aspect-video bg-[#111] relative">
+              <div className="aspect-video relative" style={{ backgroundColor: b.backgroundColor || '#111' }}>
                 {b.imageDesktop ? (
                   <img src={mediaUrl(`banners/desktop/${b.imageDesktop}`)} alt={b.title} className="w-full h-full object-cover" />
                 ) : (
@@ -106,8 +108,8 @@ export const BannerManager = () => {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-4">
                   <div>
-                    <h3 className="font-black text-white text-sm">{b.title}</h3>
-                    {b.subtitle && <p className="text-gray-300 text-xs">{b.subtitle}</p>}
+                    <h3 className="font-black text-sm" style={{ color: b.textColor || '#fff' }}>{b.title}</h3>
+                    {b.subtitle && <p className="text-xs opacity-80" style={{ color: b.textColor || '#fff' }}>{b.subtitle}</p>}
                   </div>
                 </div>
                 <div className="absolute top-3 right-3 flex gap-2">
@@ -151,6 +153,10 @@ export const BannerManager = () => {
                 <div><label className={labelCls}>Position</label><input type="number" value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} className={inputCls} /></div>
               </div>
               <div><label className={labelCls}>Avantages (séparez-les avec |)</label><textarea rows={2} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={`${inputCls} resize-none`} placeholder="ZÉRO SUCRE | 10 G DE PROTÉINES | RAFRAÎCHISSANT" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={labelCls}>Couleur du fond</label><div className="flex gap-2"><input type="color" value={form.backgroundColor} onChange={e => setForm(p => ({ ...p, backgroundColor: e.target.value }))} className="h-10 w-12 rounded border border-[#333] bg-[#222] p-1" /><input value={form.backgroundColor} onChange={e => setForm(p => ({ ...p, backgroundColor: e.target.value }))} className={inputCls} /></div></div>
+                <div><label className={labelCls}>Couleur du texte</label><div className="flex gap-2"><input type="color" value={form.textColor} onChange={e => setForm(p => ({ ...p, textColor: e.target.value }))} className="h-10 w-12 rounded border border-[#333] bg-[#222] p-1" /><input value={form.textColor} onChange={e => setForm(p => ({ ...p, textColor: e.target.value }))} className={inputCls} /></div></div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className={labelCls}>Label bouton</label><input value={form.buttonLabel} onChange={e => setForm(p => ({ ...p, buttonLabel: e.target.value }))} className={inputCls} /></div>
                 <div><label className={labelCls}>Lien bouton</label><input value={form.buttonLink} onChange={e => setForm(p => ({ ...p, buttonLink: e.target.value }))} className={inputCls} placeholder="shop ou https://..." /></div>

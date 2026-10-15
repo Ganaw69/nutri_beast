@@ -6,6 +6,8 @@ import { buildCategoryTree, collectCategoryAndDescendantIds, extractCategoryItem
 
 const EMPTY = { name: '', description: '', slug: '', type: 'PREDEFINED', isCustomizable: false, basePrice: '', finalPrice: '', discountPerProduct: '0', minProducts: '', maxProducts: '', position: '', isActive: true, startDate: '', endDate: '' };
 const PAGE_SIZE = 10;
+const PRODUCT_PICKER_CACHE_KEY = 'nutri_beast_admin_pack_products_v1';
+const PRODUCT_PICKER_CACHE_TTL = 15 * 60 * 1000;
 const currency = (n) => `${Number(n || 0).toFixed(2)} TND`;
 const date = (v) => v ? String(v).slice(0, 10) : '';
 const productIri = (p) => p?.['@id'] || `/api/products/${p?.id}`;
@@ -43,6 +45,27 @@ const mergeCategories = (flatCategories, mainCategories) => {
   return [...byId.values()];
 };
 
+const readProductPickerCache = () => {
+  try {
+    const cached = JSON.parse(localStorage.getItem(PRODUCT_PICKER_CACHE_KEY) || 'null');
+    if (!cached || !Array.isArray(cached.products)) return null;
+    return {
+      products: cached.products,
+      fresh: Date.now() - Number(cached.savedAt || 0) < PRODUCT_PICKER_CACHE_TTL,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeProductPickerCache = (products) => {
+  try {
+    localStorage.setItem(PRODUCT_PICKER_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), products }));
+  } catch {
+    // A full or disabled browser storage should not block the picker.
+  }
+};
+
 export const PackManager = () => {
   const [packs, setPacks] = useState([]), [loading, setLoading] = useState(true), [saving, setSaving] = useState(false);
   const [search, setSearch] = useState(''), [type, setType] = useState(''), [active, setActive] = useState(''), [customizable, setCustomizable] = useState('');
@@ -72,13 +95,22 @@ export const PackManager = () => {
   useEffect(() => {
     if (!picker) return;
     let alive = true;
-    setProductsLoading(true);
-    setProducts([]);
+    const cached = readProductPickerCache();
+    if (cached) {
+      setProducts(cached.products);
+      setProductsLoading(false);
+    } else {
+      setProductsLoading(true);
+      setProducts([]);
+    }
     // A category can have products beyond the first API page. Fetch all
     // matching pages before applying the category filter, as ProductManager
     // does, so a valid category is never shown as empty.
+    const productRequest = cached?.fresh
+      ? Promise.resolve({ 'hydra:member': cached.products })
+      : productService.getAllPages();
     Promise.all([
-      productService.getAllPages(),
+      productRequest,
       categoryService.getAll({ itemsPerPage: 100 }),
       categoryService.getMain(),
     ])
@@ -88,6 +120,7 @@ export const PackManager = () => {
         // soon as the product GET finishes, exactly like ProductManager.
         if (!alive) return;
         setProducts(list);
+        if (!cached?.fresh) writeProductPickerCache(list);
         setCategories(mergeCategories(categoryData['hydra:member'] || [], mainCategoryData));
         setProductsLoading(false);
       })
@@ -156,6 +189,16 @@ export const PackManager = () => {
 
       if (!packId) throw new Error('Impossible de déterminer le pack enregistré.');
       await syncPackProducts(packId);
+
+      // Synchronizing pack products can trigger the API's derived-price
+      // processor. Reapply manual predefined-pack prices afterwards so the
+      // values entered by the administrator remain authoritative.
+      if (form.type === 'PREDEFINED') {
+        await packService.update(packId, {
+          basePrice: Number(form.basePrice).toFixed(2),
+          finalPrice: Number(form.finalPrice).toFixed(2),
+        });
+      }
 
       if (image) {
         try {

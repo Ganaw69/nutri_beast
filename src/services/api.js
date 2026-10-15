@@ -1020,13 +1020,28 @@ export const resolveProductImage = (product, fallback = null) => {
 /** Get the stored JWT token */
 const getToken = () => sessionStorage.getItem('admin_jwt') || localStorage.getItem('admin_jwt');
 
+const API_READ_CACHE_TTL = 15 * 60 * 1000;
+const API_READ_CACHE_PREFIX = 'nutri_beast_api_read_v1:';
+const apiReadCache = new Map();
+
+const clearApiReadCache = () => {
+  apiReadCache.clear();
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(API_READ_CACHE_PREFIX))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // A full or disabled browser storage should not block API requests.
+  }
+};
+
 /**
  * Core fetch wrapper.
  * @param {string} path  - e.g. '/products'
  * @param {object} opts  - standard fetch options
  * @param {boolean} isMultipart - skip Content-Type header (let browser set boundary)
  */
-async function apiFetch(path, opts = {}, isMultipart = false, skipAuth = false) {
+async function requestApi(path, opts = {}, isMultipart = false, skipAuth = false) {
   if (USE_DEMO_API) {
     return mockApiFetch(path, opts, isMultipart, skipAuth);
   }
@@ -1072,6 +1087,49 @@ async function apiFetch(path, opts = {}, isMultipart = false, skipAuth = false) 
   if (res.status === 204) return null; // No Content
   return res.json();
 }
+
+const apiFetch = async (path, opts = {}, isMultipart = false, skipAuth = false) => {
+  const method = String(opts.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    const result = await requestApi(path, opts, isMultipart, skipAuth);
+    clearApiReadCache();
+    return result;
+  }
+
+  const key = `${skipAuth}:${path}`;
+  const cached = apiReadCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  let storedData = null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(`${API_READ_CACHE_PREFIX}${key}`) || 'null');
+    if (stored && Date.now() - Number(stored.savedAt || 0) < API_READ_CACHE_TTL) {
+      storedData = stored.data;
+    }
+  } catch {
+    // Browser storage can be disabled or contain invalid data.
+  }
+
+  const promise = storedData !== null
+    ? Promise.resolve(storedData)
+    : requestApi(path, opts, isMultipart, skipAuth).then((data) => {
+      try {
+        localStorage.setItem(`${API_READ_CACHE_PREFIX}${key}`, JSON.stringify({
+          savedAt: Date.now(),
+          data,
+        }));
+      } catch {
+        // A full or disabled browser storage should not block API requests.
+      }
+      return data;
+    });
+
+  apiReadCache.set(key, { promise, expiresAt: Date.now() + API_READ_CACHE_TTL });
+  promise.catch(() => {
+    if (apiReadCache.get(key)?.promise === promise) apiReadCache.delete(key);
+  });
+  return promise;
+};
 
 function normalizeCollectionResponse(data) {
   if (Array.isArray(data)) {
@@ -1177,17 +1235,46 @@ export const authService = {
 // ============================================================
 // Multiple pages use the same public product data. Keeping short-lived
 // promises here deduplicates requests (including React Strict Mode's dev-only
-// remount) without persisting stale catalogue data between sessions.
+// remount), while the persistent layer avoids refetching the catalogue for
+// fifteen minutes.
 const PRODUCT_READ_CACHE_TTL = 30 * 1000;
+const PRODUCT_STORAGE_CACHE_TTL = 15 * 60 * 1000;
 const PRODUCT_IMAGE_CACHE_TTL = 5 * 60 * 1000;
+const PRODUCT_STORAGE_CACHE_PREFIX = 'nutri_beast_product_read_v1:';
 const productReadCache = new Map();
+
+const readPersistentProductData = (key, loader, ttl = PRODUCT_STORAGE_CACHE_TTL) => {
+  const storageKey = `${PRODUCT_STORAGE_CACHE_PREFIX}${key}`;
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    if (cached && Date.now() - Number(cached.savedAt || 0) < ttl) {
+      return Promise.resolve(cached.data);
+    }
+  } catch {
+    // Browser storage can be disabled or contain invalid data.
+  }
+
+  return Promise.resolve()
+    .then(loader)
+    .then((data) => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({ savedAt: Date.now(), data }));
+      } catch {
+        // A full or disabled browser storage should not block product loading.
+      }
+      return data;
+    });
+};
 
 const readCachedProductData = (key, loader, ttl = PRODUCT_READ_CACHE_TTL) => {
   const now = Date.now();
   const cached = productReadCache.get(key);
   if (cached && cached.expiresAt > now) return cached.promise;
 
-  const promise = Promise.resolve().then(loader);
+  const promise = readPersistentProductData(key, loader, ttl === PRODUCT_READ_CACHE_TTL
+    ? PRODUCT_STORAGE_CACHE_TTL
+    : ttl);
   productReadCache.set(key, { promise, expiresAt: now + ttl });
   promise.catch(() => {
     if (productReadCache.get(key)?.promise === promise) productReadCache.delete(key);
@@ -1195,7 +1282,16 @@ const readCachedProductData = (key, loader, ttl = PRODUCT_READ_CACHE_TTL) => {
   return promise;
 };
 
-const clearProductReadCache = () => productReadCache.clear();
+const clearProductReadCache = () => {
+  productReadCache.clear();
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(PRODUCT_STORAGE_CACHE_PREFIX))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // A full or disabled browser storage should not block product mutations.
+  }
+};
 
 export const productService = {
   // Product reads are public: do not depend on an admin JWT being present.
