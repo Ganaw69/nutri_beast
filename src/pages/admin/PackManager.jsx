@@ -1,16 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Eye, ImagePlus, Loader2, Package, PackagePlus, Plus, Search, Trash2, X } from 'lucide-react';
-import { categoryService, iriToId, packService, productService, resolveProductImage } from '../../services/api';
+import { Check, ChevronLeft, ChevronRight, Eye, ImagePlus, Loader2, Package, PackagePlus, Plus, Search, Trash2, X } from 'lucide-react';
+import { categoryService, iriToId, packProductService, packService, productService, resolveProductImage } from '../../services/api';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 import { buildCategoryTree, collectCategoryAndDescendantIds, extractCategoryItems } from '../../utils/categoryTree';
 
-const EMPTY = { name: '', description: '', slug: '', type: 'PREDEFINED', isCustomizable: false, discountPerProduct: '0', minProducts: '', maxProducts: '', position: '', isActive: true, startDate: '', endDate: '' };
+const EMPTY = { name: '', description: '', slug: '', type: 'PREDEFINED', isCustomizable: false, basePrice: '', finalPrice: '', discountPerProduct: '0', minProducts: '', maxProducts: '', position: '', isActive: true, startDate: '', endDate: '' };
+const PAGE_SIZE = 10;
 const currency = (n) => `${Number(n || 0).toFixed(2)} TND`;
 const date = (v) => v ? String(v).slice(0, 10) : '';
 const productIri = (p) => p?.['@id'] || `/api/products/${p?.id}`;
+const packProductIri = (p) => p?.['@id'] || (p?.id ? `/api/pack_products/${p.id}` : null);
 const relationProduct = (p) => typeof p === 'object' ? p : { '@id': p, id: String(p || '').split('/').pop(), name: 'Produit du pack' };
 const imageUrl = (v) => !v ? null : String(typeof v === 'object' ? v.image || v.url || '' : v).startsWith('/') || String(v).startsWith('http') ? (typeof v === 'object' ? v.image || v.url : v) : `/uploads/pack/${v}`;
 const errorText = (e) => /401/.test(e?.message) ? 'Votre session a expiré.' : /403/.test(e?.message) ? 'Vous n’avez pas les droits nécessaires.' : /422/.test(e?.message) ? 'Veuillez corriger les champs indiqués.' : /400/.test(e?.message) ? 'Les données envoyées sont incorrectes.' : e?.message || 'Une erreur est survenue.';
+const discountPercentage = (basePrice, finalPrice) => {
+  const base = Number(basePrice);
+  const final = Number(finalPrice);
+  return base > 0 && final >= 0 && final <= base ? ((base - final) / base) * 100 : 0;
+};
+const isPackActive = (pack) => {
+  const value = pack?.isActive ?? pack?.is_active ?? pack?.active ?? pack?.enabled;
+  if (value === undefined || value === null || value === '') return true;
+  return [true, 1, '1', 'true', 'yes', 'on'].includes(typeof value === 'string' ? value.toLowerCase() : value);
+};
 
 // `/categories/main` includes the complete top-level hierarchy, while the
 // pageable categories endpoint can omit a later category. Flatten the main
@@ -34,10 +46,29 @@ const mergeCategories = (flatCategories, mainCategories) => {
 export const PackManager = () => {
   const [packs, setPacks] = useState([]), [loading, setLoading] = useState(true), [saving, setSaving] = useState(false);
   const [search, setSearch] = useState(''), [type, setType] = useState(''), [active, setActive] = useState(''), [customizable, setCustomizable] = useState('');
-  const [modal, setModal] = useState(null), [form, setForm] = useState(EMPTY), [selected, setSelected] = useState([]), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [currentPage, setCurrentPage] = useState(1), [totalPacks, setTotalPacks] = useState(0);
+  const [modal, setModal] = useState(null), [form, setForm] = useState(EMPTY), [selected, setSelected] = useState([]), [originalPackProductIris, setOriginalPackProductIris] = useState([]), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [image, setImage] = useState(null), [preview, setPreview] = useState(''), [picker, setPicker] = useState(false), [products, setProducts] = useState([]), [categories, setCategories] = useState([]), [productSearch, setProductSearch] = useState(''), [productCategory, setProductCategory] = useState(''), [productSubCategory, setProductSubCategory] = useState(''), [stockFilter, setStockFilter] = useState('all'), [productSort, setProductSort] = useState('name'), [productsLoading, setProductsLoading] = useState(false);
-  const fetchPacks = useCallback(async () => { setLoading(true); try { const data = await packService.getAll({ itemsPerPage: 20, name: search || undefined, type: type || undefined, isActive: active === '' ? undefined : active === 'true', isCustomizable: customizable === '' ? undefined : customizable === 'true', 'order[position]': 'asc' }); setPacks(data['hydra:member'] || []); } catch (e) { setError(errorText(e)); } finally { setLoading(false); } }, [search, type, active, customizable]);
+  const fetchPacks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await packService.getAll({
+        page: currentPage,
+        itemsPerPage: PAGE_SIZE,
+        name: search || undefined,
+        type: type || undefined,
+        isActive: active === '' ? undefined : active === 'true',
+        isCustomizable: customizable === '' ? undefined : customizable === 'true',
+        'order[position]': 'asc',
+      });
+      setPacks(data['hydra:member'] || []);
+      setTotalPacks(Number(data['hydra:totalItems'] ?? data['hydra:member']?.length ?? 0));
+    } catch (e) { setError(errorText(e)); } finally { setLoading(false); }
+  }, [search, type, active, customizable, currentPage]);
   useEffect(() => { const t = setTimeout(fetchPacks, 250); return () => clearTimeout(t); }, [fetchPacks]);
+  useEffect(() => { setCurrentPage(1); }, [search, type, active, customizable]);
+  const pageCount = Math.max(1, Math.ceil(totalPacks / PAGE_SIZE));
+  useEffect(() => { if (currentPage > pageCount) setCurrentPage(pageCount); }, [currentPage, pageCount]);
   useEffect(() => {
     if (!picker) return;
     let alive = true;
@@ -64,16 +95,87 @@ export const PackManager = () => {
       .finally(() => alive && setProductsLoading(false));
     return () => { alive = false; };
   }, [picker]);
-  const reset = () => { setForm(EMPTY); setSelected([]); setImage(null); setPreview(''); setError(''); };
+  const reset = () => { setForm(EMPTY); setSelected([]); setOriginalPackProductIris([]); setImage(null); setPreview(''); setError(''); };
   const openCreate = () => { reset(); setModal({ mode: 'create' }); };
-  const openEdit = async (summary) => { setError(''); setModal({ loading: true }); try { const p = await packService.getOne(summary.id); setForm({ name:p.name||'', description:p.description||'', slug:p.slug||'', type:p.type||'PREDEFINED', isCustomizable:!!p.isCustomizable, discountPerProduct:p.discountPerProduct??'0', minProducts:p.minProducts??'', maxProducts:p.maxProducts??'', position:p.position??'', isActive:p.isActive??true, startDate:date(p.startDate), endDate:date(p.endDate) }); setSelected((p.packProducts || []).map((x) => ({ product:relationProduct(x.product), quantity:Number(x.quantity || 1), relation:x['@id'] }))); setPreview(imageUrl(p.image) || ''); setImage(null); setModal({ mode:'edit', id:p.id }); } catch (e) { setError(errorText(e)); setModal(null); } };
+  const openEdit = async (summary) => { setError(''); setModal({ loading: true }); try { const p = await packService.getOne(summary.id); const embeddedProducts = Array.isArray(p.packProducts) ? p.packProducts : []; const relationReferences = embeddedProducts.length ? embeddedProducts : ((await packProductService.getAll({ pack: p.id, itemsPerPage: 100 }))['hydra:member'] || []); const packProducts = (await Promise.all(relationReferences.map((relation) => typeof relation === 'object' && relation.product !== undefined ? relation : packProductService.getOne(iriToId(relation))))).filter(Boolean); setForm({ name:p.name||'', description:p.description||'', slug:p.slug||'', type:p.type||'PREDEFINED', isCustomizable:!!p.isCustomizable, basePrice:p.basePrice??'', finalPrice:p.finalPrice??'', discountPerProduct:p.discountPerProduct??'0', minProducts:p.minProducts??'', maxProducts:p.maxProducts??'', position:p.position??'', isActive:isPackActive(p), startDate:date(p.startDate), endDate:date(p.endDate) }); setSelected(packProducts.map((x) => ({ product:relationProduct(x.product), quantity:Number(x.quantity || 1), relation:packProductIri(x) }))); setOriginalPackProductIris(packProducts.map(packProductIri).filter(Boolean)); setPreview(imageUrl(p.image) || ''); setImage(null); setModal({ mode:'edit', id:p.id }); } catch (e) { setError(errorText(e)); setModal(null); } };
   const view = async (summary) => { setModal({ mode:'detail', loading:true }); try { setModal({ mode:'detail', pack:await packService.getOne(summary.id) }); } catch (e) { setError(errorText(e)); setModal(null); } };
   const chooseImage = (e) => { const f = e.target.files?.[0]; if (!f) return; if (!['image/jpeg','image/png','image/webp'].includes(f.type) || f.size > 5 * 1024 * 1024) return setError('Choisissez une image JPG, PNG ou WEBP de 5 Mo maximum.'); setImage(f); setPreview(URL.createObjectURL(f)); };
   const add = (product) => { const found = selected.find((x) => productIri(x.product) === productIri(product)); if (found) changeQty(productIri(product), found.quantity + 1); else setSelected((s) => [...s, { product, quantity:1 }]); setPicker(false); };
   const changeQty = (key, qty) => setSelected((s) => s.map((x) => (x.relation || productIri(x.product)) === key ? {...x,quantity:Math.max(1,qty)} : x));
-  const save = async (e) => { e.preventDefault(); setError(''); if (!form.name.trim()) return setError('Le nom du pack est requis.'); if (form.type === 'CUSTOM' && form.maxProducts !== '' && Number(form.maxProducts) < Number(form.minProducts || 1)) return setError('Le maximum ne peut pas être inférieur au minimum.'); setSaving(true); const body = { name:form.name.trim(), ...(form.slug ? {slug:form.slug.trim()} : {}), description:form.description.trim() || null, type:form.type, isCustomizable:form.type === 'CUSTOM' && form.isCustomizable, discountPerProduct:String(Number(form.discountPerProduct || 0).toFixed(2)), minProducts:form.type === 'CUSTOM' && form.minProducts !== '' ? Number(form.minProducts) : null, maxProducts:form.type === 'CUSTOM' && form.maxProducts !== '' ? Number(form.maxProducts) : null, position:form.position === '' ? null : Number(form.position), isActive:form.isActive, startDate:form.startDate ? `${form.startDate}T00:00:00+00:00` : null, endDate:form.endDate ? `${form.endDate}T23:59:59+00:00` : null, packProducts:selected.map((x) => ({product:productIri(x.product),quantity:x.quantity})) };
-    try { const pack = modal.mode === 'create' ? await packService.create(body) : await packService.update(modal.id, body); if (image) { try { await packService.uploadImage(pack?.id || modal.id, image); } catch (_) { setNotice('Le pack a été enregistré mais l’image n’a pas pu être uploadée. Réessayez en le modifiant.'); setSaving(false); return; } } setModal(null); setNotice(modal.mode === 'create' ? 'Pack créé avec succès.' : 'Pack mis à jour avec succès.'); fetchPacks(); } catch (err) { setError(errorText(err)); } finally { setSaving(false); } };
-  const toggle = async (p) => { try { await packService.update(p.id, {isActive:!p.isActive}); fetchPacks(); } catch (e) { setError(errorText(e)); } };
+  const syncPackProducts = async (packId) => {
+    const selectedRelations = new Set(selected.map((item) => item.relation).filter(Boolean));
+    const deletedRelations = originalPackProductIris.filter((iri) => !selectedRelations.has(iri));
+    const pack = `/api/packs/${packId}`;
+
+    await Promise.all(deletedRelations.map((iri) => packProductService.delete(iriToId(iri) ?? iri)));
+    await Promise.all(selected.map((item) => {
+        const payload = { product: productIri(item.product), quantity: Number(item.quantity || 1) };
+        return item.relation
+          ? packProductService.update(iriToId(item.relation) ?? item.relation, payload)
+          : packProductService.create({ ...payload, pack });
+      }));
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.name.trim()) return setError('Le nom du pack est requis.');
+    if (form.type === 'CUSTOM' && form.maxProducts !== '' && Number(form.maxProducts) < Number(form.minProducts || 1)) return setError('Le maximum ne peut pas être inférieur au minimum.');
+    if (form.type === 'PREDEFINED' && (form.basePrice === '' || form.finalPrice === '')) return setError('Le prix du pack et le prix après réduction sont requis.');
+    if (form.type === 'PREDEFINED' && Number(form.finalPrice) > Number(form.basePrice)) return setError('Le prix après réduction ne peut pas dépasser le prix du pack.');
+
+    setSaving(true);
+    // PackProduct is its own API resource. Sending objects here causes API
+    // Platform to reject them as nested documents; synchronize the relations
+    // through /pack_products after the parent pack is saved instead.
+    const body = {
+      name: form.name.trim(),
+      ...(form.slug ? { slug: form.slug.trim() } : {}),
+      description: form.description.trim() || null,
+      type: form.type,
+      isCustomizable: form.type === 'CUSTOM' && form.isCustomizable,
+      ...(form.type === 'PREDEFINED'
+        ? {
+          basePrice: Number(form.basePrice).toFixed(2),
+          finalPrice: Number(form.finalPrice).toFixed(2),
+        }
+        : { discountPerProduct: String(Number(form.discountPerProduct || 0).toFixed(2)) }),
+      minProducts: form.type === 'CUSTOM' && form.minProducts !== '' ? Number(form.minProducts) : null,
+      maxProducts: form.type === 'CUSTOM' && form.maxProducts !== '' ? Number(form.maxProducts) : null,
+      position: form.position === '' ? null : Number(form.position),
+      isActive: form.isActive,
+      startDate: form.startDate ? `${form.startDate}T00:00:00+00:00` : null,
+      endDate: form.endDate ? `${form.endDate}T23:59:59+00:00` : null,
+    };
+
+    try {
+      const pack = modal.mode === 'create'
+        ? await packService.create(body)
+        : await packService.update(modal.id, body);
+      const packId = pack?.id ?? iriToId(pack?.['@id']) ?? modal.id;
+
+      if (!packId) throw new Error('Impossible de déterminer le pack enregistré.');
+      await syncPackProducts(packId);
+
+      if (image) {
+        try {
+          await packService.uploadImage(packId, image);
+        } catch (_) {
+          setNotice('Le pack a été enregistré mais l’image n’a pas pu être uploadée. Réessayez en le modifiant.');
+          return;
+        }
+      }
+
+      setModal(null);
+      setNotice(modal.mode === 'create' ? 'Pack créé avec succès.' : 'Pack mis à jour avec succès.');
+      fetchPacks();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const toggle = async (p) => { try { await packService.update(p.id, {isActive:!isPackActive(p)}); fetchPacks(); } catch (e) { setError(errorText(e)); } };
   const remove = async (id) => { if (!window.confirm('Supprimer ce pack ?')) return; try { await packService.delete(id); setNotice('Pack supprimé.'); fetchPacks(); } catch (e) { setError(errorText(e)); } };
   const input = 'w-full rounded-lg border border-[#333] bg-[#222] px-3 py-2.5 text-sm text-white outline-none focus:border-[#d90429]', label = 'mb-1.5 block text-xs font-bold uppercase text-gray-400';
   if (modal?.mode === 'detail') return <PackDetails modal={modal} close={() => setModal(null)} />;
@@ -81,12 +183,12 @@ export const PackManager = () => {
     <div className="flex items-end justify-between"><div><h1 className="text-2xl font-bold text-white">Packs</h1><p className="text-sm text-gray-400">Créez et gérez vos offres produits.</p></div><button onClick={openCreate} className="flex items-center gap-2 rounded-lg bg-[#d90429] px-4 py-2.5 font-bold text-white"><Plus size={16}/> Nouveau pack</button></div>
     <div className="grid gap-3 rounded-xl border border-[#2a2a2a] bg-[#161616] p-4 md:grid-cols-4"><input value={search} onChange={e=>setSearch(e.target.value)} className={input} placeholder="Rechercher un pack..."/><select value={type} onChange={e=>setType(e.target.value)} className={input}><option value="">Tous les types</option><option value="PREDEFINED">Prédéfini</option><option value="CUSTOM">Personnalisable</option></select><select value={active} onChange={e=>setActive(e.target.value)} className={input}><option value="">Tous les statuts</option><option value="true">Actif</option><option value="false">Inactif</option></select><select value={customizable} onChange={e=>setCustomizable(e.target.value)} className={input}><option value="">Personnalisable ou non</option><option value="true">Personnalisable</option><option value="false">Non personnalisable</option></select></div>
     {notice && <Alert kind="ok">{notice}</Alert>}{error && !modal && <Alert>{error}</Alert>}
-    <div className="overflow-x-auto rounded-xl border border-[#2a2a2a] bg-[#161616]"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-[#2a2a2a] text-xs uppercase text-gray-500"><tr><th className="p-4">Image</th><th className="p-4">Nom</th><th className="p-4">Type</th><th className="p-4">Produits</th><th className="p-4">Prix final</th><th className="p-4">Statut</th><th className="p-4">Actions</th></tr></thead><tbody>{loading?<tr><td colSpan="7" className="p-10 text-center"><Loader2 className="inline animate-spin text-[#d90429]"/></td></tr>:packs.map(p=><tr key={p.id} className="border-b border-[#2a2a2a] text-gray-300"><td className="p-4">{imageUrl(p.image)?<img src={imageUrl(p.image)} alt="" className="h-10 w-10 rounded object-cover"/>:<Package className="text-gray-600"/>}</td><td className="p-4 font-bold text-white">{p.name}</td><td className="p-4">{p.type === 'CUSTOM'?'Personnalisable':'Prédéfini'}</td><td className="p-4">{p.packProducts?.length ?? '—'}</td><td className="p-4">{currency(p.finalPrice ?? p.basePrice)}</td><td className="p-4"><button onClick={()=>toggle(p)}>{p.isActive?'Actif':'Inactif'}</button></td><td className="p-4"><AdminActionButton label="Voir" onClick={()=>view(p)} className="p-2"><Eye size={15}/></AdminActionButton><AdminActionButton label="Modifier" onClick={()=>openEdit(p)} className="p-2"><PackagePlus size={15}/></AdminActionButton><AdminActionButton label="Supprimer" onClick={()=>remove(p.id)} className="p-2 text-red-400"><Trash2 size={15}/></AdminActionButton></td></tr>)}</tbody></table></div>
+    <div className="overflow-x-auto rounded-xl border border-[#2a2a2a] bg-[#161616]"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-[#2a2a2a] text-xs uppercase text-gray-500"><tr><th className="p-4">Image</th><th className="p-4">Nom</th><th className="p-4">Type</th><th className="p-4">Produits</th><th className="p-4">Prix final</th><th className="p-4">Statut</th><th className="p-4">Actions</th></tr></thead><tbody>{loading?<tr><td colSpan="7" className="p-10 text-center"><Loader2 className="inline animate-spin text-[#d90429]"/></td></tr>:packs.map(p=>{ const activeStatus = isPackActive(p); return <tr key={p.id} className="border-b border-[#2a2a2a] text-gray-300"><td className="p-4">{imageUrl(p.image)?<img src={imageUrl(p.image)} alt="" className="h-10 w-10 rounded object-cover"/>:<Package className="text-gray-600"/>}</td><td className="p-4 font-bold text-white">{p.name}</td><td className="p-4">{p.type === 'CUSTOM'?'Personnalisable':'Prédéfini'}</td><td className="p-4">{p.packProducts?.length ?? '—'}</td><td className="p-4">{currency(p.finalPrice ?? p.basePrice)}</td><td className="p-4"><button type="button" onClick={()=>toggle(p)} title={activeStatus ? 'Désactiver ce pack' : 'Activer ce pack'} className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${activeStatus ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:border-emerald-400 hover:bg-emerald-500/20' : 'border-gray-500/30 bg-gray-500/10 text-gray-400 hover:border-gray-400 hover:bg-gray-500/20'}`}>{activeStatus?'Actif':'Inactif'}</button></td><td className="p-4"><AdminActionButton label="Voir" onClick={()=>view(p)} className="p-2"><Eye size={15}/></AdminActionButton><AdminActionButton label="Modifier" onClick={()=>openEdit(p)} className="p-2"><PackagePlus size={15}/></AdminActionButton><AdminActionButton label="Supprimer" onClick={()=>remove(p.id)} className="p-2 text-red-400"><Trash2 size={15}/></AdminActionButton></td></tr>})}</tbody></table>{!loading && totalPacks > 0 && <div className="flex flex-col gap-3 border-t border-[#2a2a2a] px-4 py-3 text-sm text-gray-400 sm:flex-row sm:items-center sm:justify-between"><span>Affichage de {(currentPage - 1) * PAGE_SIZE + 1} à {Math.min(currentPage * PAGE_SIZE, totalPacks)} sur {totalPacks} packs</span><div className="flex items-center gap-2"><button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} className="inline-flex items-center gap-1 rounded-lg border border-[#333] px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={14}/> Précédent</button><span className="px-2">Page {currentPage} / {pageCount}</span><button type="button" onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage === pageCount} className="inline-flex items-center gap-1 rounded-lg border border-[#333] px-3 py-1.5 text-white disabled:cursor-not-allowed disabled:opacity-40">Suivant <ChevronRight size={14}/></button></div></div>}</div>
     {modal && <FormModal modal={modal} close={()=>setModal(null)} form={form} setForm={setForm} selected={selected} setSelected={setSelected} image={image} preview={preview} chooseImage={chooseImage} save={save} saving={saving} error={error} input={input} picker={()=>setPicker(true)} changeQty={changeQty}/>} {picker && <Picker products={products} categories={categories} loading={productsLoading} search={productSearch} setSearch={setProductSearch} category={productCategory} setCategory={setProductCategory} subCategory={productSubCategory} setSubCategory={setProductSubCategory} stockFilter={stockFilter} setStockFilter={setStockFilter} sort={productSort} setSort={setProductSort} add={add} close={()=>setPicker(false)} selected={selected}/>}</div>;
 };
 const Field=({label,children})=><div className="mt-4"><label className="mb-1.5 block text-xs font-bold uppercase text-gray-400">{label}</label>{children}</div>;
 const Alert=({children,kind})=><div className={`rounded-lg border px-4 py-3 text-sm ${kind?'border-emerald-500/30 bg-emerald-500/10 text-emerald-300':'border-red-500/30 bg-red-900/20 text-red-300'}`}>{children}</div>;
-const FormModal=({modal,close,form,setForm,selected,setSelected,preview,chooseImage,save,saving,error,input,picker,changeQty})=><div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4"><form onSubmit={save} className="mx-auto my-4 w-full max-w-3xl space-y-5 rounded-xl border border-[#2a2a2a] bg-[#161616] p-5"><div className="flex justify-between"><h2 className="font-bold text-white">{modal.mode==='create'?'Créer un Pack':'Modifier le pack'}</h2><button type="button" onClick={close}><X className="text-gray-400"/></button></div>{error&&<Alert>{error}</Alert>}<div className="grid gap-4 sm:grid-cols-2"><Field label="Nom du pack *"><input required value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))} className={input}/></Field><Field label="Position"><input type="number" value={form.position} onChange={e=>setForm(v=>({...v,position:e.target.value}))} className={input}/></Field></div><Field label="Description"><textarea value={form.description} onChange={e=>setForm(v=>({...v,description:e.target.value}))} className={input}/></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Type"><select value={form.type} onChange={e=>setForm(v=>({...v,type:e.target.value}))} className={input}><option value="PREDEFINED">Prédéfini</option><option value="CUSTOM">Personnalisable</option></select></Field><label className="mt-8 text-sm text-gray-300"><input type="checkbox" checked={form.isActive} onChange={e=>setForm(v=>({...v,isActive:e.target.checked}))}/> Pack actif</label></div>{form.type==='CUSTOM'&&<div className="grid gap-4 sm:grid-cols-3"><label className="mt-8 text-sm text-gray-300"><input type="checkbox" checked={form.isCustomizable} onChange={e=>setForm(v=>({...v,isCustomizable:e.target.checked}))}/> Personnalisable</label><Field label="Minimum produits"><input type="number" min="1" value={form.minProducts} onChange={e=>setForm(v=>({...v,minProducts:e.target.value}))} className={input}/></Field><Field label="Maximum produits"><input type="number" min="1" value={form.maxProducts} onChange={e=>setForm(v=>({...v,maxProducts:e.target.value}))} className={input}/></Field></div>}<section className="border-t border-[#2a2a2a] pt-4"><h3 className="font-bold text-white">Image du pack</h3><div className="mt-3 flex gap-4"><div className="h-20 w-20 overflow-hidden rounded bg-[#222]">{preview&&<img src={preview} alt="Aperçu" className="h-full w-full object-cover"/>}</div><label className="cursor-pointer rounded border border-[#444] px-3 py-2 text-sm text-white">Choisir une image<input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseImage}/><small className="ml-2 text-gray-500">JPG, PNG, WEBP · 5 Mo max</small></label></div></section><section className="border-t border-[#2a2a2a] pt-4"><div className="flex justify-between"><h3 className="font-bold text-white">Produits du pack</h3><button type="button" onClick={picker} className="rounded bg-[#222] px-3 py-2 text-sm text-white">+ Ajouter un produit</button></div><div className="mt-3 space-y-2">{selected.length?selected.map(x=><ProductRow key={x.relation||productIri(x.product)} item={x} change={changeQty} remove={()=>setSelected(s=>s.filter(y=>(y.relation||productIri(y.product))!==(x.relation||productIri(x.product))))}/>):<p className="text-sm text-gray-500">Aucun produit sélectionné.</p>}</div></section><div className="grid gap-4 border-t border-[#2a2a2a] pt-4 sm:grid-cols-3"><Field label="Réduction par produit (%)"><input type="number" step="0.01" min="0" value={form.discountPerProduct} onChange={e=>setForm(v=>({...v,discountPerProduct:e.target.value}))} className={input}/></Field><Field label="Date de début"><input type="date" value={form.startDate} onChange={e=>setForm(v=>({...v,startDate:e.target.value}))} className={input}/></Field><Field label="Date de fin"><input type="date" value={form.endDate} onChange={e=>setForm(v=>({...v,endDate:e.target.value}))} className={input}/></Field></div><div className="flex justify-end gap-3"><button type="button" onClick={close} className="text-gray-300">Annuler</button><button disabled={saving} className="rounded bg-[#d90429] px-4 py-2 font-bold text-white">{saving?'Enregistrement…':modal.mode==='create'?'Créer le pack':'Enregistrer'}</button></div></form></div>;
+const FormModal=({modal,close,form,setForm,selected,setSelected,preview,chooseImage,save,saving,error,input,picker,changeQty})=><div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4"><form onSubmit={save} className="mx-auto my-4 w-full max-w-3xl space-y-5 rounded-xl border border-[#2a2a2a] bg-[#161616] p-5"><div className="flex justify-between"><h2 className="font-bold text-white">{modal.mode==='create'?'Créer un Pack':'Modifier le pack'}</h2><button type="button" onClick={close}><X className="text-gray-400"/></button></div>{error&&<Alert>{error}</Alert>}<div className="grid gap-4 sm:grid-cols-2"><Field label="Nom du pack *"><input required value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))} className={input}/></Field><Field label="Position"><input type="number" value={form.position} onChange={e=>setForm(v=>({...v,position:e.target.value}))} className={input}/></Field></div><Field label="Description"><textarea value={form.description} onChange={e=>setForm(v=>({...v,description:e.target.value}))} className={input}/></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Type"><select value={form.type} onChange={e=>setForm(v=>({...v,type:e.target.value}))} className={input}><option value="PREDEFINED">Prédéfini</option><option value="CUSTOM">Personnalisable</option></select></Field><label className="mt-8 text-sm text-gray-300"><input type="checkbox" checked={form.isActive} onChange={e=>setForm(v=>({...v,isActive:e.target.checked}))}/> Pack actif</label></div>{form.type==='CUSTOM'&&<div className="grid gap-4 sm:grid-cols-3"><label className="mt-8 text-sm text-gray-300"><input type="checkbox" checked={form.isCustomizable} onChange={e=>setForm(v=>({...v,isCustomizable:e.target.checked}))}/> Personnalisable</label><Field label="Minimum produits"><input type="number" min="1" value={form.minProducts} onChange={e=>setForm(v=>({...v,minProducts:e.target.value}))} className={input}/></Field><Field label="Maximum produits"><input type="number" min="1" value={form.maxProducts} onChange={e=>setForm(v=>({...v,maxProducts:e.target.value}))} className={input}/></Field></div>}{form.type==='PREDEFINED'&&<div className="grid gap-4 border-t border-[#2a2a2a] pt-4 sm:grid-cols-3"><Field label="Prix du pack (TND)"><input type="number" step="0.01" min="0" required value={form.basePrice} onChange={e=>setForm(v=>({...v,basePrice:e.target.value}))} className={input}/></Field><Field label="Prix après réduction (TND)"><input type="number" step="0.01" min="0" required value={form.finalPrice} onChange={e=>setForm(v=>({...v,finalPrice:e.target.value}))} className={input}/></Field><div className="mt-4"><span className="mb-1.5 block text-xs font-bold uppercase text-gray-400">Réduction calculée</span><p className="rounded-lg border border-[#333] bg-[#222] px-3 py-2.5 text-sm text-emerald-400">{discountPercentage(form.basePrice, form.finalPrice).toFixed(2)} %</p></div></div>}<section className="border-t border-[#2a2a2a] pt-4"><h3 className="font-bold text-white">Image du pack</h3><div className="mt-3 flex gap-4"><div className="h-20 w-20 overflow-hidden rounded bg-[#222]">{preview&&<img src={preview} alt="Aperçu" className="h-full w-full object-cover"/>}</div><label className="cursor-pointer rounded border border-[#444] px-3 py-2 text-sm text-white">Choisir une image<input className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseImage}/><small className="ml-2 text-gray-500">JPG, PNG, WEBP · 5 Mo max</small></label></div></section><section className="border-t border-[#2a2a2a] pt-4"><div className="flex justify-between"><h3 className="font-bold text-white">Produits du pack</h3><button type="button" onClick={picker} className="rounded bg-[#222] px-3 py-2 text-sm text-white">+ Ajouter un produit</button></div><div className="mt-3 space-y-2">{selected.length?selected.map(x=><ProductRow key={x.relation||productIri(x.product)} item={x} change={changeQty} remove={()=>setSelected(s=>s.filter(y=>(y.relation||productIri(y.product))!==(x.relation||productIri(x.product))))}/>):<p className="text-sm text-gray-500">Aucun produit sélectionné.</p>}</div></section>{form.type==='CUSTOM'&&<div className="grid gap-4 border-t border-[#2a2a2a] pt-4 sm:grid-cols-3"><Field label="Réduction par produit (%)"><input type="number" step="0.01" min="0" value={form.discountPerProduct} onChange={e=>setForm(v=>({...v,discountPerProduct:e.target.value}))} className={input}/></Field><Field label="Date de début"><input type="date" value={form.startDate} onChange={e=>setForm(v=>({...v,startDate:e.target.value}))} className={input}/></Field><Field label="Date de fin"><input type="date" value={form.endDate} onChange={e=>setForm(v=>({...v,endDate:e.target.value}))} className={input}/></Field></div>}<div className="flex justify-end gap-3"><button type="button" onClick={close} className="text-gray-300">Annuler</button><button disabled={saving} className="rounded bg-[#d90429] px-4 py-2 font-bold text-white">{saving?'Enregistrement…':modal.mode==='create'?'Créer le pack':'Enregistrer'}</button></div></form></div>;
 const PackDetails=({modal,close})=>modal.loading?<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"><Loader2 className="animate-spin text-[#d90429]"/></div>:<div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-4"><div className="mx-auto my-4 w-full max-w-2xl rounded-xl bg-[#161616] p-5"><div className="flex justify-between"><h2 className="font-bold text-white">{modal.pack.name}</h2><button onClick={close}><X className="text-gray-400"/></button></div>{imageUrl(modal.pack.image)&&<img src={imageUrl(modal.pack.image)} alt="" className="mt-4 h-48 w-full rounded object-cover"/>}<p className="mt-4 text-gray-300">{modal.pack.description}</p><h3 className="mt-5 font-bold text-white">Produits du pack</h3>{(modal.pack.packProducts||[]).map((x,i)=><p key={i} className="mt-2 rounded bg-[#222] p-3 text-sm text-white">{relationProduct(x.product).name} · Quantité : {x.quantity}</p>)}<div className="mt-5 grid grid-cols-3 gap-3 text-sm"><p>Base : {currency(modal.pack.basePrice)}</p><p>Réduction : {currency(modal.pack.discountAmount)}</p><p>Final : {currency(modal.pack.finalPrice)}</p></div></div></div>;
 const ProductThumbnail=({product,className='h-12 w-12',imageClassName='h-full w-full object-cover'})=>{
   const containerRef=useRef(null);

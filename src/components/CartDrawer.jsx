@@ -88,6 +88,8 @@ export const CartDrawer = () => {
                     <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">
                       {item.itemType === "custom-pack"
                         ? `Pack personnalise · ${(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                        : item.itemType === "predefined-pack"
+                          ? `Pack prédéfini · ${(item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                         : item.itemType === "product-bundle"
                           ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                         : [item.selectedFlavor, item.selectedSize].filter(Boolean).join(" · ")}

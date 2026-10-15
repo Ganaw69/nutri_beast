@@ -9,22 +9,21 @@ import {
   productService,
   resolveProductImage,
 } from "../services/api";
-import { ArrowLeft, Eye, Loader2, Package, ShoppingBag } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Eye, Loader2, Package, ShoppingBag } from "lucide-react";
 
+const PAGE_SIZE = 12;
 const money = (value) => `${Number(value || 0).toFixed(2)} TND`;
 const entityId = (value) => {
   if (value == null) return null;
   if (typeof value === "object") return value.id ?? iriToId(value["@id"] || value.iri);
   return iriToId(value) ?? value;
 };
-const apiDate = (value) => value ? new Date(value) : null;
-const isAvailable = (pack, now = new Date()) => {
-  const active = pack.isActive ?? pack.active ?? pack.enabled ?? pack.published;
-  if (active === false || active === 0 || active === "false") return false;
-  const start = apiDate(pack.startDate);
-  const end = apiDate(pack.endDate);
-  return (!start || start <= now) && (!end || end >= now);
+const isActive = (record) => {
+  const value = record?.isActive ?? record?.is_active ?? record?.active ?? record?.enabled ?? record?.published;
+  if (value === undefined || value === null || value === "") return true;
+  return [true, 1, "1", "true", "yes", "on"].includes(typeof value === "string" ? value.toLowerCase() : value);
 };
+const isAvailable = (pack) => isActive(pack);
 const packImageUrl = (pack) => {
   const raw = pack?.imageUrl || pack?.image;
   const value = typeof raw === "object" ? raw?.url || raw?.image || raw?.path : raw;
@@ -63,7 +62,7 @@ const PackCard = ({ pack, onDetails }) => {
         </div>
         <div className="flex items-end justify-between gap-3 border-t border-white/10 pt-3">
           <div>
-            {pack.basePrice != null && hasPrice && Number(pack.basePrice) > Number(pack.finalPrice) && <p className="text-xs text-gray-500 line-through">{money(pack.basePrice)}</p>}
+            {pack.basePrice != null && hasConfiguredPrice && Number(pack.basePrice) > Number(pack.finalPrice) && <p className="text-xs text-gray-500 line-through">{money(pack.basePrice)}</p>}
             <p className="text-lg font-black">{hasConfiguredPrice ? money(pack.finalPrice) : "Prix à configurer"}</p>
             {Number(pack.discountAmount) > 0 && <p className="text-[10px] font-bold text-emerald-400">Économie : {money(pack.discountAmount)}</p>}
           </div>
@@ -79,39 +78,50 @@ const PackCard = ({ pack, onDetails }) => {
 export const PacksPage = () => {
   const { viewPackDetails } = useCart();
   const [packs, setPacks] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPacks, setTotalPacks] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let current = true;
-    packService.getAll({ itemsPerPage: 100, "order[position]": "asc" }, true)
+    setLoading(true);
+    packService.getAll({ page: currentPage, itemsPerPage: PAGE_SIZE, isActive: true, "order[position]": "asc" }, true)
       .then((data) => {
-        if (current) setPacks((data["hydra:member"] || []).filter((pack) => isAvailable(pack)));
+        if (current) {
+          setPacks((data["hydra:member"] || []).filter((pack) => isAvailable(pack)));
+          setTotalPacks(Number(data["hydra:totalItems"] ?? data["hydra:member"]?.length ?? 0));
+        }
       })
       .catch((err) => { if (current) setError(packReadError(err)); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, []);
+  }, [currentPage]);
+
+  const pageCount = Math.max(1, Math.ceil(totalPacks / PAGE_SIZE));
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [currentPage, pageCount]);
 
   return (
     <div className="min-h-screen bg-[#131313] px-4 py-10 pb-20 text-[#e5e2e1] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
           <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff526d]">Sélection Protein Store</p><h1 className="mt-2 text-3xl font-black uppercase text-white sm:text-5xl">Nos packs</h1><p className="mt-3 max-w-2xl text-sm text-gray-400">Retrouvez la composition et le tarif enregistré de chaque pack.</p></div>
-          <span className="hidden rounded-lg border border-white/10 bg-[#1b1b1b] px-4 py-3 text-xs font-bold text-gray-300 sm:block">{packs.length} pack{packs.length === 1 ? "" : "s"}</span>
+          <span className="hidden rounded-lg border border-white/10 bg-[#1b1b1b] px-4 py-3 text-xs font-bold text-gray-300 sm:block">{totalPacks} pack{totalPacks === 1 ? "" : "s"}</span>
         </div>
 
         {loading ? <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="Chargement des packs">{Array.from({ length: 4 }, (_, index) => <div key={index} className="aspect-[3/4] animate-pulse rounded-[14px] border border-white/10 bg-[#1a1a1a]" />)}</div>
           : error ? <div role="alert" className="rounded-xl border border-[#d90429]/40 bg-[#d90429]/10 p-5 text-sm text-red-100"><p className="font-bold">Impossible d’afficher les packs</p><p className="mt-2 leading-6">{error}</p></div>
             : packs.length === 0 ? <div className="rounded-xl border border-white/10 bg-[#181818] p-10 text-center"><Package className="mx-auto h-10 w-10 text-gray-500" /><h2 className="mt-4 font-black uppercase text-white">Aucun pack disponible</h2><p className="mt-2 text-sm text-gray-400">Les packs actifs seront affichés ici.</p></div>
-              : <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{packs.map((pack) => <PackCard key={pack.id ?? pack["@id"]} pack={pack} onDetails={viewPackDetails} />)}</div>}
+                : <><div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{packs.map((pack) => <PackCard key={pack.id ?? pack["@id"]} pack={pack} onDetails={viewPackDetails} />)}</div><div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-5 text-sm text-gray-400 sm:flex-row"><span>Affichage de {(currentPage - 1) * PAGE_SIZE + 1} à {Math.min(currentPage * PAGE_SIZE, totalPacks)} sur {totalPacks} packs</span><div className="flex items-center gap-2"><button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-2 text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Précédent</button><span className="px-2">Page {currentPage} / {pageCount}</span><button type="button" onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage === pageCount} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-2 text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40">Suivant <ChevronRight className="h-4 w-4" /></button></div></div></>}
       </div>
     </div>
   );
 };
 
 export const PackDetailPage = () => {
-  const { selectedPackId, navigateTo } = useCart();
+  const { selectedPackId, navigateTo, addPredefinedPackToCart } = useCart();
   const [pack, setPack] = useState(null);
   const [contents, setContents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +176,10 @@ export const PackDetailPage = () => {
   const customizable = pack.type === "CUSTOM" && (pack.isCustomizable === true || pack.customizable === true);
   const hasConfiguredPrice = Number(pack.finalPrice) > 0 || Number(pack.basePrice) > 0;
   const isReadyToOrder = contents.length > 0 && hasConfiguredPrice;
+  const canPurchase = isReadyToOrder && !customizable;
+  const addPackToCart = () => {
+    if (addPredefinedPackToCart(pack, contents)) navigateTo("cart");
+  };
   return (
     <div className="min-h-screen bg-[#131313] px-4 py-8 pb-20 text-[#e5e2e1] sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-7xl">
@@ -190,8 +204,14 @@ export const PackDetailPage = () => {
             </div>
             {pack.startDate || pack.endDate ? <p className="mt-4 text-xs text-gray-400">Offre valable {pack.startDate ? `à partir du ${new Date(pack.startDate).toLocaleDateString("fr-TN")}` : ""}{pack.startDate && pack.endDate ? " " : ""}{pack.endDate ? `jusqu’au ${new Date(pack.endDate).toLocaleDateString("fr-TN")}` : ""}.</p> : null}
             {customizable && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-5 text-amber-100">Ce pack est configuré comme personnalisable (minimum {pack.minProducts ?? "—"}, maximum {pack.maxProducts ?? "sans limite"}). La configuration client et le calcul de prix ne sont pas exposés par l’API actuelle.</div>}
-            <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-lg border border-white/15 bg-[#242424] px-5 py-4 text-xs font-black uppercase tracking-widest text-gray-400" title={!isReadyToOrder ? "La composition et le prix de ce pack doivent être configurés dans le back-office." : "L’API de commande actuelle ne prend pas en charge l’achat des packs prédéfinis."}>{isReadyToOrder ? "Achat en ligne indisponible pour les packs" : "Pack à compléter dans le catalogue"}</button>
-            <p className="mt-2 text-center text-[11px] leading-5 text-gray-500">{isReadyToOrder ? "L’API de commande actuelle ne prend pas encore en charge l’achat des packs prédéfinis." : "Ajoutez les produits et définissez le prix de ce pack dans le back-office avant de le proposer à l’achat."}</p>
+            {canPurchase ? (
+              <button type="button" onClick={addPackToCart} className="mt-6 w-full rounded-lg bg-[#d90429] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#d90429]/20 transition-colors hover:bg-[#b0021f]">Ajouter le pack au panier</button>
+            ) : (
+              <>
+                <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-lg border border-white/15 bg-[#242424] px-5 py-4 text-xs font-black uppercase tracking-widest text-gray-400">{isReadyToOrder ? "Pack personnalisable" : "Pack à compléter dans le catalogue"}</button>
+                <p className="mt-2 text-center text-[11px] leading-5 text-gray-500">{isReadyToOrder ? "Configurez ce pack avant de l’ajouter au panier." : "Ajoutez les produits et définissez le prix de ce pack dans le back-office avant de le proposer à l’achat."}</p>
+              </>
+            )}
           </div>
         </div>
       </div>

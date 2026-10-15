@@ -74,6 +74,8 @@ export const CartPage = () => {
                       <p className="text-xs text-gray-400 font-body mt-0.5">
                         {item.itemType === "custom-pack"
                           ? `Pack personnalisé · ${(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                          : item.itemType === "predefined-pack"
+                            ? `Pack prédéfini · ${(item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                           : item.itemType === "product-bundle"
                             ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                           : item.flavor || "Standard"}

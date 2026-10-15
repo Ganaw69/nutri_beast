@@ -11,7 +11,7 @@ import {
   resolveProductImage,
 } from "../services/api";
 import { Check, Loader2, Minus, PackagePlus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
-import { buildCategoryTree, extractCategoryItems } from "../utils/categoryTree";
+import { buildCategoryTree, mergeCategorySources } from "../utils/categoryTree";
 
 const idOf = (value) => {
   if (value == null) return null;
@@ -56,6 +56,25 @@ const variantsOf = (product) => {
 const variantSkuOf = (variant) => variant?.sku || variant?.SKU || "";
 const variantLabel = (variant) => variant?.name || variant?.label || variant?.title || variantSkuOf(variant);
 
+// These are the seven product families displayed in the primary navbar. Keep
+// this explicit list so auxiliary roots (packs, snacks, accessories, etc.)
+// can never enter the pack-building flow.
+const PACK_BUILDER_ROOT_CATEGORY_NAMES = [
+  "Santé & Bien-être",
+  "Protéines",
+  "Prise de Masse & Glucides",
+  "Créatine",
+  "Acides Aminés & BCAA",
+  "Pré-Workout & Boosters",
+  "Perte de Poids",
+];
+
+const normaliseCategoryName = (value) => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLocaleLowerCase("fr")
+  .replace(/[^a-z0-9]+/g, "");
+
 export const PackBuilderPage = () => {
   const {
     customPackDraft, setCustomPackDraft, selectedCustomPackId, setSelectedCustomPackId,
@@ -83,11 +102,11 @@ export const PackBuilderPage = () => {
     let current = true;
     Promise.allSettled([
       productService.getAllPages({ isActive: true, packing: true }, true),
-      categoryService.getAllPages({ isActive: true }, true),
+      categoryService.getMain(),
       packService.getAllPages({ itemsPerPage: 100, "order[position]": "asc" }, true),
-    ]).then(async ([productResult, categoryResult, packResult]) => {
+    ]).then(async ([productResult, mainCategoryResult, packResult]) => {
       const productData = productResult.status === "fulfilled" ? productResult.value : null;
-      const categoryData = categoryResult.status === "fulfilled" ? categoryResult.value : null;
+      const mainCategoryData = mainCategoryResult.status === "fulfilled" ? mainCategoryResult.value : null;
       const packData = packResult.status === "fulfilled" ? packResult.value : null;
       const sourceProducts = collectionItems(productData).filter((product) => activeValue(product) !== false && product.packing === true);
       let readyProducts = sourceProducts.map((product) => ({
@@ -106,11 +125,20 @@ export const PackBuilderPage = () => {
       );
       if (current) {
         setProducts(readyProducts);
-        setCategories(buildCategoryTree(extractCategoryItems(categoryData)
-          .filter((category) => activeValue(category) !== false)));
+        // Build the complete hierarchy before selecting roots. Slicing the
+        // flattened API response can otherwise retain one root and several of
+        // its children, rather than the seven navbar categories.
+        const categoryTree = buildCategoryTree(mergeCategorySources(null, mainCategoryData));
+        const categoriesByName = new Map(categoryTree.map((category) => [
+          normaliseCategoryName(category.name),
+          category,
+        ]));
+        setCategories(PACK_BUILDER_ROOT_CATEGORY_NAMES
+          .map((name) => categoriesByName.get(normaliseCategoryName(name)))
+          .filter(Boolean));
         setCustomPacks(readyPacks);
         setProductsError(productResult.status === "rejected" ? readError(productResult.reason) : "");
-        setCategoriesError(categoryResult.status === "rejected" ? readError(categoryResult.reason) : "");
+        setCategoriesError(mainCategoryResult.status === "rejected" ? readError(mainCategoryResult.reason) : "");
         setPacksError(packResult.status === "rejected" ? readError(packResult.reason) : "");
         if (!readyPacks.some((pack) => String(idOf(pack)) === String(selectedCustomPackId))) {
           setSelectedCustomPackId(idOf(readyPacks[0]) ?? null);

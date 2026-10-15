@@ -5,7 +5,7 @@ import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems } from "../utils/categoryTree";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 12;
 
 const sameId = (first, second) => String(first) === String(second);
 

@@ -1,8 +1,8 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, couvertureService, brandService, bannerService, resolveProductImage, mediaUrl, hydrateProductsWithImages } from "../services/api";
+import { productService, couvertureService, brandService, bannerService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
-import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
+import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
 import logo from "../assets/logo.png";
 
 const normalizeProduct = (p) => ({
@@ -36,8 +36,45 @@ const bannerImageUrl = (filename, size) => {
   return mediaUrl(`banners/${size}/${filename}`);
 };
 
+const idFromReference = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'object') return idFromReference(value.id ?? value['@id'] ?? value.iri);
+  const match = String(value).match(/\/(?:api\/)?brands\/([^/?#]+)\/?$/);
+  return match ? match[1] : String(value);
+};
+
+const brandId = (brand) => idFromReference(brand?.id ?? brand?.['@id'] ?? brand?.iri);
+const normaliseBrandName = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase('fr')
+  .replace(/[^a-z0-9]+/g, '');
+
+const resolveBrandId = (reference, brands) => {
+  const target = idFromReference(reference);
+  if (!target) return null;
+  const targetName = normaliseBrandName(target);
+  const matchingBrand = brands.find((brand) =>
+    String(brandId(brand)) === String(target)
+    || normaliseBrandName(brand.name) === targetName
+    || normaliseBrandName(brand.slug) === targetName
+  );
+  return matchingBrand ? brandId(matchingBrand) : null;
+};
+
+const couvertureBrandId = (couverture, brands) => {
+  const directBrand = couverture?.brand ?? couverture?.brandId ?? couverture?.brand_id;
+  const navigationIsBrand = String(couverture?.navigationType || '').toLowerCase() === 'brand';
+  const directMatch = resolveBrandId(directBrand, brands);
+  const navigationMatch = navigationIsBrand ? resolveBrandId(couverture?.navigation, brands) : null;
+  if (directMatch || navigationMatch) return directMatch || navigationMatch;
+
+  // Existing covers can be linked when their name or title is the brand name.
+  return resolveBrandId(couverture?.brandName ?? couverture?.name ?? couverture?.title, brands);
+};
+
 export const HomePage = () => {
-  const { navigateTo } = useCart();
+  const { navigateTo, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
   const [brands, setBrands] = useState([]);
@@ -64,7 +101,7 @@ export const HomePage = () => {
         .filter((couverture) => couverture.active !== false)
         .sort((first, second) => (first.index ?? 0) - (second.index ?? 0));
       setHeroCouvertures(couvertures);
-      setBrands((brandData['hydra:member'] || []).filter((brand) => brand.active !== false && brand.isActive !== false && brand.logo));
+      setBrands(collectionItems(brandData).filter((brand) => brand.active !== false && brand.isActive !== false));
       const activeBanners = collectionItems(bannerData)
         .filter((banner) => banner.isActive !== false && banner.enabled !== false)
         .sort((first, second) => (first.position ?? 0) - (second.position ?? 0));
@@ -98,6 +135,7 @@ export const HomePage = () => {
   }, [heroCouvertures.length]);
 
   const heroCouverture = heroCouvertures[activeHeroIndex] || null;
+  const activeHeroBrandId = couvertureBrandId(heroCouverture, brands);
   const heroBgImage = heroCouverture?.image
     ? mediaUrl(`couvertures/${heroCouverture.image}`)
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
@@ -129,6 +167,35 @@ export const HomePage = () => {
     setActiveHeroIndex((current) => (current + 1) % heroCouvertures.length);
   };
 
+  const showPreviousHeroCouverture = () => {
+    if (heroCouvertures.length < 2) return;
+    setActiveHeroIndex((current) => (current - 1 + heroCouvertures.length) % heroCouvertures.length);
+  };
+
+  const openHeroCouverture = () => {
+    if (activeHeroBrandId) {
+      viewBrandDetails(activeHeroBrandId);
+      return;
+    }
+
+    const navigation = String(heroCouverture?.navigation || '').trim();
+    if (!navigation) return;
+    const navigationType = String(heroCouverture?.navigationType || '').toLowerCase();
+    if (navigationType === 'product') {
+      viewProductDetails(navigation.split('/').filter(Boolean).pop());
+    } else if (navigationType === 'category') {
+      setSelectedShopCategoryIds([navigation.split('/').filter(Boolean).pop()]);
+      navigateTo('shop');
+    } else if (navigationType === 'url' && /^https?:\/\//i.test(navigation)) {
+      window.location.assign(navigation);
+    } else if (navigationType === 'page') {
+      navigateTo(navigation.replace(/^#?\/?/, '').split(/[/?#]/)[0] || 'shop');
+    }
+  };
+
+  const heroHasDestination = Boolean(activeHeroBrandId || heroCouverture?.navigation);
+  const logoBrands = brands.filter((brand) => resolveBrandLogo(brand));
+
   const visibleBestSellers = bestSellers.length <= 3
     ? bestSellers
     : Array.from({ length: 3 }, (_, index) => bestSellers[(bestSellerOffset + index) % bestSellers.length]);
@@ -136,14 +203,18 @@ export const HomePage = () => {
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading pb-20 space-y-16">
       {/* ================= 1. HERO SECTION ================= */}
-      <section className="relative w-full bg-[#0c0c0c] border-b border-white/10 overflow-hidden">
-        <button type="button" onClick={showNextHeroCouverture} className="block w-full cursor-pointer" aria-label="Afficher la couverture suivante">
+      <section className="relative isolate w-full overflow-hidden border-b border-white/10 bg-[#0c0c0c]">
+        <button type="button" onClick={openHeroCouverture} disabled={!heroHasDestination} className="group block w-full text-left disabled:cursor-default" aria-label={activeHeroBrandId ? `Découvrir les produits ${heroCouverture?.name || 'de cette marque'}` : heroCouverture?.name || 'Couverture'}>
           <picture className="block w-full">
             <source media="(max-width: 639px)" srcSet={heroMobileBgImage} />
-            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchpriority="high" decoding="async" className="block w-full h-auto animate-[pulse_0.35s_ease-out]" />
+            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchpriority="high" decoding="async" className="block h-[clamp(13rem,60vw,24rem)] w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.015] sm:h-[clamp(18rem,38vw,36rem)] lg:h-[clamp(22rem,34vw,40rem)]" />
           </picture>
         </button>
-        <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
+        {heroCouvertures.length > 1 && <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 items-center justify-between px-3 sm:px-5">
+          <button type="button" onClick={showPreviousHeroCouverture} className="pointer-events-auto grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-black/45 text-white backdrop-blur-sm transition-colors hover:border-white hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white sm:h-12 sm:w-12" aria-label="Couverture précédente"><ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" /></button>
+          <button type="button" onClick={showNextHeroCouverture} className="pointer-events-auto grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-black/45 text-white backdrop-blur-sm transition-colors hover:border-white hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white sm:h-12 sm:w-12" aria-label="Couverture suivante"><ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" /></button>
+        </div>}
         {heroCouvertures.length > 1 && <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 gap-2" aria-label="Navigation des couvertures">
           {heroCouvertures.map((couverture, index) => <button key={couverture.id} type="button" onClick={() => setActiveHeroIndex(index)} className={`h-1.5 rounded-full transition-all ${index === activeHeroIndex ? 'w-7 bg-white' : 'w-1.5 bg-white/60 hover:bg-white'}`} aria-label={`Afficher la couverture ${index + 1}`} />)}
         </div>}
@@ -358,17 +429,17 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {brands.length > 0 && (
+      {logoBrands.length > 0 && (
         <section className="brand-logo-marquee-section border-y border-[#d90429]/30 bg-[#0b0b0b] py-6 overflow-hidden" aria-label="Marques partenaires">
           <div className="brand-logo-marquee-track">
             {[0, 1].map((group) => (
               <div key={group} className="brand-logo-marquee-group" aria-hidden={group === 1}>
-                {brands.map((brand) => {
-                  const logoPath = brand.logo.startsWith('/uploads/') ? brand.logo : `brands/${brand.logo}`;
+                {logoBrands.map((brand) => {
+                  const logoPath = resolveBrandLogo(brand);
                   return (
-                    <div key={`${group}-${brand.id ?? brand.slug}`} className="brand-logo-card">
-                      <img src={mediaUrl(logoPath)} alt={group === 0 ? brand.slug : ''} className="brand-logo-image" />
-                    </div>
+                    <button key={`${group}-${brand.id ?? brand.slug}`} type="button" onClick={() => viewBrandDetails(brandId(brand))} tabIndex={group === 1 ? -1 : 0} className="brand-logo-card" aria-label={`Découvrir ${brand.name}`}>
+                      <img src={logoPath} alt={group === 0 ? brand.name : ''} className="brand-logo-image" />
+                    </button>
                   );
                 })}
               </div>

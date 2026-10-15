@@ -144,11 +144,12 @@ export const CheckoutPage = () => {
         notes: formData.notes,
         coupon: appliedCoupon?.code || undefined,
         items: cart.flatMap((item) => {
-          if (item.itemType === "custom-pack") {
+          if (item.itemType === "custom-pack" || item.itemType === "predefined-pack") {
+            const pack = item.itemType === "custom-pack" ? item.customPack : item.predefinedPack;
             return [{
-              packId: item.customPack.packId,
+              packId: pack.packId,
               quantity: item.quantity || 1,
-              products: item.customPack.items.map(({ productId, quantity, variantSku }) => ({
+              products: pack.items.map(({ productId, quantity, variantSku }) => ({
                 productId,
                 quantity,
                 ...(variantSku ? { variantSku } : {}),
@@ -364,9 +365,10 @@ export const CheckoutPage = () => {
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {cart.map((item, i) => (
                   <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-gray-300" title={item.itemType === "custom-pack" ? (item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ") : item.itemType === "product-bundle" ? (item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ") : undefined}>
+                    <span className="min-w-0 text-gray-300" title={item.itemType === "custom-pack" ? (item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ") : item.itemType === "predefined-pack" ? (item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ") : item.itemType === "product-bundle" ? (item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ") : undefined}>
                       <span className="block truncate">{item.name} <span className="text-gray-500">×{item.quantity}</span></span>
                       {item.itemType === "custom-pack" && <span className="mt-1 block truncate text-[10px] text-gray-500">{(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
+                      {item.itemType === "predefined-pack" && <span className="mt-1 block truncate text-[10px] text-gray-500">{(item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
                       {item.itemType === "product-bundle" && <span className="mt-1 block truncate text-[10px] text-gray-500">{(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
                     </span>
                     <span className="font-bold text-white shrink-0">

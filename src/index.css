@@ -160,6 +160,21 @@
   border-radius: 1rem;
   background: #141414;
   box-shadow: 0 0 10px rgba(217, 4, 41, 0.5), 0 0 30px rgba(217, 4, 41, 0.25), inset 0 0 22px rgba(217, 4, 41, 0.1);
+  cursor: pointer;
+  padding: 0;
+  text-align: inherit;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.brand-logo-card:hover {
+  border-color: rgba(255, 82, 109, 1);
+  box-shadow: 0 0 13px rgba(255, 82, 109, 0.75), 0 0 35px rgba(217, 4, 41, 0.35), inset 0 0 22px rgba(217, 4, 41, 0.14);
+  transform: translateY(-2px);
+}
+
+.brand-logo-card:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
 }
 
 .brand-logo-card::after {

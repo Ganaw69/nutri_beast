@@ -29,6 +29,9 @@ const readClientRoute = () => {
   if (tab === "pack" && validId(id)) {
     return { tab: "pack-detail", packId: id };
   }
+  if ((tab === "brand" || tab === "brand-detail") && validId(id)) {
+    return { tab: "brand-detail", brandId: id };
+  }
   if ((tab === "article" || tab === "blog-article") && validId(id)) {
     return { tab: "blog-article", articleId: id };
   }
@@ -42,6 +45,7 @@ const routeHash = (tab, id) => {
   if (tab === "home") return "";
   if (tab === "product-detail" && validId(id)) return `#product/${id}`;
   if (tab === "pack-detail" && validId(id)) return `#pack/${id}`;
+  if (tab === "brand-detail" && validId(id)) return `#brand/${id}`;
   if (tab === "blog-article" && validId(id)) return `#article/${id}`;
   if (tab === "recipes" && validId(id)) return `#recipes/${id}`;
   return `#${tab}`;
@@ -53,6 +57,7 @@ export const CartProvider = ({ children }) => {
   const [activeTab, setActiveTab] = useState(initialRoute.tab);
   const [selectedProductId, setSelectedProductId] = useState(initialRoute.productId || null);
   const [selectedPackId, setSelectedPackId] = useState(initialRoute.packId || null);
+  const [selectedBrandId, setSelectedBrandId] = useState(initialRoute.brandId || null);
   const [customPackDraft, setCustomPackDraft] = useState([]);
   const [selectedCustomPackId, setSelectedCustomPackId] = useState(null);
   const [customPackQuote, setCustomPackQuote] = useState(null);
@@ -79,6 +84,7 @@ export const CartProvider = ({ children }) => {
       setActiveTab(route.tab);
       setSelectedProductId(route.productId || null);
       setSelectedPackId(route.packId || null);
+      setSelectedBrandId(route.brandId || null);
       setSelectedArticleId(route.articleId || null);
       setSelectedRecipeId(route.recipeId || null);
     };
@@ -152,6 +158,37 @@ export const CartProvider = ({ children }) => {
     };
     setCart((prevCart) => [...prevCart, cartItem]);
     showToast(`Pack personnalisé ajouté : ${pack.name}`);
+    return true;
+  };
+
+  const addPredefinedPackToCart = (pack, products, quantity = 1) => {
+    const finalPrice = Number(pack?.finalPrice);
+    if (!pack?.id || !Number.isFinite(finalPrice) || finalPrice <= 0 || !Array.isArray(products) || products.length === 0
+      || products.some((item) => !item?.product?.id || !item.product.sku || Number(item.quantity) < 1)) {
+      showToast("Ce pack n’est pas encore prêt à être commandé.");
+      return false;
+    }
+
+    const items = products.map((item) => ({
+      productId: item.product.id,
+      sku: item.product.sku,
+      name: item.product.name,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.product.salePrice ?? item.product.currentPrice ?? item.product.price ?? 0),
+    }));
+    const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    setCart((previous) => [...previous, {
+      id: `predefined-pack-${pack.id}-${randomPart}`,
+      itemType: "predefined-pack",
+      name: pack.name,
+      image: pack.imageUrl || pack.image || null,
+      price: finalPrice,
+      originalPrice: Number(pack.basePrice ?? finalPrice),
+      quantity: Math.max(1, Number(quantity) || 1),
+      predefinedPack: { packId: pack.id, items },
+    }]);
+    showToast(`Pack ajouté au panier : ${pack.name}`);
     return true;
   };
 
@@ -240,6 +277,13 @@ export const CartProvider = ({ children }) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const viewBrandDetails = (brandId) => {
+    setSelectedBrandId(brandId);
+    setActiveTab("brand-detail");
+    updateRoute("brand-detail", brandId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const viewBlogArticle = (articleId) => {
     setSelectedArticleId(articleId);
     setActiveTab("blog-article");
@@ -288,6 +332,7 @@ export const CartProvider = ({ children }) => {
         cart,
         addToCart,
         addCustomPackToCart,
+        addPredefinedPackToCart,
         addProductBundleToCart,
         updateQuantity,
         removeFromCart,
@@ -298,6 +343,8 @@ export const CartProvider = ({ children }) => {
         viewProductDetails,
         selectedPackId,
         viewPackDetails,
+        selectedBrandId,
+        viewBrandDetails,
         customPackDraft,
         setCustomPackDraft,
         selectedCustomPackId,

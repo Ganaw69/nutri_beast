@@ -534,7 +534,7 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
     Object.assign(item, {
       ...body,
       code: body.code == null ? item.code : String(body.code).toUpperCase(),
-      usageLimit: body.usageLimit == null || body.usageLimit === '' ? item.usageLimit : toNumber(body.usageLimit),
+      usageLimit: body.usagceLimit == null || body.usageLimit === '' ? item.usageLimit : toNumber(body.usageLimit),
       isActive: body.isActive == null ? item.isActive : normalizeBoolean(body.isActive),
     });
     return clone(item);
@@ -791,8 +791,38 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
 /** Resolve a media path to a full URL */
 export const mediaUrl = (path) => {
   if (!path) return null;
-  if (path.startsWith('http')) return path;
+  if (/^(https?:)?\/\//i.test(path)) return path;
+  if (path.startsWith('/uploads/')) return MEDIA_BASE ? `${MEDIA_BASE}${path}` : path;
   return MEDIA_BASE ? `${MEDIA_BASE}/uploads/${path}` : `/uploads/${path}`;
+};
+
+export const resolveBrandLogo = (brand) => {
+  const logo = brand?.logo
+    ?? brand?.logoUrl
+    ?? brand?.logoFile
+    ?? brand?.logoPath
+    ?? brand?.logoFilename
+    ?? brand?.image
+    ?? brand?.imageUrl;
+
+  if (!logo) return null;
+  if (typeof logo === 'object') {
+    return resolveBrandLogo({
+      logo: logo.url
+        ?? logo.path
+        ?? logo.contentUrl
+        ?? logo.file
+        ?? logo.filename
+        ?? logo.fileName
+        ?? logo.originalName
+        ?? logo.name,
+    });
+  }
+
+  const value = String(logo).trim();
+  if (!value) return null;
+  if (/^(https?:)?\/\//i.test(value) || value.startsWith('/uploads/')) return mediaUrl(value);
+  return mediaUrl(`brands/${value.replace(/^\/?uploads\/brands\//, '')}`);
 };
 
 const resolveUploadUrl = (folder, input) => {

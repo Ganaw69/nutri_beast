@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Edit2, Image, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
-import { couvertureService, mediaUrl } from '../../services/api';
+import { brandService, couvertureService, mediaUrl } from '../../services/api';
 
-const NAVIGATION_TYPES = ['category', 'product', 'page', 'url'];
+const NAVIGATION_TYPES = ['brand', 'category', 'product', 'page', 'url'];
 const EMPTY_FORM = {
   name: '',
   title: '',
@@ -24,6 +24,7 @@ const imagePath = (filename) => (filename ? mediaUrl(`couvertures/${filename}`) 
 
 export const CouvertureManager = () => {
   const [couvertures, setCouvertures] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -45,6 +46,18 @@ export const CouvertureManager = () => {
   }, []);
 
   useEffect(() => { fetchCouvertures(); }, [fetchCouvertures]);
+
+  useEffect(() => {
+    let active = true;
+    brandService.getAll({ isActive: true, itemsPerPage: 100 }, true)
+      .then((data) => {
+        if (active) setBrands((data?.['hydra:member'] || data?.member || []).filter((brand) => brand.active !== false && brand.isActive !== false));
+      })
+      .catch(() => {
+        if (active) setBrands([]);
+      });
+    return () => { active = false; };
+  }, []);
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
@@ -199,7 +212,7 @@ export const CouvertureManager = () => {
             <div><label className={labelClass}>Nom *</label><input required value={form.name} onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))} className={inputClass} /></div>
             <div className="grid sm:grid-cols-2 gap-4"><div><label className={labelClass}>Titre</label><input value={form.title} onChange={(event) => setForm((previous) => ({ ...previous, title: event.target.value }))} className={inputClass} /></div><div><label className={labelClass}>Sous-titre</label><input value={form.subtitle} onChange={(event) => setForm((previous) => ({ ...previous, subtitle: event.target.value }))} className={inputClass} /></div></div>
             <div className="grid sm:grid-cols-2 gap-4"><div><label className={labelClass}>Texte du bouton</label><input value={form.buttonText} onChange={(event) => setForm((previous) => ({ ...previous, buttonText: event.target.value }))} className={inputClass} /></div><div><label className={labelClass}>Index</label><input type="number" min="0" step="1" value={form.index} onChange={(event) => setForm((previous) => ({ ...previous, index: event.target.value }))} className={inputClass} /></div></div>
-            <div className="grid sm:grid-cols-2 gap-4"><div><label className={labelClass}>Type de navigation</label><select value={form.navigationType} onChange={(event) => setForm((previous) => ({ ...previous, navigationType: event.target.value }))} className={inputClass}>{NAVIGATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></div><div><label className={labelClass}>Navigation</label><input value={form.navigation} onChange={(event) => setForm((previous) => ({ ...previous, navigation: event.target.value }))} className={inputClass} placeholder="URL, identifiant ou chemin" /></div></div>
+            <div className="grid sm:grid-cols-2 gap-4"><div><label className={labelClass}>Type de navigation</label><select value={form.navigationType} onChange={(event) => setForm((previous) => ({ ...previous, navigationType: event.target.value }))} className={inputClass}>{NAVIGATION_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></div><div><label className={labelClass}>{form.navigationType === 'brand' ? 'Marque' : 'Navigation'}</label>{form.navigationType === 'brand' ? <select value={form.navigation} onChange={(event) => setForm((previous) => ({ ...previous, navigation: event.target.value }))} className={inputClass}><option value="">Choisir une marque</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select> : <input value={form.navigation} onChange={(event) => setForm((previous) => ({ ...previous, navigation: event.target.value }))} className={inputClass} placeholder="URL, identifiant ou chemin" />}</div></div>
             <div className="grid sm:grid-cols-2 gap-4"><div><label className={labelClass}>Date de début</label><input type="datetime-local" value={form.startDate} onChange={(event) => setForm((previous) => ({ ...previous, startDate: event.target.value }))} className={inputClass} /></div><div><label className={labelClass}>Date de fin</label><input type="datetime-local" value={form.endDate} onChange={(event) => setForm((previous) => ({ ...previous, endDate: event.target.value }))} className={inputClass} /></div></div>
             <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={form.active} onChange={(event) => setForm((previous) => ({ ...previous, active: event.target.checked }))} className="accent-[#d90429]" /><span className="text-sm text-gray-300">Couverture active</span></label>
             <div className="grid sm:grid-cols-2 gap-4"><FileInput label="Image desktop" required={modal.mode === 'add'} file={desktopFile} preview={imagePath(current?.image)} onChange={(event) => selectFile(event, setDesktopFile, 'L’image desktop')} /><FileInput label="Image mobile" file={mobileFile} preview={imagePath(current?.imageMobile)} onChange={(event) => selectFile(event, setMobileFile, 'L’image mobile')} /></div>

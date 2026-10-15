@@ -34,6 +34,26 @@ export const extractCategoryItems = (data) => {
   return items.map(normalizeCategoryRecord).filter((category) => category.id !== null && category.id !== undefined);
 };
 
+const flattenCategoryTree = (categories, parentId = null) => extractCategoryItems(categories).flatMap((category) => {
+  const item = parentId !== null && !category.parent
+    ? { ...category, parent: `/api/categories/${parentId}` }
+    : category;
+  return [item, ...flattenCategoryTree(item.children || [], item.id)];
+});
+
+export const mergeCategorySources = (flatCategories, nestedCategories) => {
+  const byId = new Map();
+  [
+    ...flattenCategoryTree(nestedCategories),
+    ...extractCategoryItems(flatCategories),
+  ].forEach((category) => {
+    const key = String(category.id);
+    const existing = byId.get(key);
+    byId.set(key, existing ? { ...existing, ...category, children: existing.children } : category);
+  });
+  return [...byId.values()];
+};
+
 const sortCategories = (items = []) =>
   [...items].sort((a, b) => {
     const positionA = Number(a?.position ?? 0);

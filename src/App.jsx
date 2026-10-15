@@ -19,6 +19,7 @@ const PacksPage = lazyPage(() => import("./pages/PacksPage"), "PacksPage");
 const PackDetailPage = lazyPage(() => import("./pages/PacksPage"), "PackDetailPage");
 const PackBuilderPage = lazyPage(() => import("./pages/PackBuilderPage"), "PackBuilderPage");
 const ProductDetailPage = lazyPage(() => import("./pages/ProductDetailPage"), "ProductDetailPage");
+const BrandDetailPage = lazyPage(() => import("./pages/BrandDetailPage"), "BrandDetailPage");
 const CalculatorPage = lazyPage(() => import("./pages/CalculatorPage"), "CalculatorPage");
 const NutritionistAIPage = lazyPage(() => import("./pages/NutritionistAIPage"), "NutritionistAIPage");
 const CoachIaPage = lazyPage(() => import("./pages/CoachIaPage"), "CoachIaPage");
@@ -92,6 +93,7 @@ const MainContent = () => {
           {activeTab === "pack-detail" && <PackDetailPage />}
           {activeTab === "pack-builder" && <PackBuilderPage />}
           {activeTab === "product-detail" && <ProductDetailPage />}
+          {activeTab === "brand-detail" && <BrandDetailPage />}
           {activeTab === "calculator" && <CalculatorPage />}
           {activeTab === "nutritionist-ai" && <NutritionistAIPage />}
           {activeTab === "coach-ia" && <CoachIaPage />}
