@@ -5,6 +5,15 @@ import { ShoppingBag } from "lucide-react";
 export const ProductCard = ({ product }) => {
   const { addToCart, viewProductDetails } = useCart();
   const hasImage = !!product.image;
+  const hasDiscount = product.isOnSale
+    || (Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price))
+    || (Number(product.originalPrice) > Number(product.price));
+  const badges = [
+    ...(product.badge === "TOP SELLER" ? ["TOP SELLER"] : []),
+    ...(product.isNew ? ["NOUVEAU"] : []),
+    ...(hasDiscount ? ["REMISE"] : []),
+  ];
+  if (badges.length === 0 && product.badge) badges.push(product.badge);
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#111111] font-heading shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-xl hover:shadow-black/35">
@@ -14,19 +23,18 @@ export const ProductCard = ({ product }) => {
         className="relative flex aspect-square w-full cursor-pointer items-center justify-center overflow-hidden bg-[#f0f0f0] p-5 sm:p-6"
       >
         {/* Badges on top right */}
-        {product.badge && (
-          <div className="absolute top-3 right-3 z-10">
-            <span
-              className={`text-[9px] font-black px-2.5 py-1 rounded-xs tracking-wider uppercase shadow-xs ${
-                product.badge === "-15%" || product.badge === "HOT"
-                  ? product.badge === "-15%"
-                    ? "bg-[#d90429] text-white"
-                    : "bg-[#1c1b1b] text-white"
-                  : "bg-[#d90429] text-white"
-              }`}
-            >
-              {product.badge}
-            </span>
+        {badges.length > 0 && (
+          <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-1.5">
+            {badges.map((badge) => (
+              <span
+                key={badge}
+                className={`rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-xs ${
+                  badge === "TOP SELLER" || badge === "HOT" ? "bg-[#1c1b1b]" : "bg-[#f0143c]"
+                }`}
+              >
+                {badge}
+              </span>
+            ))}
           </div>
         )}
 

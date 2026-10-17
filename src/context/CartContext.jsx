@@ -5,6 +5,7 @@ const CartContext = createContext();
 const CLIENT_TABS = new Set([
   "home",
   "shop",
+  "new",
   "packs",
   "pack-builder",
   "calculator",

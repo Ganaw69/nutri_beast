@@ -15,6 +15,7 @@ const lazyPage = (loader, exportName) => lazy(async () => {
 // when a visitor opens them. The admin and AI dependencies were otherwise
 // delaying the first storefront paint for every visitor.
 const ShopPage = lazyPage(() => import("./pages/ShopPage"), "ShopPage");
+const NewProductsPage = lazyPage(() => import("./pages/NewProductsPage"), "NewProductsPage");
 const PacksPage = lazyPage(() => import("./pages/PacksPage"), "PacksPage");
 const PackDetailPage = lazyPage(() => import("./pages/PacksPage"), "PackDetailPage");
 const PackBuilderPage = lazyPage(() => import("./pages/PackBuilderPage"), "PackBuilderPage");
@@ -89,6 +90,7 @@ const MainContent = () => {
         <Suspense fallback={<PageLoader />}>
           {activeTab === "home" && <HomePage />}
           {activeTab === "shop" && <ShopPage />}
+          {activeTab === "new" && <NewProductsPage />}
           {activeTab === "packs" && <PacksPage />}
           {activeTab === "pack-detail" && <PackDetailPage />}
           {activeTab === "pack-builder" && <PackBuilderPage />}

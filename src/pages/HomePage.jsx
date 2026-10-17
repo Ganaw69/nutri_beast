@@ -4,6 +4,7 @@ import { productService, couvertureService, brandService, bannerService, resolve
 import { ProductCard } from "../components/ProductCard";
 import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
 import logo from "../assets/logo.png";
+import collagenBiotinImage from "../assets/pack-collagene-biotine-peau-cheveux-ongles.png";
 
 const normalizeProduct = (p) => ({
   id: p.id,
@@ -13,6 +14,9 @@ const normalizeProduct = (p) => ({
   price: parseFloat(p.price || 0),
   originalPrice: p.isOnSale && p.salePrice ? parseFloat(p.price) : null,
   image: resolveProductImage(p, null),
+  isNew: p.isNew,
+  isOnSale: p.isOnSale,
+  salePrice: p.salePrice,
   badge: p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : null,
   inStock: p.stock > 0,
   flavors: p.flavors?.map(f => f.name) || [],
@@ -20,21 +24,7 @@ const normalizeProduct = (p) => ({
   sku: p.sku,
 });
 
-const FALLBACK_PROMO = {
-  title: 'PROTEIN',
-  subtitle: 'WATER',
-  description: 'ZÉRO SUCRE | 10 G DE PROTÉINES | RAFRAÎCHISSANT',
-  buttonLabel: 'JE DÉCOUVRE',
-  image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=800',
-};
-
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || (Array.isArray(data) ? data : []);
-
-const bannerImageUrl = (filename, size) => {
-  if (!filename) return null;
-  if (typeof filename === 'string' && (filename.startsWith('http') || filename.startsWith('/uploads/'))) return filename;
-  return mediaUrl(`banners/${size}/${filename}`);
-};
 
 const idFromReference = (value) => {
   if (value === null || value === undefined || value === '') return null;
@@ -44,37 +34,64 @@ const idFromReference = (value) => {
 };
 
 const brandId = (brand) => idFromReference(brand?.id ?? brand?.['@id'] ?? brand?.iri);
-const normaliseBrandName = (value) => String(value || '')
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .toLocaleLowerCase('fr')
-  .replace(/[^a-z0-9]+/g, '');
 
-const resolveBrandId = (reference, brands) => {
-  const target = idFromReference(reference);
-  if (!target) return null;
-  const targetName = normaliseBrandName(target);
-  const matchingBrand = brands.find((brand) =>
-    String(brandId(brand)) === String(target)
-    || normaliseBrandName(brand.name) === targetName
-    || normaliseBrandName(brand.slug) === targetName
-  );
-  return matchingBrand ? brandId(matchingBrand) : null;
+const normalizedNavigationType = (value) => {
+  const type = String(value || '').trim().toLowerCase();
+  if (['categorie', 'catégorie', 'categories', 'category'].includes(type)) return 'category';
+  if (['marque', 'brands'].includes(type)) return 'brand';
+  if (['produit', 'products'].includes(type)) return 'product';
+  return type;
 };
 
-const couvertureBrandId = (couverture, brands) => {
-  const directBrand = couverture?.brand ?? couverture?.brandId ?? couverture?.brand_id;
-  const navigationIsBrand = String(couverture?.navigationType || '').toLowerCase() === 'brand';
-  const directMatch = resolveBrandId(directBrand, brands);
-  const navigationMatch = navigationIsBrand ? resolveBrandId(couverture?.navigation, brands) : null;
-  if (directMatch || navigationMatch) return directMatch || navigationMatch;
+const PAGE_TABS = new Set([
+  'home', 'shop', 'packs', 'pack-builder', 'calculator', 'nutritionist-ai',
+  'coach-ia', 'cart', 'checkout', 'blog', 'recipes',
+]);
 
-  // Existing covers can be linked when their name or title is the brand name.
-  return resolveBrandId(couverture?.brandName ?? couverture?.name ?? couverture?.title, brands);
+const navigationId = (value, resource, routeNames) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'object') return navigationId(value.id ?? value['@id'] ?? value.iri, resource, routeNames);
+
+  const rawValue = String(value).trim();
+  if (/^\d+$/.test(rawValue)) return rawValue;
+
+  const resourceMatch = rawValue.match(new RegExp(`/(?:api/)?${resource}/(\\d+)/?$`, 'i'));
+  if (resourceMatch) return resourceMatch[1];
+
+  const routeMatch = rawValue.replace(/^#/, '').match(new RegExp(`^/?(?:${routeNames.join('|')})/(\\d+)/?$`, 'i'));
+  return routeMatch ? routeMatch[1] : null;
+};
+
+const parseCouvertureDestination = (couverture) => {
+  const navigationType = normalizedNavigationType(couverture?.navigationType || couverture?.navigation_type);
+  const navigation = couverture?.navigation;
+  if (navigation === null || navigation === undefined || navigation === '') return null;
+
+  if (navigationType === 'brand') {
+    const value = navigationId(navigation, 'brands?', ['brand', 'brand-detail']);
+    return value ? { type: 'brand', value } : null;
+  }
+  if (navigationType === 'category') {
+    const value = navigationId(navigation, 'categor(?:y|ies)', ['categor(?:y|ies)']);
+    return value ? { type: 'category', value } : null;
+  }
+  if (navigationType === 'product') {
+    const value = navigationId(navigation, 'products?', ['product', 'product-detail']);
+    return value ? { type: 'product', value } : null;
+  }
+  if (navigationType === 'url') {
+    const value = typeof navigation === 'string' ? navigation.trim() : '';
+    return /^https?:\/\//i.test(value) ? { type: 'url', value } : null;
+  }
+  if (navigationType === 'page') {
+    const route = String(navigation).trim().replace(/^#?\/?/, '').split(/[/?#]/)[0];
+    return PAGE_TABS.has(route) ? { type: 'page', value: route } : null;
+  }
+  return null;
 };
 
 export const HomePage = () => {
-  const { navigateTo, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails } = useCart();
+  const { navigateTo, setSearchQuery, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
   const [brands, setBrands] = useState([]);
@@ -87,13 +104,15 @@ export const HomePage = () => {
     let active = true;
 
     Promise.all([
-      productService.getAll({ isFeatured: true, isActive: true, itemsPerPage: 12 }, true).catch(() => ({ 'hydra:member': [] })),
+      productService.getAllPages({ isFeatured: true, isActive: true }, true).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
       bannerService.getActive().catch(() => ({ 'hydra:member': [] })),
     ]).then(([prodData, couvertureData, brandData, bannerData]) => {
       if (!active) return;
-      const prods = prodData['hydra:member'] || [];
+      const prods = (prodData['hydra:member'] || []).filter((product) =>
+        product.isActive !== false && product.brand?.isActive !== false
+      );
       // The collection already includes everything a product card needs.
       // Render it immediately; image enrichment is non-blocking below.
       setBestSellers(prods.map(normalizeProduct));
@@ -135,20 +154,12 @@ export const HomePage = () => {
   }, [heroCouvertures.length]);
 
   const heroCouverture = heroCouvertures[activeHeroIndex] || null;
-  const activeHeroBrandId = couvertureBrandId(heroCouverture, brands);
+  const heroDestination = parseCouvertureDestination(heroCouverture);
+  const activeHeroBrandId = heroDestination?.type === 'brand' ? heroDestination.value : null;
   const heroBgImage = heroCouverture?.image
     ? mediaUrl(`couvertures/${heroCouverture.image}`)
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
   const heroMobileBgImage = heroCouverture?.imageMobile ? mediaUrl(`couvertures/${heroCouverture.imageMobile}`) : heroBgImage;
-  const promoTitle = promoBanner?.title || FALLBACK_PROMO.title;
-  const promoSubtitle = promoBanner?.subtitle || FALLBACK_PROMO.subtitle;
-  const promoHighlights = (promoBanner?.description || FALLBACK_PROMO.description)
-    .split(/\r?\n|\|/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const promoDesktopImage = bannerImageUrl(promoBanner?.imageDesktop, 'desktop') || FALLBACK_PROMO.image;
-  const promoMobileImage = bannerImageUrl(promoBanner?.imageMobile, 'mobile') || promoDesktopImage;
-
   const openPromoLink = () => {
     const link = promoBanner?.buttonLink?.trim();
     if (!link) {
@@ -173,27 +184,24 @@ export const HomePage = () => {
   };
 
   const openHeroCouverture = () => {
-    if (activeHeroBrandId) {
-      viewBrandDetails(activeHeroBrandId);
-      return;
-    }
-
-    const navigation = String(heroCouverture?.navigation || '').trim();
-    if (!navigation) return;
-    const navigationType = String(heroCouverture?.navigationType || '').toLowerCase();
-    if (navigationType === 'product') {
-      viewProductDetails(navigation.split('/').filter(Boolean).pop());
-    } else if (navigationType === 'category') {
-      setSelectedShopCategoryIds([navigation.split('/').filter(Boolean).pop()]);
+    const destination = heroDestination;
+    if (!destination) return;
+    if (destination.type === 'product') {
+      viewProductDetails(destination.value);
+    } else if (destination.type === 'category') {
+      setSearchQuery('');
+      setSelectedShopCategoryIds([destination.value]);
       navigateTo('shop');
-    } else if (navigationType === 'url' && /^https?:\/\//i.test(navigation)) {
-      window.location.assign(navigation);
-    } else if (navigationType === 'page') {
-      navigateTo(navigation.replace(/^#?\/?/, '').split(/[/?#]/)[0] || 'shop');
+    } else if (destination.type === 'brand') {
+      viewBrandDetails(destination.value);
+    } else if (destination.type === 'url') {
+      window.location.assign(destination.value);
+    } else if (destination.type === 'page') {
+      navigateTo(destination.value.split('/')[0] || 'shop');
     }
   };
 
-  const heroHasDestination = Boolean(activeHeroBrandId || heroCouverture?.navigation);
+  const heroHasDestination = Boolean(heroDestination);
   const logoBrands = brands.filter((brand) => resolveBrandLogo(brand));
 
   const visibleBestSellers = bestSellers.length <= 3
@@ -204,7 +212,7 @@ export const HomePage = () => {
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading pb-20 space-y-16">
       {/* ================= 1. HERO SECTION ================= */}
       <section className="relative isolate w-full overflow-hidden border-b border-white/10 bg-[#0c0c0c]">
-        <button type="button" onClick={openHeroCouverture} disabled={!heroHasDestination} className="group block w-full text-left disabled:cursor-default" aria-label={activeHeroBrandId ? `Découvrir les produits ${heroCouverture?.name || 'de cette marque'}` : heroCouverture?.name || 'Couverture'}>
+        <button type="button" onClick={openHeroCouverture} aria-disabled={!heroHasDestination} className="group block w-full text-left" aria-label={activeHeroBrandId ? `Découvrir les produits ${heroCouverture?.name || 'de cette marque'}` : heroCouverture?.name || 'Couverture'}>
           <picture className="block w-full">
             <source media="(max-width: 639px)" srcSet={heroMobileBgImage} />
             <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchpriority="high" decoding="async" className="block h-[clamp(13rem,60vw,24rem)] w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.015] sm:h-[clamp(18rem,38vw,36rem)] lg:h-[clamp(22rem,34vw,40rem)]" />
@@ -222,31 +230,37 @@ export const HomePage = () => {
 
       {/* ================= 2. ADMIN-MANAGED PROMO BANNER ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="rounded-xl p-8 sm:p-12 relative overflow-hidden shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-8" style={{ backgroundColor: promoBanner?.backgroundColor || '#00a896', color: promoBanner?.textColor || '#ffffff' }}>
-          <div className="space-y-6 max-w-xl z-10">
-            <div>
-              <h2 className="font-black text-4xl sm:text-6xl uppercase leading-none tracking-tight block" style={{ color: promoBanner?.textColor || '#ffffff' }}>{promoTitle}</h2>
-              {promoSubtitle && <span className="italic font-normal text-4xl sm:text-6xl block mt-1" style={{ color: promoBanner?.textColor || '#ffffff' }}>{promoSubtitle}</span>}
+        <div className="collagen-promo-panel grid overflow-hidden rounded-2xl border border-[#d90429]/55 shadow-[0_0_10px_rgba(217,4,41,0.5),0_0_30px_rgba(217,4,41,0.25)] transition-shadow duration-300 hover:shadow-[0_0_13px_rgba(255,82,109,0.75),0_0_35px_rgba(217,4,41,0.35)] md:min-h-[340px] md:grid-cols-2">
+          <div className="flex flex-col items-start justify-center px-7 py-9 text-white sm:px-10 md:px-12 md:py-12">
+            <p className="text-3xl font-black uppercase leading-[1.08] tracking-tight text-white sm:text-4xl lg:text-5xl">
+              Pack Collagène<br />+ Biotine
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2.5 text-[11px] font-black uppercase sm:text-xs">
+              {['Peau', 'Cheveux', 'Ongles'].map((benefit) => (
+                <span key={benefit} className="rounded-md border border-[#ff596e]/50 bg-[#9f1018]/90 px-4 py-2.5 text-white shadow-[0_0_12px_rgba(217,4,41,0.25)]">{benefit}</span>
+              ))}
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
-              {promoHighlights.map((highlight) => <span key={highlight} className="bg-white/20 backdrop-blur-md px-3.5 py-2 rounded-md border border-white/30" style={{ color: promoBanner?.textColor || '#ffffff' }}>{highlight}</span>)}
+            <div className="mt-5 flex flex-wrap items-baseline gap-3">
+              <span className="text-lg font-bold text-gray-400 line-through decoration-[#ff2948] decoration-2">200,000 TND</span>
+              <span className="text-3xl font-black text-[#ff2948] drop-shadow-[0_0_12px_rgba(217,4,41,0.45)]">120,000 <span className="text-base">TND</span></span>
             </div>
-            <div>
-              <button
-                onClick={openPromoLink}
-                className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase tracking-wider px-6 py-3.5 rounded-full shadow-lg inline-flex items-center gap-2 transition-transform hover:scale-105"
-              >
-                {promoBanner?.buttonLabel || FALLBACK_PROMO.buttonLabel} <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={openPromoLink}
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-6 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_18px_rgba(217,4,41,0.4)] transition-transform hover:scale-105 hover:bg-[#b0021f]"
+            >
+              Je découvre <ArrowRight className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="w-full lg:w-1/2 flex justify-center z-10">
-            <div className="relative transform rotate-3 hover:rotate-0 transition-transform duration-500 bg-[#0c0c0c] border border-white/20 p-2 rounded-xl backdrop-blur-sm shadow-2xl w-full max-w-md">
-              <picture>
-                <source media="(max-width: 639px)" srcSet={promoMobileImage} />
-                <img src={promoDesktopImage} alt={promoTitle} className="w-full h-64 object-cover rounded-lg" />
-              </picture>
+          <div className="flex items-center justify-center px-7 pb-8 md:px-10 md:py-8">
+            <div className="inline-flex max-w-full rotate-1 overflow-hidden rounded-xl border border-white/10 bg-transparent shadow-[0_0_24px_rgba(217,4,41,0.28)] transition-transform duration-500 hover:rotate-0">
+              <img
+                src={collagenBiotinImage}
+                alt="Pack collagène et biotine pour la peau, les cheveux et les ongles"
+                className="block h-auto max-h-[360px] w-auto max-w-full object-contain"
+                loading="lazy"
+              />
             </div>
           </div>
         </div>

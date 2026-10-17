@@ -106,13 +106,13 @@ export const ShopPage = () => {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
         currentProducts = matchingProducts.slice(start, start + ITEMS_PER_PAGE);
       } else {
-        const data = await productService.getAll({
+        const data = await productService.getAllPages({
           ...params,
-          page: currentPage,
-          itemsPerPage: ITEMS_PER_PAGE,
         }, true);
-        currentProducts = data['hydra:member'] || [];
-        total = Number(data['hydra:totalItems'] ?? currentProducts.length);
+        const availableProducts = data['hydra:member'] || [];
+        total = Number(data['hydra:totalItems'] ?? availableProducts.length);
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        currentProducts = availableProducts.slice(start, start + ITEMS_PER_PAGE);
       }
 
       if (requestVersion !== requestVersionRef.current) return;
@@ -190,6 +190,9 @@ export const ShopPage = () => {
     price: parseFloat(p.price || 0),
     originalPrice: p.salePrice ? parseFloat(p.price) : null,
     image: resolveProductImage(p, null),
+    isNew: p.isNew,
+    isOnSale: p.isOnSale,
+    salePrice: p.salePrice,
     badge: p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : p.isOnSale ? 'PROMO' : null,
     inStock: p.stock > 0,
     flavors: p.flavors?.map(f => f.name) || [],

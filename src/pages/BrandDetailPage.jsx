@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, Loader2, PackageOpen } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { brandService, hydrateProductsWithImages, productService, resolveBrandLogo, resolveProductImage } from "../services/api";
@@ -27,8 +27,43 @@ const displayBrandName = (brand) => {
 const isActive = (record) => record?.isActive !== false && record?.active !== false;
 const isAvailable = (product) => {
   if (!isActive(product)) return false;
+  if (product?.brand?.isActive === false || product?.brand?.active === false) return false;
   const stock = product?.stock;
   return stock === null || stock === undefined || Number(stock) > 0;
+};
+
+const BrandDescription = ({ description }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const descriptionRef = useRef(null);
+  const paragraphs = String(description || "").split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+
+  useLayoutEffect(() => {
+    const element = descriptionRef.current;
+    if (!element) return undefined;
+    const measure = () => {
+      if (!expanded) setCanExpand(element.scrollHeight > element.clientHeight + 2);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [description, expanded]);
+
+  return (
+    <div className="mt-7 border-t border-white/10 pt-6 sm:mt-8 sm:pt-7">
+      <div className="mb-3 flex items-center gap-3">
+        <span className="h-px w-8 bg-[#d90429]" />
+        <h2 className="text-xs font-black uppercase tracking-[0.22em] text-[#ff7186]">À propos de la marque</h2>
+      </div>
+      <div ref={descriptionRef} className={`max-w-5xl text-base leading-7 text-gray-200 sm:text-lg sm:leading-8 ${expanded ? "" : "max-h-[12rem] overflow-hidden"}`}>
+        <div className="space-y-4">
+          {paragraphs.map((paragraph, index) => <p key={index} className="whitespace-pre-line">{paragraph}</p>)}
+        </div>
+      </div>
+      {canExpand && <button type="button" onClick={() => setExpanded((value) => !value)} className="mt-4 inline-flex items-center gap-2 text-sm font-black text-white underline decoration-[#d90429] decoration-2 underline-offset-4 transition-colors hover:text-[#ff7186]">{expanded ? "Réduire" : "Lire la suite"}</button>}
+    </div>
+  );
 };
 
 const normalizeProduct = (product) => ({
@@ -39,6 +74,9 @@ const normalizeProduct = (product) => ({
   price: Number(product.price || 0),
   originalPrice: product.isOnSale && product.salePrice ? Number(product.price) : null,
   image: resolveProductImage(product, null),
+  isNew: product.isNew,
+  isOnSale: product.isOnSale,
+  salePrice: product.salePrice,
   badge: product.isFeatured ? "TOP SELLER" : product.isNew ? "NOUVEAU" : product.isOnSale ? "PROMO" : null,
   inStock: Number(product.stock ?? 1) > 0,
   flavors: product.flavors?.map((flavor) => flavor.name) || [],
@@ -55,6 +93,8 @@ export const BrandDetailPage = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    setBrand(null);
+    setProducts([]);
     if (!selectedBrandId) {
       setLoading(false);
       return undefined;
@@ -70,18 +110,19 @@ export const BrandDetailPage = () => {
       brandService.getAllPages({}, true)
         .then((data) => collectionItems(data).find((item) =>
           String(idFromReference(item.id ?? item["@id"] ?? item.iri)) === String(selectedBrandId)
+          && isActive(item)
         ) || null)
         .catch(() => null),
       productService.getAllPages({ isActive: true, "brand.id": selectedBrandId }, true),
     ]).then(([brandData, productData]) => {
       if (!current) return;
 
-      const availableProducts = collectionItems(productData).filter((product) =>
+      const availableProducts = brandData && !isActive(brandData) ? [] : collectionItems(productData).filter((product) =>
         String(idFromReference(product.brand ?? product.brandId)) === String(selectedBrandId)
         && isAvailable(product)
       );
 
-      setBrand(brandData || availableProducts[0]?.brand || null);
+      setBrand((brandData && isActive(brandData) ? brandData : null) || availableProducts[0]?.brand || null);
       setProducts(availableProducts.map(normalizeProduct));
       setLoading(false);
 
@@ -123,22 +164,18 @@ export const BrandDetailPage = () => {
           <div className="rounded-xl border border-white/10 bg-[#181818] p-8 text-center text-sm text-gray-400">Cette marque n’est plus disponible.</div>
         ) : (
           <>
-            <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#181818] shadow-2xl shadow-black/20">
-              <div className="flex flex-col gap-7 p-6 sm:p-8 md:flex-row md:items-center md:p-10">
-                <div className="flex h-28 w-full shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#101010] p-5 sm:h-36 md:w-52">
-                  {logoUrl ? <img src={logoUrl} alt={brandName} className="h-full w-full object-contain" /> : <span className="text-xl font-black uppercase text-white">{brandName}</span>}
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1b1b1b] via-[#151515] to-[#101010] p-6 shadow-2xl shadow-black/20 sm:p-9 md:p-11">
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#0d0d0d] p-4 shadow-[0_12px_36px_rgba(0,0,0,0.35)] sm:h-28 sm:w-28">
+                  {logoUrl ? <img src={logoUrl} alt={brandName} className="h-full w-full object-contain" /> : <span className="text-center text-sm font-black uppercase leading-tight text-white">{brandName}</span>}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#ff526d]">Marque partenaire</p>
-                  <h1 className="mt-2 text-3xl font-black uppercase tracking-tight text-white sm:text-5xl">{brandName}</h1>
-                  {brand.description && <p className="mt-4 max-w-3xl text-sm leading-6 text-gray-300 sm:text-base">{brand.description}</p>}
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-[#ff526d]">Découvrir la marque</p>
+                  <h1 className="mt-2 text-3xl font-black uppercase leading-tight tracking-tight text-white sm:text-5xl">{brandName}</h1>
+                  {brand.website && <a href={brand.website} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-gray-200 transition-colors hover:border-[#d90429] hover:bg-[#d90429]/10 hover:text-white">Site officiel <ExternalLink className="h-4 w-4" /></a>}
                 </div>
-                {brand.website && (
-                  <a href={brand.website} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-white/20 px-5 py-3 text-xs font-black uppercase tracking-wider text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429]">
-                    Site officiel <ExternalLink className="h-4 w-4" />
-                  </a>
-                )}
               </div>
+              {brand.description && <BrandDescription key={selectedBrandId} description={brand.description} />}
             </section>
 
             <section className="mt-10">

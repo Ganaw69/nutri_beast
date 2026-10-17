@@ -3,7 +3,7 @@ import { Check, Edit2, Image, Loader2, Plus, Trash2, Upload, X } from 'lucide-re
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 import { brandService, couvertureService, mediaUrl } from '../../services/api';
 
-const NAVIGATION_TYPES = ['brand', 'category', 'product', 'page', 'url'];
+const NAVIGATION_TYPES = ['brand', 'category', 'categorie', 'product', 'page', 'url'];
 const EMPTY_FORM = {
   name: '',
   title: '',
@@ -73,7 +73,7 @@ export const CouvertureManager = () => {
       title: couverture.title || '',
       subtitle: couverture.subtitle || '',
       buttonText: couverture.buttonText || '',
-      navigationType: NAVIGATION_TYPES.includes(couverture.navigationType) ? couverture.navigationType : 'url',
+      navigationType: NAVIGATION_TYPES.includes(couverture.navigationType ?? couverture.navigation_type) ? (couverture.navigationType ?? couverture.navigation_type) : 'url',
       navigation: couverture.navigation || '',
       index: couverture.index ?? 0,
       active: couverture.active ?? true,

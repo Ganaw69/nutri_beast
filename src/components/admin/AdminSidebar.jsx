@@ -64,7 +64,6 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile
       icon: Image,
       subItems: [
         { id: 'brands', label: 'Marques' },
-        { id: 'banner', label: 'Bannières' },
         { id: 'couvertures', label: 'Couvertures' },
       ],
     },
@@ -97,8 +96,8 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile
             <Dumbbell size={16} className="text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="font-black text-sm text-white leading-tight tracking-wide">NUTRIBEAST</span>
-            <span className="text-[10px] text-white/60 font-mono">Admin Console</span>
+            <span className="font-black text-base text-white leading-tight tracking-wide">NUTRIBEAST</span>
+            <span className="text-xs text-white/70 font-mono">Admin Console</span>
           </div>
         </div>
         {mobile && <button type="button" onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-[#222] hover:text-white" aria-label="Fermer le menu"><X size={18} /></button>}
@@ -121,7 +120,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile
                     toggleMenu(item.id);
                     if (!mobile) openDefaultChild(item);
                   }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-bold ${
+                  className={`w-full flex items-center justify-between px-3 py-3 rounded-lg transition-all duration-200 text-base font-bold ${
                     hasActiveChild && !isExpanded
                       ? 'bg-[#d90429]/10 text-white'
                       : 'text-white/85 hover:bg-[#222] hover:text-white'
@@ -141,7 +140,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile
                         type="button"
                         key={sub.id}
                         onClick={() => selectTab(sub.id)}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-all duration-200 text-xs font-semibold ${
+                        className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-semibold ${
                           activeTab === sub.id
                             ? 'bg-[#d90429] text-white font-bold'
                             : 'text-white/75 hover:text-white hover:bg-[#222]'
@@ -161,7 +160,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile
               type="button"
               key={item.id}
               onClick={() => selectTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sm font-bold ${
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-base font-bold ${
                 isDirectlyActive
                   ? 'bg-[#d90429] text-white'
                   : 'text-white/85 hover:bg-[#222] hover:text-white'

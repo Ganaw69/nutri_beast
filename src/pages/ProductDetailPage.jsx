@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, reviewService, flavorService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
+import { productService, reviewService, flavorService, brandService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
@@ -19,15 +19,34 @@ const getRelationId = (relation) => {
   return Number(String(relation || '').split('/').pop()) || null;
 };
 
+const displayBrandName = (brand) => {
+  const name = brand?.name || brand?.brandName || brand?.brand_name || brand?.label || brand?.title;
+  if (name) return name;
+  return String(brand?.slug || '')
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const isEnabledFlag = (value) => value === true || value === 1 || ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+const isAvailableProduct = (product) => product?.isActive !== false
+  && product?.brand?.isActive !== false
+  && product?.brand?.active !== false;
+
 const normalizeProduct = (p, flavorCatalog = []) => ({
   id: p.id,
   name: p.name,
   category: p.category?.name || '',
-  brand: p.brand?.name || '',
+  brand: displayBrandName(p.brand),
+  brandId: getRelationId(p.brand),
   price: parseFloat(p.price || 0),
-  originalPrice: p.isOnSale && p.salePrice ? parseFloat(p.price) : null,
+  originalPrice: (isEnabledFlag(p.isOnSale) || (Number(p.salePrice) > 0 && Number(p.salePrice) < Number(p.price))) && p.salePrice ? parseFloat(p.price) : null,
   image: resolveProductImage(p, null),
-  badge: p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : null,
+  isNew: isEnabledFlag(p.isNew ?? p.is_new),
+  isOnSale: isEnabledFlag(p.isOnSale) || (Number(p.salePrice) > 0 && Number(p.salePrice) < Number(p.price)),
+  salePrice: p.salePrice,
+  badge: isEnabledFlag(p.isFeatured) ? 'TOP SELLER' : null,
   inStock: (p.stock || 0) > 0,
   flavors: resolveProductFlavors(p, flavorCatalog),
   sizes: [],
@@ -42,7 +61,7 @@ const normalizeProduct = (p, flavorCatalog = []) => ({
 });
 
 export const ProductDetailPage = () => {
-  const { selectedProductId, addToCart, navigateTo, showToast, setSelectedShopCategoryIds } = useCart();
+  const { selectedProductId, addToCart, navigateTo, viewBrandDetails, showToast } = useCart();
 
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -65,6 +84,7 @@ export const ProductDetailPage = () => {
     if (!selectedProductId) return;
     let active = true;
     setLoading(true);
+    setProduct(null);
     setDescriptionExpanded(false);
 
     const loadProduct = async () => {
@@ -74,6 +94,11 @@ export const ProductDetailPage = () => {
         // the above-the-fold product information is already visible.
         const prod = await productService.getOne(selectedProductId, true);
         if (!active) return;
+        if (!isAvailableProduct(prod)) {
+          setProduct(null);
+          setLoading(false);
+          return;
+        }
 
         const immediateProduct = normalizeProduct(prod);
         setProduct(immediateProduct);
@@ -85,12 +110,15 @@ export const ProductDetailPage = () => {
         const relatedParams = { isActive: true, itemsPerPage: 8 };
         if (productCategoryId) relatedParams['category.id'] = productCategoryId;
 
-        const [imageData, relData, revData, flavorData] = await Promise.all([
+        const [imageData, relData, revData, flavorData, brandData] = await Promise.all([
           // The image API filters by `product` (the same query used in back office).
           productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-          productService.getAll(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
+          productService.getAllPages(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
           reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
           flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+          immediateProduct.brand || immediateProduct.brandId == null
+            ? Promise.resolve(null)
+            : brandService.getAllPages({}, true).catch(() => null),
         ]);
         if (!active) return;
 
@@ -115,7 +143,10 @@ export const ProductDetailPage = () => {
       });
       const productWithImages = { ...prod, productImages };
       const flavorCatalog = flavorData['hydra:member'] || [];
+      const brandItems = brandData?.['hydra:member'] || brandData?.member || brandData?.items || [];
+      const brandRecord = brandItems.find((item) => String(getRelationId(item)) === String(immediateProduct.brandId));
       const norm = normalizeProduct(productWithImages, flavorCatalog);
+      if (!norm.brand && brandRecord) norm.brand = displayBrandName(brandRecord);
       setProduct(norm);
       setActiveImage(
         resolveProductImage(productWithImages, norm.image) ||
@@ -125,7 +156,7 @@ export const ProductDetailPage = () => {
       // Related products are returned as lightweight records. Hydrate their
       // images exactly like product cards elsewhere in the storefront.
       const relatedWithImages = await hydrateProductsWithImages(
-        (relData['hydra:member'] || []).filter((item) => String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
+        (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
         true
       );
       if (!active) return;
@@ -198,9 +229,11 @@ export const ProductDetailPage = () => {
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Image */}
         <div className="relative flex items-center justify-center rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 sm:p-8 lg:col-span-7 xl:col-span-6">
-          {product.badge && (
-            <div className="absolute top-4 left-4 bg-[#d90429] text-white text-xs font-black px-3 py-1 rounded shadow-lg uppercase">
-              {product.badge}
+          {(product.badge || product.isNew || product.isOnSale) && (
+            <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+              {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
+              {product.isNew && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">NOUVEAU</span>}
+              {product.isOnSale && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">REMISE</span>}
             </div>
           )}
           <div className="w-full space-y-4">
@@ -245,8 +278,6 @@ export const ProductDetailPage = () => {
         <div className="space-y-6 lg:col-span-5 xl:col-span-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-xs font-bold text-[#d90429] tracking-widest uppercase font-heading">{product.brand}</span>
-              <span className="text-gray-600">•</span>
               <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
                 <Star className="w-4 h-4 fill-yellow-400" />
                 <span>{reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : '—'}</span>
@@ -263,6 +294,17 @@ export const ProductDetailPage = () => {
                 {product.inStock ? 'En Stock' : 'Rupture de Stock'}
               </span>
             </div>
+            {product.brand && <div className="mt-4 flex items-center gap-2 border-y border-[#303030] py-3.5 text-sm">
+              <span className="h-5 w-1 shrink-0 rounded-sm bg-[#d90429]" aria-hidden="true" />
+              <span className="font-medium text-gray-400">Brand:</span>
+              {product.brandId ? (
+                <button type="button" onClick={() => viewBrandDetails(product.brandId)} className="ml-2 font-bold text-white transition-colors hover:text-[#ff7186]">
+                  {product.brand}
+                </button>
+              ) : (
+                <span className="ml-2 font-bold text-white">{product.brand}</span>
+              )}
+            </div>}
           </div>
 
           {product.shortDescription && (
@@ -327,7 +369,7 @@ export const ProductDetailPage = () => {
 
           <button
             type="button"
-            onClick={() => { setSelectedShopCategoryIds([151]); navigateTo("shop"); }}
+            onClick={() => navigateTo("pack-builder")}
             className="group relative flex min-h-[205px] w-full items-center overflow-hidden rounded-2xl border border-[#ff2349]/80 bg-gradient-to-br from-[#4b0715] via-[#1c080e] to-[#080808] p-5 text-left shadow-xl shadow-[#d90429]/10 transition-all hover:-translate-y-1 hover:border-[#ff526d] hover:shadow-[#d90429]/20"
             aria-label="Découvrir les packs exclusifs"
           >

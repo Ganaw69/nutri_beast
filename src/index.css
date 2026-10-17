@@ -25,6 +25,12 @@
   color: #ffffff !important;
 }
 
+/* Keep admin controls and data readable across every back-office screen. */
+.admin-shell .text-xs { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+.admin-shell .text-sm { font-size: 1rem !important; line-height: 1.5rem !important; }
+.admin-shell .text-base { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+.admin-shell .text-lg { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+
 /* Apex Athletic Glowing Wave Background Effect */
 .red-glowing-wave {
   background: linear-gradient(
@@ -128,6 +134,14 @@
 @keyframes brandLogoMarqueeMove {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }
+}
+
+.collagen-promo-panel {
+  background-image:
+    radial-gradient(ellipse at 100% 0%, rgba(255, 35, 24, 0.92) 0%, rgba(196, 18, 24, 0.48) 24%, transparent 54%),
+    radial-gradient(ellipse at 0% 100%, rgba(255, 35, 24, 0.82) 0%, rgba(196, 18, 24, 0.35) 23%, transparent 52%),
+    repeating-linear-gradient(132deg, rgba(255, 255, 255, 0.055) 0 2px, transparent 2px 8px),
+    linear-gradient(145deg, #181818 4%, #070707 58%, #111 100%);
 }
 
 .brand-logo-marquee-track {

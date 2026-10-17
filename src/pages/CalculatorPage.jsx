@@ -31,13 +31,14 @@ export const CalculatorPage = () => {
     proteinGrams: 180,
     carbGrams: 320,
     fatGrams: 75,
+    fiberGrams: 40,
     proteinPct: 35,
     carbPct: 45,
     fatPct: 20,
   });
 
   useEffect(() => {
-    productService.getAll({ isActive: true, itemsPerPage: 100 }, true)
+    productService.getAllPages({ isActive: true }, true)
       // Recommendation cards only use fields included in the collection.
       // Avoid requesting a full product document for every catalogue entry.
       .then((data) => setCatalog((data?.["hydra:member"] || []).map(normalizeProduct)))
@@ -71,6 +72,7 @@ export const CalculatorPage = () => {
     const targetCalories = Math.max(1400, Math.round(bmr * activityFactor + calorieAdjustment));
     const proteinGrams = Math.round(weight * proteinPerKg);
     const fatGrams = Math.round(weight * fatPerKg);
+    const fiberGrams = Math.round(targetCalories * 14 / 1000);
     const remainingCalories = Math.max(0, targetCalories - (proteinGrams * 4) - (fatGrams * 9));
     const carbGrams = Math.round(remainingCalories / 4);
 
@@ -83,7 +85,7 @@ export const CalculatorPage = () => {
     const carbPct = Math.round((carbCalories / totalMacroCalories) * 100);
     const fatPct = Math.max(0, 100 - proteinPct - carbPct);
 
-    setResults({ targetCalories, proteinGrams, carbGrams, fatGrams, proteinPct, carbPct, fatPct });
+    setResults({ targetCalories, proteinGrams, carbGrams, fatGrams, fiberGrams, proteinPct, carbPct, fatPct });
   };
 
   const productsByNeed = useMemo(() => {
@@ -190,7 +192,7 @@ export const CalculatorPage = () => {
                   <span className="text-xs font-black text-gray-300 uppercase tracking-widest block mt-1">KCAL / DAY</span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2.5 w-full sm:w-auto">
+                <div className="grid grid-cols-2 gap-2.5 w-full sm:grid-cols-4 sm:w-auto">
                   <div className="bg-[#0e0e0e] border border-white/10 p-3.5 rounded-xs text-center min-w-[80px]">
                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">PROT</span>
                     <div className="font-black text-lg text-white mt-1">{results.proteinGrams}g</div>
@@ -202,6 +204,10 @@ export const CalculatorPage = () => {
                   <div className="bg-[#0e0e0e] border border-white/10 p-3.5 rounded-xs text-center min-w-[80px]">
                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">FAT</span>
                     <div className="font-black text-lg text-white mt-1">{results.fatGrams}g</div>
+                  </div>
+                  <div className="bg-[#0e0e0e] border border-white/10 p-3.5 rounded-xs text-center min-w-[80px]">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">FIBRE</span>
+                    <div className="font-black text-lg text-white mt-1">{results.fiberGrams}g</div>
                   </div>
                 </div>
               </div>

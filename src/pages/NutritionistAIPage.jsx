@@ -145,12 +145,12 @@ export const NutritionistAIPage = () => {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-heading font-black text-base sm:text-xl text-white uppercase truncate">NUTRITIONIST AI</h1>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusStyles[apiStatus]}`}>
+              <h1 className="font-heading font-black text-lg sm:text-2xl text-white uppercase truncate">NUTRITIONIST AI</h1>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded border ${statusStyles[apiStatus]}`}>
                 {statusLabels[apiStatus]}
               </span>
             </div>
-            <p className="text-xs text-gray-300">Conseils sur la nutrition sportive, les repas et les estimations nutritionnelles.</p>
+            <p className="text-sm text-gray-300">Conseils sur la nutrition sportive, les repas et les estimations nutritionnelles.</p>
           </div>
         </div>
 
@@ -165,14 +165,14 @@ export const NutritionistAIPage = () => {
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <span className="text-xs font-bold text-gray-400 shrink-0 font-heading">Sujets Fréquents:</span>
+        <span className="text-sm font-bold text-gray-300 shrink-0 font-heading">Sujets Fréquents:</span>
         {sampleQuestions.map((q, idx) => (
           <button
             key={idx}
             type="button"
             disabled={isTyping}
             onClick={() => handleSendMessage(q)}
-            className="bg-surface-low border border-white/10 hover:border-accent-gold text-gray-300 hover:text-white text-xs font-medium px-3 py-1.5 rounded-full shrink-0 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-surface-low border border-white/10 hover:border-accent-gold text-gray-300 hover:text-white text-sm font-medium px-4 py-2 rounded-full shrink-0 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           >
             {q}
           </button>
@@ -193,7 +193,7 @@ export const NutritionistAIPage = () => {
               )}
 
               <div
-                className={`max-w-[85%] sm:max-w-lg p-3 sm:p-4 rounded-2xl text-xs sm:text-sm ${
+                className={`max-w-[90%] sm:max-w-2xl p-4 sm:p-5 rounded-2xl text-sm sm:text-base ${
                   msg.sender === "user"
                     ? "bg-primary text-white rounded-br-none shadow-md shadow-primary/20 font-medium"
                     : "bg-surface-high border border-white/10 text-on-surface rounded-bl-none"
@@ -215,7 +215,7 @@ export const NutritionistAIPage = () => {
               <div className="w-8 h-8 rounded-full bg-accent-gold text-background flex items-center justify-center font-bold">
                 <Bot className="w-5 h-5" />
               </div>
-              <div className="bg-surface-high border border-white/10 px-4 py-3 rounded-2xl text-xs text-gray-400 flex items-center gap-1.5">
+              <div className="bg-surface-high border border-white/10 px-4 py-3 rounded-2xl text-sm text-gray-300 flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-accent-gold rounded-full animate-ping" />
                 <span>Nutritionist AI prepare your recommendation...</span>
               </div>
@@ -237,12 +237,12 @@ export const NutritionistAIPage = () => {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             disabled={isTyping}
-            className="w-full flex-1 bg-surface border border-white/10 rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent-gold"
+            className="w-full flex-1 bg-surface border border-white/10 rounded-xl px-4 py-3 text-sm sm:text-base text-white placeholder-gray-400 focus:outline-none focus:border-accent-gold"
           />
           <button
             type="submit"
             disabled={isTyping || !inputText.trim()}
-            className="w-full sm:w-auto bg-accent-gold hover:bg-yellow-400 text-background font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs"
+            className="w-full sm:w-auto bg-accent-gold hover:bg-yellow-400 text-background font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm"
           >
             <span>ENVOYER</span>
             <Send className="w-4 h-4" />

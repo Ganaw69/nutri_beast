@@ -1167,17 +1167,31 @@ const normalizeCoupon = (coupon) => {
   };
 };
 
+const normalizeBrand = (brand) => {
+  if (!brand || typeof brand !== 'object') return brand;
+  return {
+    ...brand,
+    isActive: normalizeBoolean(brand.isActive ?? brand.is_active ?? brand.active, true),
+  };
+};
+
 const normalizeProduct = (product) => {
   if (!product || typeof product !== 'object') return product;
   return {
     ...product,
+    brand: normalizeBrand(product.brand),
     isActive: normalizeBoolean(
       product.isActive ?? product.is_active ?? product.is_Active ?? product.active,
       true
     ),
+    isNew: normalizeBoolean(product.isNew ?? product.is_new, false),
+    isOnSale: normalizeBoolean(product.isOnSale ?? product.is_on_sale, false),
     packing: normalizeBoolean(product.packing, false),
   };
 };
+
+const isAvailableProduct = (product) => product?.isActive !== false
+  && product?.brand?.isActive !== false;
 
 /** Build a query string from a plain object (skips undefined/null) */
 function buildQuery(params = {}) {
@@ -1295,6 +1309,35 @@ const clearProductReadCache = () => {
 
 export const productService = {
   // Product reads are public: do not depend on an admin JWT being present.
+  async getNew(params = {}) {
+    const response = normalizeCollectionResponse(await apiFetch(`/products/new${buildQuery(params)}`, {}, false, true));
+    return {
+      ...response,
+      'hydra:member': response['hydra:member'].map(normalizeProduct),
+    };
+  },
+  async getNewPages() {
+    const [firstPage, flaggedProducts] = await Promise.all([
+      this.getNew({ page: 1, itemsPerPage: 100 }),
+      this.getAllPages({ isActive: true, isNew: true }, true),
+    ]);
+    const firstItems = firstPage['hydra:member'] || [];
+    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
+    let members = firstItems;
+    if (firstItems.length > 0 && firstItems.length < total) {
+      const pageCount = Math.ceil(total / firstItems.length);
+      const pages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
+        this.getNew({ page: index + 2, itemsPerPage: 100 })
+      ));
+      members = [...firstItems, ...pages.flatMap((page) => page['hydra:member'] || [])];
+    }
+    const byId = new Map();
+    [...members, ...(flaggedProducts['hydra:member'] || [])].forEach((product) => {
+      if (product.isNew && isAvailableProduct(product)) byId.set(String(product.id), product);
+    });
+    const availableNewProducts = [...byId.values()];
+    return { ...firstPage, 'hydra:member': availableNewProducts, 'hydra:totalItems': availableNewProducts.length };
+  },
   getAll(params = {}, skipAuth = true) {
     const path = `/products${buildQuery(params)}`;
     return readCachedProductData(
@@ -1315,27 +1358,23 @@ export const productService = {
     const firstItems = firstPage['hydra:member'] || [];
     const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
 
-    if (firstItems.length === 0 || firstItems.length >= total) {
-      return { ...firstPage, 'hydra:member': firstItems, 'hydra:totalItems': total };
+    let members = firstItems;
+    if (firstItems.length > 0 && firstItems.length < total) {
+      const pageCount = Math.ceil(total / firstItems.length);
+      // A failed later page must not hide the first valid results.
+      const remainingResults = await Promise.allSettled(
+        Array.from({ length: pageCount - 1 }, (_, index) =>
+          this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
+        )
+      );
+      const remainingPages = remainingResults
+        .filter((result) => result.status === 'fulfilled')
+        .map((result) => result.value);
+      members = [...firstItems, ...remainingPages.flatMap((data) => data['hydra:member'] || [])];
     }
 
-    const pageCount = Math.ceil(total / firstItems.length);
-    // A failed later page must not hide the first valid results. Some API
-    // deployments can reject a deep page while page 1 is perfectly usable.
-    const remainingResults = await Promise.allSettled(
-      Array.from({ length: pageCount - 1 }, (_, index) =>
-        this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
-      )
-    );
-    const remainingPages = remainingResults
-      .filter((result) => result.status === 'fulfilled')
-      .map((result) => result.value);
-
-    return {
-      ...firstPage,
-      'hydra:member': [...firstItems, ...remainingPages.flatMap((data) => data['hydra:member'] || [])],
-      'hydra:totalItems': firstItems.length + remainingPages.flatMap((data) => data['hydra:member'] || []).length,
-    };
+    if (normalizeBoolean(params.isActive, false)) members = members.filter(isAvailableProduct);
+    return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
   },
   getOne(id, skipAuth = true) {
     const path = `/products/${id}`;
@@ -1534,7 +1573,8 @@ export const categoryService = {
 export const brandService = {
   async getAll(params = {}, skipAuth = false) {
     const data = await apiFetch(`/brands${buildQuery(params)}`, {}, false, skipAuth);
-    return normalizeCollectionResponse(data);
+    const response = normalizeCollectionResponse(data);
+    return { ...response, 'hydra:member': response['hydra:member'].map(normalizeBrand) };
   },
   async getAllPages(params = {}, skipAuth = false) {
     const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth);
@@ -1566,7 +1606,7 @@ export const brandService = {
     return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
   },
   async getOne(id, skipAuth = false) {
-    return apiFetch(`/brands/${id}`, {}, false, skipAuth);
+    return normalizeBrand(await apiFetch(`/brands/${id}`, {}, false, skipAuth));
   },
   async create(data) {
     const isMultipart = data instanceof FormData;
@@ -1574,11 +1614,13 @@ export const brandService = {
   },
   async update(id, data) {
     const isMultipart = data instanceof FormData;
-    return apiFetch(`/brands/${id}`, {
+    const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
       ...(isMultipart ? {} : { headers: { 'Content-Type': 'application/merge-patch+json' } }),
       body: isMultipart ? data : JSON.stringify(data),
     }, isMultipart);
+    clearProductReadCache();
+    return result;
   },
   async delete(id) {
     return apiFetch(`/brands/${id}`, { method: 'DELETE' });

@@ -205,7 +205,7 @@ export const Navbar = () => {
           itemsPerPage: 7,
         }, true);
         const suggestions = (data["hydra:member"] || [])
-          .filter((product) => product?.isActive !== false && product?.active !== false)
+          .filter((product) => product?.isActive !== false && product?.active !== false && product?.brand?.isActive !== false && product?.brand?.active !== false)
           .filter((product) => normaliseSearchText(product.name).includes(normalisedQuery))
           .slice(0, 7);
         if (current) setSearchSuggestions(suggestions);
@@ -293,6 +293,12 @@ export const Navbar = () => {
   };
 
   const handleCategoryClick = async (categoryId) => {
+    if (categoryId === "new") {
+      navigateTo("new");
+      setMobileMenuOpen(false);
+      return;
+    }
+
     if (categoryId === "packs") {
       navigateTo("packs");
       setMobileMenuOpen(false);
@@ -371,7 +377,7 @@ export const Navbar = () => {
         navigateShop("accessoire");
         break;
       case "new":
-        navigateShop("");
+        navigateTo("new");
         setMobileMenuOpen(false);
         break;
       case "sale":
@@ -519,7 +525,7 @@ export const Navbar = () => {
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-24 w-auto sm:h-28 object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-200" 
+              className="h-[104px] w-auto sm:h-[120px] object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-200" 
             />
           </button>
 
@@ -626,7 +632,7 @@ export const Navbar = () => {
                   type="button"
                   aria-expanded={item.children ? openCategoryId === item.id : undefined}
                   onClick={() => handleRootCategoryClick(item)}
-                  className={`whitespace-nowrap rounded-md px-1.5 py-2 text-[11px] 2xl:px-2.5 2xl:text-sm font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
+                  className={`whitespace-nowrap rounded-md px-1.5 py-2 text-sm 2xl:px-2.5 2xl:text-[17px] font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
                 >
                   <CategoryNavLabel label={item.label} />{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
                 </button>
@@ -651,7 +657,7 @@ export const Navbar = () => {
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-48 w-auto max-w-none 2xl:h-56 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.24)] group-hover:scale-105 transition-transform duration-200" 
+              className="h-60 w-auto max-w-none 2xl:h-72 object-contain drop-shadow-[0_0_24px_rgba(255,255,255,0.3)] group-hover:scale-105 transition-transform duration-200" 
             />
           </button>
 
@@ -667,7 +673,7 @@ export const Navbar = () => {
                   type="button"
                   aria-expanded={item.children ? openCategoryId === item.id : undefined}
                   onClick={() => handleRootCategoryClick(item)}
-                  className={`whitespace-nowrap rounded-md px-1.5 py-2 text-[11px] 2xl:px-2.5 2xl:text-sm font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
+                  className={`whitespace-nowrap rounded-md px-1.5 py-2 text-sm 2xl:px-2.5 2xl:text-[17px] font-black uppercase tracking-wide transition-colors ${openCategoryId === item.id ? "bg-white/15 text-white" : "text-white hover:bg-white/10"}`}
                 >
                   <CategoryNavLabel label={item.label} />{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
                 </button>
@@ -701,7 +707,7 @@ export const Navbar = () => {
               key={item.id}
               type="button"
               onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === item.id) ? handleCategoryClick(item.id) : handleSectionClick(item.id)}
-              className="whitespace-nowrap rounded-md px-2 py-2 text-[11px] 2xl:px-3 2xl:text-sm font-black uppercase tracking-wide text-white transition-colors hover:bg-white/10"
+              className="whitespace-nowrap rounded-md px-2 py-2 text-sm 2xl:px-3 2xl:text-[17px] font-black uppercase tracking-wide text-white transition-colors hover:bg-white/10"
             >
               {item.label}
             </button>

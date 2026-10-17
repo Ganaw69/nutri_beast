@@ -684,11 +684,11 @@ export const ProductManager = () => {
                 <tr key={p.id} className="hover:bg-[#1a1a1a] transition-colors group">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg bg-[#222] border border-[#333] flex items-center justify-center overflow-hidden shrink-0">
+                      <div className="h-20 w-20 rounded-xl bg-[#111] border border-[#333] p-1.5 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
                         {(() => {
                           const primarySrc = resolveProductImage(p, null);
                           return primarySrc
-                            ? <img src={primarySrc} alt={`Image principale de ${p.name}`} className="w-full h-full object-cover" />
+                            ? <img src={primarySrc} alt={`Image principale de ${p.name}`} className="w-full h-full object-contain" />
                             : <Package size={18} className="text-gray-500" />;
                         })()}
                       </div>
@@ -1158,7 +1158,7 @@ export const ProductManager = () => {
                       const imageSrc = productImageUrl(image);
                       return (
                         <div key={getProductImageId(image) ?? index} className="relative aspect-square overflow-hidden rounded-lg border border-[#333] bg-[#111]">
-                          {imageSrc ? <img src={imageSrc} alt={`${detailsModal.product.name} ${index + 1}`} className="w-full h-full object-cover" /> : <Package className="absolute inset-0 m-auto text-gray-600" />}
+                          {imageSrc ? <img src={imageSrc} alt={`${detailsModal.product.name} ${index + 1}`} className="w-full h-full object-contain" /> : <Package className="absolute inset-0 m-auto text-gray-600" />}
                           {isPrimaryProductImage(image) && <span className="absolute left-2 top-2 rounded bg-[#d90429] px-2 py-1 text-[10px] font-bold uppercase text-white">Principale</span>}
                         </div>
                       );
