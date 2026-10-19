@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
-import { X, Trash2, Plus, Minus, ArrowRight, Tag, ShieldCheck, ShoppingCart } from "lucide-react";
+import { X, Trash2, Plus, Minus, ArrowRight, Tag, ShieldCheck, ShoppingCart, Package } from "lucide-react";
 
 export const CartDrawer = () => {
   const {
@@ -76,11 +76,11 @@ export const CartDrawer = () => {
                   key={`${item.id}-${item.selectedFlavor}-${item.selectedSize}-${index}`}
                   className="bg-surface border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row gap-4 sm:items-center group relative"
                 >
-                  <img
+                  {item.image ? <img
                     src={item.image}
                     alt={item.name}
                     className="w-20 h-20 sm:w-16 sm:h-16 object-contain bg-surface-dark p-2 rounded-lg self-center sm:self-auto"
-                  />
+                  /> : <div className="w-20 h-20 sm:w-16 sm:h-16 bg-surface-dark p-2 rounded-lg self-center sm:self-auto flex items-center justify-center"><Package className="h-8 w-8 text-gray-400" aria-hidden="true" /></div>}
                   <div className="flex-1 min-w-0 text-center sm:text-left">
                     <h4 className="font-heading font-bold text-sm text-white truncate">
                       {item.name}

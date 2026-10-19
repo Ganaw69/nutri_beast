@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, couvertureService, brandService, bannerService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
+import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
 import logo from "../assets/logo.png";
@@ -91,12 +91,11 @@ const parseCouvertureDestination = (couverture) => {
 };
 
 export const HomePage = () => {
-  const { navigateTo, setSearchQuery, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails } = useCart();
+  const { navigateTo, setSearchQuery, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails, viewPackDetails } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
-  const [promoBanner, setPromoBanner] = useState(null);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -107,8 +106,7 @@ export const HomePage = () => {
       productService.getAllPages({ isFeatured: true, isActive: true }, true).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-      bannerService.getActive().catch(() => ({ 'hydra:member': [] })),
-    ]).then(([prodData, couvertureData, brandData, bannerData]) => {
+    ]).then(([prodData, couvertureData, brandData]) => {
       if (!active) return;
       const prods = (prodData['hydra:member'] || []).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
@@ -121,10 +119,6 @@ export const HomePage = () => {
         .sort((first, second) => (first.index ?? 0) - (second.index ?? 0));
       setHeroCouvertures(couvertures);
       setBrands(collectionItems(brandData).filter((brand) => brand.active !== false && brand.isActive !== false));
-      const activeBanners = collectionItems(bannerData)
-        .filter((banner) => banner.isActive !== false && banner.enabled !== false)
-        .sort((first, second) => (first.position ?? 0) - (second.position ?? 0));
-      setPromoBanner(activeBanners[0] || null);
       setLoading(false);
 
       void hydrateProductsWithImages(prods).then((productsWithImages) => {
@@ -160,17 +154,8 @@ export const HomePage = () => {
     ? mediaUrl(`couvertures/${heroCouverture.image}`)
     : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
   const heroMobileBgImage = heroCouverture?.imageMobile ? mediaUrl(`couvertures/${heroCouverture.imageMobile}`) : heroBgImage;
-  const openPromoLink = () => {
-    const link = promoBanner?.buttonLink?.trim();
-    if (!link) {
-      navigateTo('shop');
-      return;
-    }
-    if (/^https?:\/\//i.test(link)) {
-      window.location.assign(link);
-      return;
-    }
-    navigateTo(link.replace(/^#?\/?/, '').split(/[/?#]/)[0] || 'shop');
+  const openCollagenPack = () => {
+    viewPackDetails(22);
   };
 
   const showNextHeroCouverture = () => {
@@ -246,7 +231,7 @@ export const HomePage = () => {
             </div>
             <button
               type="button"
-              onClick={openPromoLink}
+              onClick={openCollagenPack}
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-6 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_18px_rgba(217,4,41,0.4)] transition-transform hover:scale-105 hover:bg-[#b0021f]"
             >
               Je découvre <ArrowRight className="h-4 w-4" />
@@ -254,14 +239,14 @@ export const HomePage = () => {
           </div>
 
           <div className="flex items-center justify-center px-7 pb-8 md:px-10 md:py-8">
-            <div className="inline-flex max-w-full rotate-1 overflow-hidden rounded-xl border border-white/10 bg-transparent shadow-[0_0_24px_rgba(217,4,41,0.28)] transition-transform duration-500 hover:rotate-0">
+            <button type="button" onClick={openCollagenPack} aria-label="Voir le détail du pack Collagène et Biotine" className="inline-flex max-w-full rotate-1 cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-transparent shadow-[0_0_24px_rgba(217,4,41,0.28)] transition-transform duration-500 hover:rotate-0 focus:outline-none focus:ring-2 focus:ring-white">
               <img
                 src={collagenBiotinImage}
                 alt="Pack collagène et biotine pour la peau, les cheveux et les ongles"
                 className="block h-auto max-h-[360px] w-auto max-w-full object-contain"
                 loading="lazy"
               />
-            </div>
+            </button>
           </div>
         </div>
       </section>

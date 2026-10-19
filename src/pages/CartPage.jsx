@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
-import { X, Lock, ShoppingBag, ArrowRight } from "lucide-react";
+import { X, Lock, ShoppingBag, ArrowRight, Package } from "lucide-react";
 
 export const CartPage = () => {
   const { cart, removeFromCart, updateQuantity, navigateTo } = useCart();
@@ -59,11 +59,11 @@ export const CartPage = () => {
                   </button>
 
                   <div className="bg-white p-3 rounded-md w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0 relative shadow-md">
-                    <img
+                    {item.image ? <img
                       src={item.image}
                       alt={item.name}
                       className="w-full h-full object-contain mix-blend-multiply"
-                    />
+                    /> : <Package className="h-10 w-10 text-gray-400" aria-hidden="true" />}
                   </div>
 
                   <div className="flex-1 space-y-3 text-center sm:text-left w-full">

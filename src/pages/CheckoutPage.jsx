@@ -103,6 +103,8 @@ export const CheckoutPage = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const amount = (value) => value === undefined || value === null ? null : `${Number(value).toFixed(2)} TND`;
+
   const handleApplyCoupon = async () => {
     if (!promoInput.trim()) return;
     setCheckingCoupon(true);
@@ -184,7 +186,6 @@ export const CheckoutPage = () => {
     const order = orderConfirmation.order || {};
     const reference = order.reference || order.orderReference || order.id || "—";
     const orderedItems = Array.isArray(order.items) && order.items.length > 0 ? order.items : orderConfirmation.cartItems;
-    const amount = (value) => value === undefined || value === null ? null : `${Number(value).toFixed(2)} TND`;
 
     return (
       <div className="min-h-screen bg-[#131313] px-4 py-12 text-[#e5e2e1] sm:py-16">
