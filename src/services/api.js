@@ -719,6 +719,7 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
       ingredients: rawIngredients.map((ingredient) => {
         const product = demoStore.products.find((entry) => String(entry.id) === String(ingredient.productId)) || null;
         return {
+          ingredientName: ingredient.ingredientName || ingredient.name || product?.name || '',
           product,
           quantity: String(ingredient.quantity || ''),
           unit: String(ingredient.unit || 'g'),
@@ -746,6 +747,7 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
       metaDescription: body.metaDescription ?? item.metaDescription,
       ingredients: Array.isArray(body.ingredients)
         ? body.ingredients.map((ingredient) => ({
+            ingredientName: ingredient.ingredientName || ingredient.name || demoStore.products.find((entry) => String(entry.id) === String(ingredient.productId))?.name || '',
             product: demoStore.products.find((entry) => String(entry.id) === String(ingredient.productId)) || null,
             quantity: String(ingredient.quantity || ''),
             unit: String(ingredient.unit || 'g'),
@@ -1187,6 +1189,7 @@ const normalizeProduct = (product) => {
     isNew: normalizeBoolean(product.isNew ?? product.is_new, false),
     isOnSale: normalizeBoolean(product.isOnSale ?? product.is_on_sale, false),
     packing: normalizeBoolean(product.packing, false),
+    montantRemise: product.montantRemise ?? product.montant_remise ?? null,
   };
 };
 

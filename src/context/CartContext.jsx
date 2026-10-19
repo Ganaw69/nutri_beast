@@ -141,10 +141,16 @@ export const CartProvider = ({ children }) => {
       name: pack.name,
       image: pack.imageUrl || pack.image || null,
       price: Number(quote.finalPrice),
-      originalPrice: Number(quote.basePrice),
+      originalPrice: Number(quote.subtotal ?? quote.basePrice),
       quantity: Math.max(1, Number(quantity) || 1),
       customPack: {
         packId: pack.id,
+        subtotal: Number(quote.subtotal ?? quote.basePrice),
+        finalPrice: Number(quote.finalPrice),
+        total: quote.total != null ? Number(quote.total) : undefined,
+        discountAmount: quote.discountAmount != null
+          ? Number(quote.discountAmount)
+          : quote.items.reduce((sum, item) => sum + Number(item.discountAmount || 0), 0),
         items: quote.items.map((item) => ({
           productId: item.productId,
           name: item.productName || item.name,
@@ -152,9 +158,10 @@ export const CartProvider = ({ children }) => {
           variantSku: item.variantSku || null,
           quantity: Number(item.quantity),
           unitPrice: Number(item.unitPrice),
+          discountAmount: item.discountAmount != null ? Number(item.discountAmount) : undefined,
+          subtotal: item.subtotal != null ? Number(item.subtotal) : undefined,
+          total: item.total != null ? Number(item.total) : undefined,
         })),
-        discountAmount: Number(quote.discountAmount || 0),
-        discountPercentage: Number(quote.discountPercentage || 0),
       },
     };
     setCart((prevCart) => [...prevCart, cartItem]);

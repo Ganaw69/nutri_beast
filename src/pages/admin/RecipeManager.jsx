@@ -3,7 +3,13 @@ import { productService, recipeService, mediaUrl } from '../../services/api';
 import { Plus, Edit2, Trash2, Search, X, Loader2, Check, Upload, ChefHat, Clock, Flame } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
-const EMPTY_INGREDIENT = { name: '', quantity: '100', unit: 'g' };
+const EMPTY_INGREDIENT = { name: '', quantity: '100', unit: 'g', productId: null, productLabel: '' };
+const normalizeIngredientName = (name) => String(name || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+const existingIngredientProductId = (ingredient) => {
+  const reference = ingredient.productId ?? ingredient.product?.id ?? ingredient.product?.['@id'] ?? ingredient.product;
+  const match = String(reference ?? '').match(/(?:\/|^)(\d+)$/);
+  return match ? Number(match[1]) : null;
+};
 
 const EMPTY = {
   title: '',
@@ -83,9 +89,11 @@ export const RecipeManager = () => {
       metaTitle: recipe.metaTitle || '',
       metaDescription: recipe.metaDescription || '',
       ingredients: (recipe.ingredients || []).map((ing) => ({
-        name: ing.product?.name || ing.name || '',
+        name: ing.ingredientName || ing.name || ing.product?.name || '',
         quantity: String(ing.quantity ?? '100'),
         unit: ing.unit || 'g',
+        productId: existingIngredientProductId(ing),
+        productLabel: ing.product?.name || ing.ingredientName || ing.name || '',
       })),
     });
     setImageFile(null);
@@ -103,13 +111,10 @@ export const RecipeManager = () => {
     }
   };
 
-  const resolveIngredientProductId = (name) => {
-    const term = String(name || '').trim().toLowerCase();
+  const resolveIngredientProduct = (name) => {
+    const term = normalizeIngredientName(name);
     if (!term) return null;
-    const exact = products.find((product) => (product.name || '').trim().toLowerCase() === term);
-    if (exact) return exact.id;
-    const loose = products.find((product) => (product.name || '').trim().toLowerCase().includes(term));
-    return loose?.id || null;
+    return products.find((product) => normalizeIngredientName(product.name) === term) || null;
   };
 
   const handleSave = async (e) => {
@@ -118,22 +123,20 @@ export const RecipeManager = () => {
     setError('');
 
     try {
-      const ingredients = (form.ingredients || [])
-        .map((ing) => ({
-          productId: Number(resolveIngredientProductId(ing.name) || 0),
-          name: String(ing.name || '').trim(),
-          quantity: String(ing.quantity || '').trim(),
-          unit: String(ing.unit || 'g').trim() || 'g',
-        }));
-
-      const unresolved = ingredients.filter((ing) => !ing.productId && ing.name);
-      if (unresolved.length > 0) {
-        throw new Error(`Ingrédient introuvable: ${unresolved[0].name}. Crée-le comme produit ou choisis un nom existant.`);
-      }
-
-      const payloadIngredients = ingredients
-        .filter((ing) => ing.productId > 0 && ing.quantity)
-        .map(({ name, ...rest }) => rest);
+      const payloadIngredients = (form.ingredients || [])
+        .map((ing) => {
+          const ingredientName = String(ing.name || '').trim();
+          const matchedProduct = resolveIngredientProduct(ingredientName);
+          const keepsExistingMatch = ing.productId && normalizeIngredientName(ing.productLabel) === normalizeIngredientName(ingredientName);
+          const productId = matchedProduct?.id ?? (keepsExistingMatch ? ing.productId : null);
+          return {
+            ingredientName,
+            ...(productId != null && Number(productId) > 0 ? { productId: Number(productId) } : {}),
+            quantity: String(ing.quantity ?? '').trim(),
+            unit: String(ing.unit || 'g').trim() || 'g',
+          };
+        })
+        .filter((ingredient) => ingredient.ingredientName);
 
       if (payloadIngredients.length === 0) {
         throw new Error('Ajoute au moins un ingrédient.');
@@ -185,7 +188,7 @@ export const RecipeManager = () => {
     setForm((prev) => ({
       ...prev,
       ingredients: prev.ingredients.map((ingredient, i) => (
-        i === index ? { ...ingredient, [key]: value } : ingredient
+        i === index ? { ...ingredient, [key]: value, ...(key === 'name' ? { productId: null, productLabel: '' } : {}) } : ingredient
       )),
     }));
   };
@@ -321,6 +324,7 @@ export const RecipeManager = () => {
                           className={inputCls}
                           placeholder="Chicken, rice, whey..."
                         />
+                        {resolveIngredientProduct(ingredient.name) && <p className="mt-1 text-[11px] text-emerald-400">Produit catalogue : {resolveIngredientProduct(ingredient.name).name}</p>}
                       </div>
                       <div className="sm:col-span-3">
                         <label className={labelCls}>Quantity</label>

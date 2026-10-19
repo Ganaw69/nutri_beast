@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { productService, categoryService, brandService, goalService, flavorService, productImageUrl, resolveProductImage, iriToId, isPrimaryProductImage } from '../../services/api';
 import { buildCategoryTree, extractCategoryItems, getCategoryParentId } from '../../utils/categoryTree';
-import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, ToggleLeft, Copy, Upload, Eye } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, ToggleLeft, Copy, Upload, Eye, Pencil, Barcode, Tag, Weight, Layers, Target, CalendarDays, Star, Sparkles, Warehouse, BadgeCheck, Image as ImageIcon } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 const EMPTY_FORM = {
   name: '', barcode: '', shortDescription: '', description: '',
   price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', dateProduit: '',
   isActive: true, isFeatured: false, isNew: false, isBestSeller: false, isOnSale: false,
-  packing: false,
+  packing: false, montantRemise: '',
   category: '', brand: '', goals: [], flavors: [],
   productOptions: { type: '', sizes: [], colors: [], styles: [], capacityLiters: '' },
   metaTitle: '', metaDescription: '',
@@ -28,6 +28,10 @@ const relationToIri = (value, resource) => {
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || data?.items || [];
 const displayName = (item) => item?.name || item?.brandName || item?.brand_name || item?.nom || item?.title || item?.label || '';
 const displayBrandName = (brand) => {
+  if (typeof brand === 'string') {
+    const reference = brand.split('/').filter(Boolean).pop();
+    return reference ? reference.replace(/[-_]+/g, ' ') : '';
+  }
   const name = displayName(brand);
   if (name) return name;
   const identifier = brand?.slug || brand?.['@id'] || brand?.iri || brand?.id;
@@ -45,6 +49,43 @@ const displayRelationNames = (items = []) => (Array.isArray(items) ? items : [])
   .join(', ') || '—';
 const entityId = (item) => item?.id ?? iriToId(item?.['@id'] || item?.iri);
 const dateInputValue = (value) => (value ? String(value).slice(0, 10) : '');
+const safeDescriptionHtml = (html) => {
+  if (typeof DOMParser === 'undefined') return '';
+  const allowedTags = new Set(['P', 'BR', 'UL', 'OL', 'LI', 'STRONG', 'B', 'EM', 'I', 'U', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'A']);
+  const blockedTags = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH']);
+  const document = new DOMParser().parseFromString(String(html), 'text/html');
+  const cleanNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+    if (node.nodeType !== Node.ELEMENT_NODE) return document.createDocumentFragment();
+    if (blockedTags.has(node.tagName)) return document.createDocumentFragment();
+    const children = [...node.childNodes].map(cleanNode);
+    if (!allowedTags.has(node.tagName)) {
+      const fragment = document.createDocumentFragment();
+      children.forEach((child) => fragment.append(child));
+      return fragment;
+    }
+    const element = document.createElement(node.tagName.toLowerCase());
+    children.forEach((child) => element.append(child));
+    if (node.tagName === 'A') {
+      const href = node.getAttribute('href') || '';
+      if (/^(https?:|mailto:)/i.test(href)) {
+        element.setAttribute('href', href);
+        element.setAttribute('target', '_blank');
+        element.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+    return element;
+  };
+  const output = document.createElement('div');
+  [...document.body.childNodes].map(cleanNode).forEach((node) => output.append(node));
+  return output.innerHTML;
+};
+const descriptionIsHtml = (value) => /<\/?[a-z][^>]*>/i.test(String(value || ''));
+const formatAdminDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('fr-TN', { dateStyle: 'medium', timeStyle: 'short' });
+};
 const normalizeProductOptions = (options = {}) => ({
   type: options?.type || '',
   sizes: Array.isArray(options?.sizes) ? options.sizes : [],
@@ -164,6 +205,7 @@ export const ProductManager = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [detailsModal, setDetailsModal] = useState(null);
+  const [selectedDetailImage, setSelectedDetailImage] = useState(0);
 
   // Select options
   const [categories, setCategories] = useState([]);
@@ -388,7 +430,7 @@ export const ProductManager = () => {
       dateProduit: dateInputValue(p.dateProduit),
       isActive: p.isActive ?? true, isFeatured: p.isFeatured ?? false,
       isNew: p.isNew ?? false, isBestSeller: p.isBestSeller ?? false, isOnSale: p.isOnSale ?? false,
-      packing: p.packing ?? false,
+      packing: p.packing ?? false, montantRemise: p.montantRemise ?? p.montant_remise ?? '',
       category: relationToIri(p.category, 'categories'),
       brand: relationToIri(p.brand, 'brands'),
       goals: (p.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
@@ -407,7 +449,7 @@ export const ProductManager = () => {
         dateProduit: dateInputValue(fullProduct.dateProduit),
         isActive: fullProduct.isActive ?? true, isFeatured: fullProduct.isFeatured ?? false,
         isNew: fullProduct.isNew ?? false, isBestSeller: fullProduct.isBestSeller ?? false, isOnSale: fullProduct.isOnSale ?? false,
-        packing: fullProduct.packing ?? false,
+        packing: fullProduct.packing ?? false, montantRemise: fullProduct.montantRemise ?? fullProduct.montant_remise ?? '',
         category: relationToIri(fullProduct.category, 'categories'),
         brand: relationToIri(fullProduct.brand, 'brands'),
         goals: (fullProduct.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
@@ -440,6 +482,7 @@ export const ProductManager = () => {
         minimumStock: form.minimumStock !== '' ? parseInt(form.minimumStock) : undefined,
         weight: form.weight === '' ? null : String(form.weight).trim(),
         dateProduit: form.dateProduit ? `${form.dateProduit}T00:00:00+00:00` : null,
+        montantRemise: form.packing && form.montantRemise !== '' ? String(Number(form.montantRemise).toFixed(2)) : null,
         category: form.category || undefined,
         brand: form.brand || undefined,
         productOptions: form.productOptions,
@@ -591,10 +634,13 @@ export const ProductManager = () => {
   };
 
   const openDetails = async (product) => {
+    setSelectedDetailImage(0);
     setDetailsModal({ product, images: [], loading: true, error: '' });
     try {
       const fullProduct = await productService.getOne(product.id).catch(() => product);
       const images = await hydrateProductImages(fullProduct.id || product.id, fullProduct.productImages || product.productImages || []);
+      const primaryIndex = images.findIndex(isPrimaryProductImage);
+      setSelectedDetailImage(primaryIndex >= 0 ? primaryIndex : 0);
       setDetailsModal({ product: fullProduct, images, loading: false, error: '' });
     } catch (e) {
       setDetailsModal({ product, images: [], loading: false, error: e.message || 'Impossible de charger les détails.' });
@@ -1125,6 +1171,7 @@ export const ProductManager = () => {
                   </label>
                 ))}
               </div>
+              {form.packing && <div className="mt-4 max-w-xs"><label className={labelCls}>Montant de remise pack (DT)</label><input type="number" min="0" step="0.01" value={form.montantRemise} onChange={e => setForm(p => ({ ...p, montantRemise: e.target.value }))} className={inputCls} placeholder="0.00" /><p className="mt-1 text-[11px] text-gray-500">Remise fixe appliquée par le backend lors de la composition d’un pack.</p></div>}
             </form>
             <div className="p-5 border-t border-[#2a2a2a] flex gap-3 justify-end bg-[#1a1a1a] rounded-b-xl">
               <button onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
@@ -1137,71 +1184,84 @@ export const ProductManager = () => {
       )}
 
       {/* Product details modal */}
-      {detailsModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh]">
-            <div className="flex items-center justify-between p-6 border-b border-[#2a2a2a]">
-              <div>
-                <p className="text-[10px] font-bold tracking-widest text-[#d90429] uppercase">Détails du produit</p>
-                <h2 className="mt-1 text-xl font-bold text-white">{detailsModal.product.name}</h2>
-              </div>
-              <button onClick={() => setDetailsModal(null)} className="text-gray-400 hover:text-white p-1" aria-label="Fermer"><X size={20} /></button>
-            </div>
-            <div className="overflow-y-auto p-6">
-              {detailsModal.loading ? (
-                <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 text-[#d90429] animate-spin" /></div>
-              ) : (
-                <div className="space-y-6">
-                  {detailsModal.error && <div className="text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg p-3">{detailsModal.error}</div>}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {detailsModal.images.length > 0 ? detailsModal.images.map((image, index) => {
-                      const imageSrc = productImageUrl(image);
-                      return (
-                        <div key={getProductImageId(image) ?? index} className="relative aspect-square overflow-hidden rounded-lg border border-[#333] bg-[#111]">
-                          {imageSrc ? <img src={imageSrc} alt={`${detailsModal.product.name} ${index + 1}`} className="w-full h-full object-contain" /> : <Package className="absolute inset-0 m-auto text-gray-600" />}
-                          {isPrimaryProductImage(image) && <span className="absolute left-2 top-2 rounded bg-[#d90429] px-2 py-1 text-[10px] font-bold uppercase text-white">Principale</span>}
-                        </div>
-                      );
-                    }) : (
-                      <div className="col-span-full flex min-h-40 items-center justify-center rounded-lg border border-dashed border-[#333] text-sm text-gray-500">Aucune image disponible</div>
-                    )}
+      {detailsModal && (() => {
+        const product = detailsModal.product;
+        const gallery = detailsModal.images || [];
+        const activeImage = gallery[selectedDetailImage] || gallery[0];
+        const fallbackImage = !activeImage ? resolveProductImage(product, null) : null;
+        const stock = Math.max(0, Number(product.stock || 0));
+        const minimumStock = Math.max(0, Number(product.minimumStock || 0));
+        const stockPercent = Math.min(100, stock / Math.max(minimumStock * 2, stock, 1) * 100);
+        const lowStock = stock <= minimumStock;
+        const price = Number(product.price || 0);
+        const salePrice = Number(product.salePrice || 0);
+        const hasPromotion = salePrice > 0 && salePrice < price;
+        const finalPrice = hasPromotion ? salePrice : price;
+        const brand = displayBrandName(product.brand) || product.brandName || product.brand_name || '?';
+        const amount = product.montantRemise ?? product.montant_remise;
+        const headerFormat = [product.weight ? `${product.weight} kg` : '', product.productOptions?.type].filter(Boolean).join(' ? ');
+        const details = [
+          [Barcode, 'SKU', product.sku || '?'],
+          [Barcode, 'Code-barres', product.barcode || '?'],
+          [Layers, 'Cat?gorie', displayName(product.category) || '?'],
+          [BadgeCheck, 'Marque', brand],
+          [Weight, 'Poids', product.weight ? `${product.weight} kg` : '?'],
+          [Target, 'Objectifs', displayRelationNames(product.goals)],
+          [Sparkles, 'Saveurs', displayRelationNames(product.flavors)],
+          [CalendarDays, 'Date du produit', dateInputValue(product.dateProduit) || '?'],
+          [CalendarDays, 'Cr?? le', formatAdminDate(product.createdAt ?? product.created_at)],
+          [CalendarDays, 'Mis ? jour le', formatAdminDate(product.updatedAt ?? product.updated_at)],
+          [Star, 'Produit vedette', product.isFeatured ? 'Oui' : 'Non'],
+          [Star, 'Meilleure vente', product.isBestSeller ? 'Oui' : 'Non'],
+          [Sparkles, 'Nouveaut?', product.isNew ? 'Oui' : 'Non'],
+          [Package, 'Disponible dans un pack', product.packing ? 'Oui' : 'Non'],
+          [Tag, 'Remise pack', product.packing && amount != null ? `${Number(amount).toFixed(2)} DT` : '?'],
+          [CalendarDays, 'Expiration', dateInputValue(product.expirationDate || product.expiryDate) || '?'],
+        ];
+        const descriptionBlock = (title, value) => <section className="rounded-xl border border-[#29313D] bg-[#11151C] p-5">
+          <h3 className="border-l-2 border-[#FF382F] pl-3 text-sm font-bold uppercase tracking-wide text-[#FF665F]">{title}</h3>
+          {!value ? <p className="mt-3 text-sm text-gray-500">?</p> : descriptionIsHtml(value)
+            ? <div className="admin-product-description mt-4 text-sm leading-7 text-gray-300 [&_p]:mb-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-[#FF665F] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-[#29313D] [&_blockquote]:pl-4 [&_h2]:mb-2 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:mb-2 [&_h3]:font-bold" dangerouslySetInnerHTML={{ __html: safeDescriptionHtml(value) }} />
+            : <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-gray-300">{value}</p>}
+        </section>;
+        return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm sm:p-6">
+          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-[#29313D] bg-[#0B0D11] shadow-2xl shadow-black/60">
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#29313D] bg-[#11151C] px-5 py-4 sm:px-7">
+              <div className="min-w-0"><p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#FF5148]">D?tails du produit</p><h2 className="mt-1 truncate text-lg font-black text-white sm:text-2xl">{product.name}</h2><p className="mt-1 truncate text-sm text-gray-400">{brand}{headerFormat ? ` ? ${headerFormat}` : ''}</p></div>
+              <button onClick={() => setDetailsModal(null)} className="rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white" aria-label="Fermer"><X size={20} /></button>
+            </header>
+            <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7">
+              {detailsModal.loading ? <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-[#FF382F]" /></div> : <div className="space-y-6">
+                {detailsModal.error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-950/30 p-4 text-sm text-red-200">{detailsModal.error}</div>}
+                <section className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(220px,.75fr)]">
+                  <div className="relative flex min-h-[260px] items-center justify-center overflow-hidden rounded-xl border border-[#29313D] bg-[#11151C] p-5 sm:min-h-[360px]">
+                    {activeImage && productImageUrl(activeImage) ? <img src={productImageUrl(activeImage)} alt={product.name} className="max-h-[460px] w-full object-contain" /> : fallbackImage ? <img src={fallbackImage} alt={product.name} className="max-h-[460px] w-full object-contain" /> : <div className="flex flex-col items-center gap-3 text-gray-500"><ImageIcon size={42} /><span className="text-sm">Aucune image disponible</span></div>}
+                    {(activeImage ? isPrimaryProductImage(activeImage) : Boolean(fallbackImage)) && <span className="absolute left-4 top-4 rounded-md bg-[#FF382F] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">Principale</span>}
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 rounded-xl border border-[#2a2a2a] bg-[#111] p-5">
-                    {[
-                      ['SKU', detailsModal.product.sku || '—'],
-                      ['Code-barres', detailsModal.product.barcode || '—'],
-                      ['Prix', `${parseFloat(detailsModal.product.price || 0).toFixed(2)} TND`],
-                      ['Prix promo', detailsModal.product.salePrice ? `${parseFloat(detailsModal.product.salePrice).toFixed(2)} TND` : '—'],
-                      ['Stock', `${detailsModal.product.stock ?? 0} (minimum : ${detailsModal.product.minimumStock ?? 0})`],
-                      ['Poids', detailsModal.product.weight ? `${detailsModal.product.weight} kg` : '—'],
-                      ['Catégorie', displayName(detailsModal.product.category) || '—'],
-                      ['Marque', displayName(detailsModal.product.brand) || '—'],
-                      ['Objectifs', displayRelationNames(detailsModal.product.goals)],
-                      ['Saveurs', displayRelationNames(detailsModal.product.flavors)],
-                      ['Date du produit', dateInputValue(detailsModal.product.dateProduit) || '—'],
-                      ['Expiration', dateInputValue(detailsModal.product.expirationDate || detailsModal.product.expiryDate) || '—'],
-                      ['Statut', detailsModal.product.isActive ? 'Actif' : 'Inactif'],
-                      ['Best seller', detailsModal.product.isBestSeller ? 'Oui' : 'Non'],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{label}</p>
-                        <p className="mt-1 text-sm text-white break-words">{value}</p>
-                      </div>
-                    ))}
+                  <div className="flex gap-3 overflow-x-auto pb-1 lg:max-h-[360px] lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden">
+                    {gallery.map((image, index) => <button type="button" key={getProductImageId(image) ?? index} onClick={() => setSelectedDetailImage(index)} aria-label={`Afficher l?image ${index + 1}`} aria-pressed={selectedDetailImage === index} className={`relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border-2 bg-[#11151C] p-2 transition sm:h-28 sm:w-28 lg:h-24 lg:w-full ${selectedDetailImage === index ? 'border-[#FF382F]' : 'border-[#29313D] hover:border-gray-500'}`}><img src={productImageUrl(image)} alt={`${product.name} ${index + 1}`} className="h-full w-full object-contain" />{isPrimaryProductImage(image) && <span className="absolute bottom-1 left-1 rounded bg-black/80 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">Principale</span>}</button>)}
+                    {!gallery.length && <div className="flex h-24 min-w-24 items-center justify-center rounded-lg border border-dashed border-[#29313D] text-gray-600 lg:w-full"><ImageIcon /></div>}
                   </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    <div><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Description courte</p><p className="mt-1 text-sm leading-relaxed text-gray-300">{detailsModal.product.shortDescription || '—'}</p></div>
-                    <div><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Description</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-gray-300">{detailsModal.product.description || '—'}</p></div>
-                    <div><p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">SEO</p><p className="mt-1 text-sm text-gray-300">{detailsModal.product.metaTitle || '—'}</p><p className="mt-1 text-xs leading-relaxed text-gray-500">{detailsModal.product.metaDescription || ''}</p></div>
+                </section>
+                <section className="overflow-hidden rounded-xl border border-[#29313D] bg-[#11151C]">
+                  <div className="flex items-center justify-between border-b border-[#29313D] px-5 py-4"><h3 className="text-sm font-black uppercase tracking-wider text-[#FF665F]">Informations produit</h3><span className={`rounded-full px-3 py-1 text-xs font-bold ${product.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>{product.isActive ? 'Actif' : 'Inactif'}</span></div>
+                  <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+                    <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prix actuel</p><p className="mt-1 text-2xl font-black text-white">{finalPrice.toFixed(2)} TND</p></div>{hasPromotion && <div className="text-right"><p className="text-xs text-gray-500">Prix initial</p><p className="text-sm text-gray-500 line-through">{price.toFixed(2)} TND</p><p className="mt-1 text-xs font-bold text-emerald-400">Promotion active</p></div>}{product.packing && Number(amount) > 0 && <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-400">Remise pack : {Number(amount).toFixed(2)} DT</div>}</div></div>
+                    {details.map(([Icon, label, value]) => <div key={label} className="flex min-w-0 gap-3 rounded-lg border border-[#29313D] bg-[#0B0D11] p-3.5"><Icon size={17} className="mt-0.5 shrink-0 text-[#FF5148]" /><div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</p><p className="mt-1 break-words text-sm font-medium text-gray-200">{value}</p></div></div>)}
+                    <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Warehouse size={17} className="text-[#FF5148]" /><span className="text-xs font-bold uppercase tracking-wide text-gray-400">Stock disponible</span></div><span className={`text-sm font-bold ${lowStock ? 'text-amber-300' : 'text-emerald-400'}`}>{stock} en stock {lowStock ? '? Stock faible' : ''}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-[#29313D]"><div className={`h-full rounded-full transition-all ${lowStock ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${stockPercent}%` }} /></div><p className="mt-2 text-xs text-gray-500">Seuil minimum : {minimumStock}</p></div>
                   </div>
-                </div>
-              )}
-            </div>
+                </section>
+                <div className="grid gap-4 lg:grid-cols-2">{descriptionBlock('Description courte', product.shortDescription)}{descriptionBlock('Description d?taill?e', product.description)}</div>
+                <section className="rounded-xl border border-[#29313D] bg-[#11151C] p-5"><h3 className="border-l-2 border-[#FF382F] pl-3 text-sm font-bold uppercase tracking-wide text-[#FF665F]">Informations SEO</h3><p className="mt-4 text-sm font-semibold text-gray-200">{product.metaTitle || '?'}</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-400">{product.metaDescription || '?'}</p></section>
+              </div>}
+            </main>
+            <footer className="flex shrink-0 flex-col-reverse gap-3 border-t border-[#29313D] bg-[#11151C] px-4 py-4 sm:flex-row sm:justify-end sm:px-7">
+              <button type="button" onClick={() => setDetailsModal(null)} className="rounded-lg border border-[#29313D] px-5 py-2.5 text-sm font-bold text-gray-300 transition hover:border-gray-500 hover:text-white">Fermer</button>
+              <button type="button" disabled={detailsModal.loading} onClick={() => { const selectedProduct = detailsModal.product; setDetailsModal(null); openEdit(selectedProduct); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#FF382F] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#e52f28] disabled:cursor-not-allowed disabled:opacity-50"><Pencil size={16} /> Modifier le produit</button>
+            </footer>
           </div>
-        </div>
-      )}
+        </div>;
+      })()}
 
       {/* Stock Modal */}
       {stockModal && (

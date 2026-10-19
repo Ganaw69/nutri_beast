@@ -96,7 +96,7 @@ export const AdminSidebar = ({ activeTab, setActiveTab, onExit, onLogout, mobile
             <Dumbbell size={16} className="text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="font-black text-base text-white leading-tight tracking-wide">NUTRIBEAST</span>
+            <span className="font-black text-base text-white leading-tight tracking-wide">Protein Store Tunisia</span>
             <span className="text-xs text-white/70 font-mono">Admin Console</span>
           </div>
         </div>

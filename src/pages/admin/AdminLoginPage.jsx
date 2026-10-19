@@ -77,7 +77,7 @@ export const AdminLoginPage = ({ onLoginSuccess }) => {
               <h1 className="text-white font-black text-2xl tracking-widest uppercase mb-1"
                 style={{ fontFamily: 'Montserrat, sans-serif', letterSpacing: '0.2em' }}
               >
-                NutriBeast
+                Protein Store Tunisia
               </h1>
               <p className="text-[#d90429] text-xs font-bold tracking-[0.3em] uppercase">Admin Portal</p>
             </div>

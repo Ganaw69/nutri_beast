@@ -94,6 +94,7 @@ export const CartDrawer = () => {
                           ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                         : [item.selectedFlavor, item.selectedSize].filter(Boolean).join(" · ")}
                     </p>
+                    {item.itemType === "custom-pack" && item.customPack && <div className="mt-2 space-y-1 text-[10px] text-gray-400"><div className="flex justify-between"><span>Sous-total</span><span>{Number(item.customPack.subtotal ?? item.originalPrice ?? 0).toFixed(2)} TND</span></div><div className="flex justify-between text-emerald-400"><span>Remise pack</span><span>−{Number(item.customPack.discountAmount ?? 0).toFixed(2)} TND</span></div><div className="flex justify-between font-bold text-white"><span>Total du pack</span><span>{Number(item.customPack.finalPrice ?? item.price).toFixed(2)} TND</span></div></div>}
                     <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <span className="font-heading font-black text-sm text-white">
                         {item.price * item.quantity} <span className="text-xs text-primary font-bold">TND</span>
