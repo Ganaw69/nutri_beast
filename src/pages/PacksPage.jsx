@@ -18,6 +18,7 @@ const entityId = (value) => {
   if (typeof value === "object") return value.id ?? iriToId(value["@id"] || value.iri);
   return iriToId(value) ?? value;
 };
+const isHiddenPack = (pack) => String(entityId(pack)) === "1";
 const isActive = (record) => {
   const value = record?.isActive ?? record?.is_active ?? record?.active ?? record?.enabled ?? record?.published;
   if (value === undefined || value === null || value === "") return true;
@@ -89,8 +90,10 @@ export const PacksPage = () => {
     packService.getAll({ page: currentPage, itemsPerPage: PAGE_SIZE, isActive: true, "order[position]": "asc" }, true)
       .then((data) => {
         if (current) {
-          setPacks((data["hydra:member"] || []).filter((pack) => isAvailable(pack)));
-          setTotalPacks(Number(data["hydra:totalItems"] ?? data["hydra:member"]?.length ?? 0));
+          const visiblePacks = (data["hydra:member"] || []).filter((pack) => isAvailable(pack) && !isHiddenPack(pack));
+          const totalItems = Number(data["hydra:totalItems"] ?? data["hydra:member"]?.length ?? 0);
+          setPacks(visiblePacks);
+          setTotalPacks(Math.max(0, totalItems - (data["hydra:member"] || []).filter(isHiddenPack).length));
         }
       })
       .catch((err) => { if (current) setError(packReadError(err)); })
@@ -138,6 +141,7 @@ export const PackDetailPage = () => {
     setError("");
     const load = async () => {
       const packData = await packService.getOne(selectedPackId, true);
+      if (isHiddenPack(packData)) throw new Error("Ce pack n’est pas disponible actuellement.");
       if (!isAvailable(packData)) throw new Error("Ce pack n’est pas disponible actuellement.");
       let relations = packItems(packData);
       if (relations.length === 0) {

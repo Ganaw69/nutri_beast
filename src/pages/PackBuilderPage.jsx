@@ -18,6 +18,7 @@ const idOf = (value) => {
   if (typeof value === "object") return value.id ?? iriToId(value["@id"] || value.iri);
   return iriToId(value) ?? value;
 };
+const isHiddenPack = (pack) => String(idOf(pack)) === "1";
 const currency = (price) => `${Number(price || 0).toFixed(2)} TND`;
 const packImageUrl = (pack) => {
   const value = pack?.imageUrl || pack?.image;
@@ -121,6 +122,7 @@ export const PackBuilderPage = () => {
       const readyPacks = collectionItems(packData).filter((pack) =>
         String(pack.type || pack.packType || "").toUpperCase() === "CUSTOM"
         && idOf(pack) != null
+        && !isHiddenPack(pack)
         && isCustomizable(pack) && packIsCurrent(pack)
       );
       if (current) {

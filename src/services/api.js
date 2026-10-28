@@ -793,9 +793,11 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
 /** Resolve a media path to a full URL */
 export const mediaUrl = (path) => {
   if (!path) return null;
-  if (/^(https?:)?\/\//i.test(path)) return path;
-  if (path.startsWith('/uploads/')) return MEDIA_BASE ? `${MEDIA_BASE}${path}` : path;
-  return MEDIA_BASE ? `${MEDIA_BASE}/uploads/${path}` : `/uploads/${path}`;
+  const value = String(path).trim();
+  if (/^(https?:)?\/\//i.test(value)) return value;
+  const uploadsPath = value.match(/(?:^|\/)uploads\/(.+)$/i);
+  const normalizedPath = uploadsPath ? `/uploads/${uploadsPath[1]}` : `/uploads/${value.replace(/^\/+/, '')}`;
+  return MEDIA_BASE ? `${MEDIA_BASE}${normalizedPath}` : normalizedPath;
 };
 
 export const resolveBrandLogo = (brand) => {

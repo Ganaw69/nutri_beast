@@ -53,7 +53,9 @@ export const ShopPage = () => {
   useEffect(() => {
     Promise.all([
       categoryService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-      goalService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+      (sessionStorage.getItem('admin_jwt') || localStorage.getItem('admin_jwt')
+        ? goalService.getAll({ isActive: true, itemsPerPage: 100 })
+        : Promise.resolve({ 'hydra:member': [] })),
     ]).then(([catData, goalData]) => {
       setCategories(extractCategoryItems(catData));
       setGoals(goalData['hydra:member'] || []);
