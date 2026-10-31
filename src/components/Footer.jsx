@@ -128,6 +128,7 @@ export const Footer = () => {
         {/* Bottom Bar */}
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-gray-500 gap-4 font-bold tracking-wider">
           <p>© 2026 PROTEIN STORE TUNISIA. CONÇU POUR DÉPASSER.</p>
+          <p>CREATED BY HAIZ SOLUTIONS</p>
           <div className="uppercase text-gray-400">
             PAIEMENTS 100% SÉCURISÉS EN TUNISIE
           </div>

@@ -28,3 +28,19 @@ VITE_COACH_API_BASE_URL=https://coach-api.example.com
 ```
 
 `COACH_API_HOST`, `COACH_API_PORT`, and `OPENROUTER_API_KEY` belong only in the Coach API server's `.env`. Configure the API's `COACH_API_ALLOWED_ORIGIN` to allow the storefront origin.
+
+### Production environment
+
+Copy [`.env.example`](./.env.example) to `.env.production`, replace every
+`example.com` URL with the deployed HTTPS origin for that service, and run
+`npm run build`. The production build uses:
+
+- `VITE_API_BASE_URL` for catalogue, pricing, and checkout API requests.
+- `VITE_MEDIA_BASE_URL` for uploaded product media; it can match the main API
+  origin when uploads are served there.
+- `VITE_NUTRITION_API_BASE_URL` for the Nutritionist AI service.
+- `VITE_COACH_API_BASE_URL` for the Coach IA service.
+
+Only public URLs may use the `VITE_` prefix. Keep `OPENROUTER_API_KEY` and all
+other backend credentials in the corresponding server environment, never in
+this storefront repository or browser bundle.
