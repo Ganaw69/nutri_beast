@@ -26,6 +26,39 @@ const normalizeProduct = (p) => ({
 
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || (Array.isArray(data) ? data : []);
 
+const couvertureDesktopImage = (couverture) => (
+  couverture?.image
+  ?? couverture?.imageDesktop
+  ?? couverture?.image_desktop
+  ?? couverture?.desktopImage
+  ?? couverture?.desktop_image
+  ?? couverture?.imageUrl
+  ?? couverture?.image_url
+);
+
+const couvertureMobileImage = (couverture) => (
+  couverture?.image_mobile
+  ?? couverture?.imageMobile
+  ?? couverture?.mobileImage
+  ?? couverture?.mobile_image
+  ?? couverture?.imageMobileUrl
+  ?? couverture?.image_mobile_url
+);
+
+const resolveCouvertureImage = (image) => {
+  if (!image) return null;
+  if (typeof image === 'object') {
+    return resolveCouvertureImage(
+      image.url ?? image.path ?? image.contentUrl ?? image.file ?? image.filename ?? image.name
+    );
+  }
+
+  const value = String(image).trim();
+  if (!value) return null;
+  if (/^(https?:)?\/\//i.test(value) || value.startsWith('/')) return mediaUrl(value);
+  return mediaUrl(`couvertures/${value.replace(/^\/?(?:uploads\/)?couvertures\//, '')}`);
+};
+
 const idFromReference = (value) => {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'object') return idFromReference(value.id ?? value['@id'] ?? value.iri);
@@ -122,7 +155,10 @@ export const HomePage = () => {
       // Render it immediately; image enrichment is non-blocking below.
       setBestSellers(prods.map(normalizeProduct));
       const couvertures = (couvertureData['hydra:member'] || couvertureData.member || [])
-        .filter((couverture) => couverture.active !== false)
+        .filter((couverture) => (
+          (couverture.active ?? couverture.isActive ?? couverture.is_active ?? couverture.enabled ?? true) !== false
+          && resolveCouvertureImage(couvertureDesktopImage(couverture))
+        ))
         .sort((first, second) => (first.index ?? 0) - (second.index ?? 0));
       setHeroCouvertures(couvertures);
       setBrands(collectionItems(brandData).filter((brand) => brand.active !== false && brand.isActive !== false));
@@ -157,14 +193,11 @@ export const HomePage = () => {
   const heroCouverture = heroCouvertures[activeHeroIndex] || null;
   const heroDestination = parseCouvertureDestination(heroCouverture);
   const activeHeroBrandId = heroDestination?.type === 'brand' ? heroDestination.value : null;
-  const heroBgImage = heroCouverture?.image
-    ? mediaUrl(`couvertures/${heroCouverture.image}`)
-    : 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&q=80&w=1920';
-  const heroMobileBgImage = heroCouverture?.imageMobile ? mediaUrl(`couvertures/${heroCouverture.imageMobile}`) : heroBgImage;
+  const heroBgImage = resolveCouvertureImage(couvertureDesktopImage(heroCouverture));
+  const heroMobileBgImage = resolveCouvertureImage(couvertureMobileImage(heroCouverture));
   const openCollagenPack = () => {
     viewPackDetails(22);
   };
-
   const showNextHeroCouverture = () => {
     if (heroCouvertures.length < 2) return;
     setActiveHeroIndex((current) => (current + 1) % heroCouvertures.length);
@@ -203,11 +236,11 @@ export const HomePage = () => {
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading pb-20 space-y-16">
       {/* ================= 1. HERO SECTION ================= */}
-      <section className="relative isolate w-full overflow-hidden border-b border-white/10 bg-[#0c0c0c]">
+      {heroCouverture && heroBgImage && <section className="relative isolate w-full overflow-hidden border-b border-white/10 bg-[#0c0c0c]">
         <button type="button" onClick={openHeroCouverture} aria-disabled={!heroHasDestination} className="group block w-full text-left" aria-label={activeHeroBrandId ? `Découvrir les produits ${heroCouverture?.name || 'de cette marque'}` : heroCouverture?.name || 'Couverture'}>
           <picture className="block w-full">
-            <source media="(max-width: 639px)" srcSet={heroMobileBgImage} />
-            <img key={heroCouverture?.id || 'fallback'} src={heroBgImage} alt={heroCouverture?.name || 'Couverture'} fetchpriority="high" decoding="async" className="block h-[clamp(13rem,60vw,24rem)] w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.015] sm:h-[clamp(18rem,38vw,36rem)] lg:h-[clamp(22rem,34vw,40rem)]" />
+            {heroMobileBgImage && <source media="(max-width: 767px)" srcSet={heroMobileBgImage} />}
+            <img key={heroCouverture.id} src={heroBgImage} alt={heroCouverture.name || 'Couverture'} fetchpriority="high" decoding="async" className="block h-[clamp(13rem,60vw,24rem)] w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.015] sm:h-[clamp(18rem,38vw,36rem)] lg:h-[clamp(22rem,34vw,40rem)]" />
           </picture>
         </button>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
@@ -218,9 +251,9 @@ export const HomePage = () => {
         {heroCouvertures.length > 1 && <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 gap-2" aria-label="Navigation des couvertures">
           {heroCouvertures.map((couverture, index) => <button key={couverture.id} type="button" onClick={() => setActiveHeroIndex(index)} className={`h-1.5 rounded-full transition-all ${index === activeHeroIndex ? 'w-7 bg-white' : 'w-1.5 bg-white/60 hover:bg-white'}`} aria-label={`Afficher la couverture ${index + 1}`} />)}
         </div>}
-      </section>
+      </section>}
 
-      {/* ================= 2. ADMIN-MANAGED PROMO BANNER ================= */}
+      {/* ================= 2. PROMOTION PACK ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="collagen-promo-panel grid overflow-hidden rounded-2xl border border-[#d90429]/55 shadow-[0_0_10px_rgba(217,4,41,0.5),0_0_30px_rgba(217,4,41,0.25)] transition-shadow duration-300 hover:shadow-[0_0_13px_rgba(255,82,109,0.75),0_0_35px_rgba(217,4,41,0.35)] md:min-h-[340px] md:grid-cols-2">
           <div className="flex flex-col items-start justify-center px-7 py-9 text-white sm:px-10 md:px-12 md:py-12">
@@ -319,7 +352,7 @@ export const HomePage = () => {
             </div>
             <div className="pt-2">
               <button
-                onClick={() => navigateTo("coach-ia")}
+                onClick={() => navigateTo("coach-ia", { preserveScroll: true })}
                 className="bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-8 py-4 rounded-xs shadow-lg transition-colors"
               >
                 DÉMARRER LE QUIZ (2 MIN)
@@ -364,7 +397,7 @@ export const HomePage = () => {
             </div>
 
             <button
-              onClick={() => navigateTo("calculator")}
+              onClick={() => navigateTo("calculator", { preserveScroll: true })}
               className="inline-flex items-center gap-2 bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-6 py-3 rounded-xs transition-colors w-fit"
             >
               DEFINE MY GOAL <ArrowRight className="w-4 h-4" />

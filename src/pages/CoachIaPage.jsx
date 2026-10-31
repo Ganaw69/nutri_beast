@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { coachApi } from "../services/coachApi";
 import { findCoachProductRecommendation } from "../services/coachProductMatcher";
+import { useCart } from "../context/CartContext";
 
 const COACH_USER_ID_STORAGE_KEY = "nutri_beast_coach_user_id";
 
@@ -32,11 +33,13 @@ const initialMessages = () => [
 ];
 
 export const CoachIaPage = () => {
+  const { viewProductDetails } = useCart();
   const [messages, setMessages] = useState(initialMessages);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [apiStatus, setApiStatus] = useState("checking");
   const messagesContainerRef = useRef(null);
+  const newestMessageRef = useRef(null);
   const userIdRef = useRef(getCoachUserId());
   const requestControllerRef = useRef(null);
 
@@ -51,9 +54,12 @@ export const CoachIaPage = () => {
 
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    }
+    const newestMessage = newestMessageRef.current;
+    if (!container || !newestMessage) return;
+
+    const { top, bottom } = container.getBoundingClientRect();
+    if (bottom <= 0 || top >= window.innerHeight) return;
+    newestMessage.scrollIntoView({ behavior: "smooth", block: "nearest", container: "nearest" });
   }, [messages, isTyping]);
 
   useEffect(() => () => requestControllerRef.current?.abort(), []);
@@ -178,10 +184,11 @@ export const CoachIaPage = () => {
       </div>
 
       <div className="bg-surface border border-white/10 rounded-2xl h-[min(480px,calc(100dvh-18rem))] min-h-[360px] flex flex-col justify-between overflow-hidden shadow-2xl">
-        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
-          {messages.map((message) => (
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
+          {messages.map((message, index) => (
             <div
               key={message.id}
+              ref={index === messages.length - 1 && !isTyping ? newestMessageRef : null}
               className={`flex gap-3 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               {message.sender === "ai" && (
@@ -201,6 +208,10 @@ export const CoachIaPage = () => {
                 {message.type === "product-recommendation" && message.product && (
                   <a
                     href={message.product.href}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      viewProductDetails(message.product.id);
+                    }}
                     className="mt-3 flex items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
                     aria-label={`Voir le produit ${message.product.name}`}
                   >
@@ -234,7 +245,7 @@ export const CoachIaPage = () => {
           ))}
 
           {isTyping && (
-            <div className="flex gap-3 justify-start items-center">
+            <div ref={newestMessageRef} className="flex gap-3 justify-start items-center">
               <div className="w-8 h-8 rounded-full bg-accent-gold text-background flex items-center justify-center font-bold">
                 <Bot className="w-5 h-5" />
               </div>
@@ -264,10 +275,10 @@ export const CoachIaPage = () => {
           <button
             type="submit"
             disabled={!inputText.trim() || isTyping}
-            className="w-full sm:w-auto bg-accent-gold hover:bg-yellow-400 text-background font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full sm:w-auto bg-[#ff003b] hover:bg-[#e00034] text-white font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span>ENVOYER</span>
-            <Send className="w-4 h-4" />
+            <Send className="w-4 h-4 text-white" />
           </button>
         </form>
       </div>

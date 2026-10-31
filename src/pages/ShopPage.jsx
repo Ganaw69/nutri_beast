@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useCart } from "../context/CartContext";
+import { useAdmin } from "../context/AdminContext";
 import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, Loader2 } from "lucide-react";
@@ -12,6 +13,38 @@ const normaliseText = (value) => String(value || "")
   .replace(/[\u0300-\u036f]/g, "")
   .toLocaleLowerCase("fr");
 
+const isPackOrBundleCategory = (category) => /\b(pack|packs|bundle|bundles|lot|lots)\b/i.test(
+  normaliseText(category?.name ?? category?.label)
+);
+
+const withoutPackOrBundleCategories = (categories) => categories
+  .filter((category) => !isPackOrBundleCategory(category))
+  .map((category) => ({
+    ...category,
+    children: withoutPackOrBundleCategories(category.children || []),
+  }));
+
+const QUICK_CATEGORY_FILTERS = [
+  { key: "snacks", label: "Snacks & Drinks", fallbackId: 150, matches: /snack|drink|boisson/i },
+  { key: "women", label: "Santé de la femme", fallbackId: 153, matches: /sant[eé].*femme|femme/i },
+  { key: "accessories", label: "Accessoires", fallbackId: 154, matches: /accessoire/i },
+];
+
+const normaliseFilterSlug = (value) => normaliseText(value)
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "");
+
+const quickFilterKeyFromCategory = (category) => ({
+  "snacks-drinks": "snacks",
+  snacks: "snacks",
+  drinks: "snacks",
+  accessoires: "accessories",
+  accessories: "accessories",
+  "sante-de-la-femme": "women",
+  "sante-femme": "women",
+  women: "women",
+}[normaliseFilterSlug(category)] || null);
+
 const getRelatedId = (value) => {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "object") {
@@ -22,12 +55,15 @@ const getRelatedId = (value) => {
 };
 
 export const ShopPage = () => {
-  const { searchQuery, selectedShopCategoryIds, setSelectedShopCategoryIds } = useCart();
+  const { searchQuery, selectedShopCategoryIds, setSelectedShopCategoryIds, shopRouteFilters } = useCart();
+  const { categoryNavigation } = useAdmin();
 
   // API data
   const [catalogueProducts, setCatalogueProducts] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [mainCategoryIds, setMainCategoryIds] = useState([]);
+  const [mainCategoriesLoaded, setMainCategoriesLoaded] = useState(false);
   const [goals, setGoals] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -37,16 +73,35 @@ export const ShopPage = () => {
   // Filters
   const [selectedBrandIds, setSelectedBrandIds] = useState([]);
   const [selectedGoalIds, setSelectedGoalIds] = useState([]);
+  const [selectedQuickCategoryKeys, setSelectedQuickCategoryKeys] = useState([]);
+  const [showNewOnly, setShowNewOnly] = useState(false);
   const [priceMax, setPriceMax] = useState(500);
   const [sortBy, setSortBy] = useState("recent");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(9);
+  const [itemsPerPage, setItemsPerPage] = useState(9);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileExpandedCategoryIds, setMobileExpandedCategoryIds] = useState([]);
   const productRequestVersionRef = useRef(0);
   const imageRequestVersionRef = useRef(0);
   const productGridRef = useRef(null);
-  const categoryTree = buildCategoryTree(categories.filter(cat => cat.isActive !== false));
+  const categoryTree = useMemo(() => {
+    if (!mainCategoriesLoaded) return [];
+    const fullTree = buildCategoryTree(categories.filter((category) => category.isActive !== false));
+    const rootsById = new Map(fullTree.map((category) => [String(category.id), category]));
+    const hiddenIds = new Set((categoryNavigation?.hiddenTopLevelCategoryIds || []).map(String));
+    const requestedRootIds = mainCategoryIds.map(String);
+    const topLevelCategories = requestedRootIds.map((id) => rootsById.get(id)).filter(Boolean);
+    const visibleCategories = withoutPackOrBundleCategories(topLevelCategories).filter((category) => (
+      !hiddenIds.has(String(category.id)) && !isPackOrBundleCategory(category)
+    ));
+    const visibleById = new Map(visibleCategories.map((category) => [String(category.id), category]));
+    const orderedIds = (categoryNavigation?.topLevelOrder || []).map(String);
+
+    return [
+      ...orderedIds.map((id) => visibleById.get(id)).filter(Boolean),
+      ...visibleCategories.filter((category) => !orderedIds.includes(String(category.id))),
+    ];
+  }, [categories, categoryNavigation, mainCategoryIds, mainCategoriesLoaded]);
   const brands = useMemo(() => {
     const seen = new Set();
     return catalogueProducts
@@ -58,26 +113,49 @@ export const ShopPage = () => {
         return true;
       });
   }, [catalogueProducts]);
+  const quickCategoryFilters = useMemo(() => QUICK_CATEGORY_FILTERS.map((filter) => {
+    const category = categories.find((item) => String(item.id) === String(filter.fallbackId))
+      || categories.find((item) => filter.matches.test(normaliseText(item.name)));
+    return {
+      ...filter,
+      categoryId: category?.id ?? filter.fallbackId,
+      categoryName: normaliseText(category?.name),
+    };
+  }), [categories]);
+
+  useEffect(() => {
+    const quickFilterKey = quickFilterKeyFromCategory(shopRouteFilters?.category);
+    const filter = normaliseFilterSlug(shopRouteFilters?.filter);
+    const isNewFilter = ["new", "nouveaute", "nouveautes"].includes(filter);
+
+    setSelectedQuickCategoryKeys(quickFilterKey ? [quickFilterKey] : []);
+    setShowNewOnly(isNewFilter);
+    if (quickFilterKey || isNewFilter) setSelectedShopCategoryIds([]);
+  }, [shopRouteFilters?.category, shopRouteFilters?.filter, setSelectedShopCategoryIds]);
 
   // Load filter options once
   useEffect(() => {
     Promise.all([
       categoryService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
       goalService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([catData, goalData]) => {
+      categoryService.getMain(true).catch(() => ({ 'hydra:member': [] })),
+    ]).then(([catData, goalData, mainCategoryData]) => {
       setCategories(extractCategoryItems(catData));
       setGoals(goalData['hydra:member'] || []);
+      setMainCategoryIds(extractCategoryItems(mainCategoryData).map((category) => category.id));
+      setMainCategoriesLoaded(true);
     });
   }, []);
 
   const fetchProducts = useCallback(async () => {
     const requestVersion = ++productRequestVersionRef.current;
+    const fetchCollection = showNewOnly ? productService.getNew : productService.getAll;
     setLoading(true);
     setCatalogueComplete(false);
     setError(null);
     try {
       if (requestVersion !== productRequestVersionRef.current) return;
-      const data = await productService.getAll({ isActive: true }, true);
+      const data = await fetchCollection({ isActive: true, page: 1, itemsPerPage }, true);
       if (requestVersion !== productRequestVersionRef.current) return;
       const firstPage = data['hydra:member'] || [];
       const total = Number(data['hydra:totalItems'] ?? firstPage.length);
@@ -94,8 +172,8 @@ export const ShopPage = () => {
 
       const remainingPages = await Promise.allSettled(
         Array.from({ length: pageCount - 1 }, (_, index) =>
-          productService.getAll(
-            { isActive: true, page: index + 2 },
+          fetchCollection(
+            { isActive: true, page: index + 2, itemsPerPage },
             true
           )
         )
@@ -114,28 +192,39 @@ export const ShopPage = () => {
     } finally {
       if (requestVersion === productRequestVersionRef.current) setLoading(false);
     }
-  }, []);
+  }, [itemsPerPage, showNewOnly]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, priceMax, sortBy, itemsPerPage]);
+  }, [searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, selectedQuickCategoryKeys, showNewOnly, priceMax, sortBy, itemsPerPage]);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
   const filteredProducts = useMemo(() => {
-    const expandedCategoryIds = collectExpandedCategoryIds(selectedShopCategoryIds, categories);
+    const selectedQuickFilters = quickCategoryFilters.filter((filter) => selectedQuickCategoryKeys.includes(filter.key));
+    const selectedCategoryIds = [
+      ...selectedShopCategoryIds,
+      ...selectedQuickFilters.map((filter) => filter.categoryId),
+    ];
+    const expandedCategoryIds = collectExpandedCategoryIds(selectedCategoryIds, categories);
     const categoryFilterIds = expandedCategoryIds.length > 0
       ? expandedCategoryIds
-      : selectedShopCategoryIds.filter((id) => id !== null && id !== undefined && id !== '');
-    const allowedCategoryIds = new Set(categoryFilterIds.map(String));
+      : selectedCategoryIds.filter((id) => id !== null && id !== undefined && id !== '');
+    const allowedCategoryIds = new Set([
+      ...categoryFilterIds.map(String),
+      ...selectedQuickFilters.map((filter) => String(filter.categoryId)),
+    ]);
     const allowedCategoryNames = new Set(
       categories
         .filter((category) => allowedCategoryIds.has(String(category.id)))
         .map((category) => normaliseText(category.name))
         .filter(Boolean)
     );
+    selectedQuickFilters.forEach((filter) => {
+      if (filter.categoryName) allowedCategoryNames.add(filter.categoryName);
+    });
     const allowedBrandIds = new Set(selectedBrandIds.map(String));
     const allowedGoalIds = new Set(selectedGoalIds.map(String));
     const searchNeedle = normaliseText(searchQuery.trim());
@@ -167,7 +256,7 @@ export const ShopPage = () => {
         if (sortBy === "featured") return Number(first.position ?? 0) - Number(second.position ?? 0);
         return new Date(second.createdAt || 0) - new Date(first.createdAt || 0);
       });
-  }, [catalogueProducts, categories, searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, priceMax, sortBy]);
+  }, [catalogueProducts, categories, quickCategoryFilters, searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, selectedQuickCategoryKeys, showNewOnly, priceMax, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage));
   const pagedProducts = useMemo(() => {
@@ -305,7 +394,7 @@ export const ShopPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* ================= LEFT SIDEBAR ================= */}
-          <aside className="lg:col-span-3 pr-0 lg:pr-4">
+          <aside className="lg:col-span-3 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-6rem)] lg:overflow-y-auto pr-0 lg:pr-4">
             <button
               type="button"
               onClick={() => setMobileFiltersOpen((open) => !open)}
@@ -321,16 +410,56 @@ export const ShopPage = () => {
               <h2 className="font-black text-xs uppercase tracking-widest text-white">FILTRER PAR</h2>
             </div>
 
+            <div className="space-y-3">
+              <h3 className="font-bold text-[11px] text-gray-400 uppercase tracking-widest">ACCÈS RAPIDES</h3>
+              <div className="space-y-2 text-xs font-semibold text-gray-300">
+                {quickCategoryFilters.map((filter) => {
+                  const isChecked = selectedQuickCategoryKeys.includes(filter.key);
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setSelectedQuickCategoryKeys((previous) => previous.includes(filter.key)
+                        ? previous.filter((key) => key !== filter.key)
+                        : [...previous, filter.key])}
+                      className="flex w-full items-center gap-3 text-left transition-colors hover:text-white"
+                      aria-pressed={isChecked}
+                    >
+                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border ${isChecked ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/30 bg-[#1c1b1b]"}`}>
+                        {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                      </span>
+                      <span>{filter.label}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setShowNewOnly((current) => !current)}
+                  className="flex w-full items-center gap-3 text-left transition-colors hover:text-white"
+                  aria-pressed={showNewOnly}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-xs border ${showNewOnly ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/30 bg-[#1c1b1b]"}`}>
+                    {showNewOnly && <Check className="h-3 w-3 stroke-[3]" />}
+                  </span>
+                  <span>Nouveautés</span>
+                </button>
+              </div>
+            </div>
+
             {/* CATÉGORIE */}
             {categoryTree.length > 0 && (
               <div className="space-y-3">
                 <h3 className="font-bold text-[11px] text-gray-400 uppercase tracking-widest">CATÉGORIE</h3>
                 <div className="hidden lg:block">{renderCategoryTree(categoryTree)}</div>
                 <div className="lg:hidden">{renderMobileCategoryTree(categoryTree)}</div>
-                {selectedShopCategoryIds.length > 0 && (
+                {(selectedShopCategoryIds.length > 0 || selectedQuickCategoryKeys.length > 0 || showNewOnly) && (
                   <button
                     type="button"
-                    onClick={() => setSelectedShopCategoryIds([])}
+                    onClick={() => {
+                      setSelectedShopCategoryIds([]);
+                      setSelectedQuickCategoryKeys([]);
+                      setShowNewOnly(false);
+                    }}
                     className="text-[11px] font-bold uppercase tracking-widest text-[#d90429] hover:text-[#ff4d6d]"
                   >
                     Réinitialiser la catégorie
@@ -402,7 +531,17 @@ export const ShopPage = () => {
                 {loading ? 'Chargement...' : <><strong className="text-white">{totalCount}</strong> produit{totalCount !== 1 ? 's' : ''}</>}
               </span>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">9 produits par page</span>
+                <label className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                  <span>Produits par page</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(event) => setItemsPerPage(Number(event.target.value))}
+                    aria-label="Produits par page"
+                    className="bg-[#1c1b1b] border border-white/10 text-white text-xs font-bold px-3 py-2 rounded-xs focus:outline-none focus:border-[#d90429] cursor-pointer"
+                  >
+                    {[9, 15, 21].map((count) => <option key={count} value={count}>{count}</option>)}
+                  </select>
+                </label>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
                   className="bg-[#1c1b1b] border border-white/10 text-white text-xs font-bold px-4 py-2 rounded-xs focus:outline-none focus:border-[#d90429] cursor-pointer"
                 >

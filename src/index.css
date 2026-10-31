@@ -78,26 +78,6 @@
   transform: scale(1.3);
 }
 
-/* Apex Athletic Glowing Wave Background Effect */
-.red-glowing-wave {
-  background: linear-gradient(
-    90deg,
-    rgba(19, 19, 19, 0) 0%,
-    rgba(217, 4, 41, 0.15) 35%,
-    rgba(217, 4, 41, 0.35) 50%,
-    rgba(217, 4, 41, 0.15) 65%,
-    rgba(19, 19, 19, 0) 100%
-  );
-  background-size: 200% 100%;
-  animation: wavePulse 6s ease-in-out infinite;
-}
-
-@keyframes wavePulse {
-  0% { background-position: 100% 0%; }
-  50% { background-position: 0% 0%; }
-  100% { background-position: 100% 0%; }
-}
-
 /* Navbar Red Glowing Wave & Shining Line Animations (Left to Right) */
 @keyframes navbarWaveMove {
   0% {

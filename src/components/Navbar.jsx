@@ -32,12 +32,6 @@ const normaliseSearchText = (value) => String(value || "")
   .replace(/[\u0300-\u036f]/g, "")
   .toLocaleLowerCase("fr");
 
-const QUICK_CATEGORY_IDS = {
-  snacks: 150,
-  accessories: 154,
-  women: 153,
-};
-
 const ProductSearchSuggestions = ({ products, loading, onSelect, visible }) => {
   if (!visible) return null;
 
@@ -261,6 +255,24 @@ export const Navbar = () => {
     [quickAccessStrip]
   );
 
+  const mobileQuickLinks = useMemo(() => {
+    const categoryNames = navigationCategories.map((category) => normaliseSearchText(category.label));
+    const categoryAliases = {
+      snacks: ["snack", "drink", "boisson"],
+      packs: ["pack"],
+      new: ["nouveaute"],
+      women: ["femme"],
+      accessories: ["accessoire"],
+      recipes: ["recette"],
+      blog: ["blog"],
+    };
+
+    return secondaryDesktopLinks.filter((link) => {
+      const aliases = categoryAliases[link.id] || [normaliseSearchText(link.label)];
+      return !categoryNames.some((categoryName) => aliases.some((alias) => categoryName.includes(alias)));
+    });
+  }, [navigationCategories, secondaryDesktopLinks]);
+
   const navigateShop = (query = "") => {
     setSelectedShopCategoryIds([]);
     setSearchQuery(query);
@@ -273,6 +285,14 @@ export const Navbar = () => {
     setSearchQuery("");
     setSelectedShopCategoryIds([categoryId]);
     navigateTo("shop");
+    setMobileMenuOpen(false);
+    setShowSearchModal(false);
+  };
+
+  const navigateToShopFilter = (shopFilters) => {
+    setSearchQuery("");
+    setSelectedShopCategoryIds([]);
+    navigateTo("shop", { shopFilters });
     setMobileMenuOpen(false);
     setShowSearchModal(false);
   };
@@ -309,7 +329,7 @@ export const Navbar = () => {
     }
 
     if (sectionId === "calculator") {
-      navigateTo("calculator");
+      navigateTo("calculator", { preserveScroll: true });
       setMobileMenuOpen(false);
       return;
     }
@@ -319,21 +339,20 @@ export const Navbar = () => {
   };
 
   const handleCategoryClick = async (categoryId) => {
-    if (categoryId === "new") {
-      navigateTo("new");
-      setMobileMenuOpen(false);
+    const shopFilters = {
+      new: { filter: "new" },
+      snacks: { category: "snacks-drinks" },
+      women: { category: "sante-de-la-femme" },
+      accessories: { category: "accessoires" },
+    };
+    if (shopFilters[categoryId]) {
+      navigateToShopFilter(shopFilters[categoryId]);
       return;
     }
 
     if (categoryId === "packs") {
       navigateTo("packs");
       setMobileMenuOpen(false);
-      return;
-    }
-
-    const fixedCategoryId = QUICK_CATEGORY_IDS[categoryId];
-    if (fixedCategoryId) {
-      navigateToCategory(fixedCategoryId);
       return;
     }
 
@@ -390,21 +409,8 @@ export const Navbar = () => {
       case "bars":
         navigateShop("barre");
         break;
-      case "snacks":
-        navigateShop("snack");
-        break;
       case "packs":
         navigateShop("pack");
-        break;
-      case "women":
-        navigateShop("femme");
-        break;
-      case "accessories":
-        navigateShop("accessoire");
-        break;
-      case "new":
-        navigateTo("new");
-        setMobileMenuOpen(false);
         break;
       case "sale":
         navigateShop("");
@@ -537,21 +543,21 @@ export const Navbar = () => {
         </div>
       </div>
 
-      <div className="relative z-10 w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-2">
-        <div className="flex min-h-16 items-center gap-2 xl:hidden">
+      <div className="relative z-10 w-full px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-2">
+        <div className="flex min-h-28 items-center gap-2 xl:hidden">
           <button
             onClick={() => {
               setSelectedShopCategoryIds([]);
               navigateTo("home");
               setMobileMenuOpen(false);
             }}
-            className="flex items-center focus:outline-none group shrink-0 py-1"
+            className="group flex min-w-0 shrink-0 items-center rounded-full bg-black/20 p-1.5 ring-1 ring-[#ff003b]/35 focus:outline-none"
             title="Accueil"
           >
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-12 w-auto object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] transition-transform duration-200 group-hover:scale-105 sm:h-14"
+              className="h-20 w-auto max-w-[42vw] object-contain drop-shadow-[0_0_20px_rgba(255,0,59,0.7)] transition-transform duration-200 group-hover:scale-105 sm:h-24"
             />
           </button>
 
@@ -616,7 +622,7 @@ export const Navbar = () => {
             </button>
           </div>
 
-          <div className="ml-auto flex items-center gap-1 xl:hidden">
+          <div className="ml-auto flex shrink-0 items-center gap-1 xl:hidden">
             <button
               onClick={() => showSearchModal ? setShowSearchModal(false) : openSearch()}
               className="p-2.5 text-white hover:text-[#ff7f3f] transition-colors"
@@ -746,13 +752,13 @@ export const Navbar = () => {
         <nav className="mt-4 hidden rounded-2xl border border-[#f0143c]/70 bg-[#070809]/95 p-2 shadow-[0_0_24px_rgba(240,20,60,0.18)] lg:block" aria-label="Services et outils">
           <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-[1fr_1fr_1fr_1.15fr] xl:gap-1 xl:overflow-visible xl:pb-0">
             {[
-              { id: "coach-ia", title: "Coach IA", subtitle: "Votre coach personnel, 24/7", Icon: Bot, onClick: () => navigateTo("coach-ia") },
-              { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Des conseils adaptés à vos objectifs", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
-              { id: "calculator", title: "Calculateur", subtitle: "Calculez vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator") },
+              { id: "coach-ia", title: "Coach IA", subtitle: "Chatbot IA disponible 24/7 pour vos questions sportives", Icon: Bot, onClick: () => navigateTo("coach-ia", { preserveScroll: true }) },
+              { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Chatbot expert en nutrition et régimes", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai", { preserveScroll: true }) },
+              { id: "calculator", title: "Calculateur", subtitle: "Chatbot assistant pour calculer vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator", { preserveScroll: true }) },
             ].map(({ id, title, subtitle, Icon, onClick }) => (
               <button key={id} type="button" onClick={onClick} className="group flex min-h-[76px] min-w-[270px] snap-start items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] sm:min-w-[300px] sm:px-4 xl:min-w-0 xl:border-r xl:border-[#f0143c]/35 xl:rounded-none">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/75 bg-[#10090b] text-[#ff2448] shadow-[0_0_14px_rgba(240,20,60,0.16)] transition group-hover:bg-[#f0143c]/15 group-hover:shadow-[0_0_20px_rgba(240,20,60,0.35)]"><Icon className="h-6 w-6" /></span>
-                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">{title}</span><span className="mt-1 block text-[11px] font-medium text-gray-400">{subtitle}</span></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">{title}</span><span className="mt-1 block text-[11px] font-medium text-[#ff003b]">{subtitle}</span></span>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f0143c]/50 text-[#ff526d] transition group-hover:bg-[#f0143c] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
               </button>
             ))}
@@ -835,14 +841,14 @@ export const Navbar = () => {
       )}
 
       {mobileMenuOpen && (
-        <div className="mobile-menu-drawer flex h-[calc(100dvh-8rem)] max-h-[calc(100dvh-5rem)] min-h-0 flex-col overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white lg:hidden sm:p-6">
+        <div className="mobile-menu-drawer flex h-[calc(100dvh-8rem)] max-h-[calc(100dvh-5rem)] min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white lg:hidden sm:p-6">
           <section className="shrink-0" aria-labelledby="mobile-tools-title">
             <h2 id="mobile-tools-title" className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Services et outils</h2>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="grid w-full grid-cols-2 gap-2">
               {[
-                { id: "coach-ia", title: "Coach IA", subtitle: "Votre coach personnel, 24/7", Icon: Bot, onClick: () => navigateTo("coach-ia") },
-                { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Des conseils adaptés", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
-                { id: "calculator", title: "Calculateur", subtitle: "Kcal et macros", Icon: Calculator, onClick: () => navigateTo("calculator") },
+                { id: "coach-ia", title: "Coach IA", subtitle: "Chatbot IA disponible 24/7 pour vos questions sportives", Icon: Bot, onClick: () => navigateTo("coach-ia", { preserveScroll: true }) },
+                { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Chatbot expert en nutrition et régimes", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai", { preserveScroll: true }) },
+                { id: "calculator", title: "Calculateur", subtitle: "Chatbot assistant pour calculer vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator", { preserveScroll: true }) },
                 { id: "pack-builder", title: "Vos packs", subtitle: "Composez votre pack", Icon: PackagePlus, onClick: () => navigateTo("pack-builder") },
               ].map(({ id, title, subtitle, Icon, onClick }) => (
                 <button
@@ -852,41 +858,19 @@ export const Navbar = () => {
                     onClick();
                     setMobileMenuOpen(false);
                   }}
-                  className="flex min-w-[210px] shrink-0 items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left transition-colors hover:border-[#d90429]/70 hover:bg-neutral-900"
+                  className={`flex min-w-0 items-start gap-2 rounded-xl border p-2.5 text-left transition-colors ${id === "pack-builder" ? "border-[#ff003b] bg-[#ff003b] text-white hover:bg-[#e00034]" : "border-neutral-800 bg-neutral-900/80 hover:border-[#d90429]/70 hover:bg-neutral-900"}`}
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d90429]/60 bg-[#16090c] text-[#ff526d]">
-                    <Icon className="h-5 w-5" />
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${id === "pack-builder" ? "border-white/40 bg-white/10 text-white" : "border-[#d90429]/60 bg-[#16090c] text-[#ff526d]"}`}>
+                    <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-white">{title}</span>
-                    <span className="mt-1 block truncate text-[11px] font-normal text-gray-400">{subtitle}</span>
+                    <span className="block truncate text-xs font-bold text-white">{title}</span>
+                    <span className={`mt-0.5 block line-clamp-2 text-[9px] leading-3 font-normal ${id === "pack-builder" ? "text-white" : "text-[#ff003b]"}`}>{subtitle}</span>
                   </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-[#ff526d]" />
                 </button>
               ))}
             </div>
           </section>
-
-          <div className="mt-5 grid shrink-0 grid-cols-2 gap-3">
-            {sectionTabs.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleSectionClick(item.id)}
-                className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-white"
-              >
-                {item.label}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                navigateTo("cart");
-                setMobileMenuOpen(false);
-              }}
-              className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-[#ff526d]"
-            >
-              Panier
-            </button>
-          </div>
 
           <div className="mt-5 border-t border-neutral-800 pt-4">
             <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Catégories</p>
@@ -919,7 +903,7 @@ export const Navbar = () => {
             <div className="mt-5 border-t border-neutral-800 pt-4">
               <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Liens rapides</p>
               <div className="grid grid-cols-2 gap-3">
-                {secondaryDesktopLinks.map((item) => (
+                {mobileQuickLinks.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === item.id) ? handleCategoryClick(item.id) : handleSectionClick(item.id)}

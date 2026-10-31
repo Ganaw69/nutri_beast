@@ -81,23 +81,23 @@ export const Footer = () => {
             </h4>
             <ul className="space-y-2 text-xs text-gray-400 font-body">
               <li>
-                <button onClick={() => navigateTo("shop")} className="hover:text-white transition-colors">
-                  Protéine
+                <button type="button" onClick={() => navigateTo("shop")} className="hover:text-white transition-colors">
+                  Shop
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo("shop")} className="hover:text-white transition-colors">
-                  Performance
+                <button type="button" onClick={() => navigateTo("packs")} className="hover:text-white transition-colors">
+                  Packs Exclusifs
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo("shop")} className="hover:text-white transition-colors">
-                  Boissons
+                <button type="button" onClick={() => navigateTo("blog")} className="hover:text-white transition-colors">
+                  Blog
                 </button>
               </li>
               <li>
-                <button onClick={() => navigateTo("calculator")} className="hover:text-white transition-colors">
-                  Objectifs
+                <button type="button" onClick={() => navigateTo("recipes")} className="hover:text-white transition-colors">
+                  Recettes
                 </button>
               </li>
             </ul>

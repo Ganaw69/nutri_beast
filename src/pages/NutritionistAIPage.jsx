@@ -47,6 +47,7 @@ export const NutritionistAIPage = () => {
   const [apiStatus, setApiStatus] = useState("checking");
   const [session, setSession] = useState(getStoredSession);
   const messagesContainerRef = useRef(null);
+  const newestMessageRef = useRef(null);
   const clientIdRef = useRef(null);
   const requestControllerRef = useRef(null);
   if (!clientIdRef.current) clientIdRef.current = getClientId();
@@ -61,9 +62,12 @@ export const NutritionistAIPage = () => {
 
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (container) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    }
+    const newestMessage = newestMessageRef.current;
+    if (!container || !newestMessage) return;
+
+    const { top, bottom } = container.getBoundingClientRect();
+    if (bottom <= 0 || top >= window.innerHeight) return;
+    newestMessage.scrollIntoView({ behavior: "smooth", block: "nearest", container: "nearest" });
   }, [messages, isTyping]);
 
   useEffect(() => () => requestControllerRef.current?.abort(), []);
@@ -180,10 +184,11 @@ export const NutritionistAIPage = () => {
       </div>
 
       <div className="bg-surface border border-white/10 rounded-2xl h-[min(480px,calc(100dvh-18rem))] min-h-[360px] flex flex-col justify-between overflow-hidden shadow-2xl">
-        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
-          {messages.map((msg) => (
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
+          {messages.map((msg, index) => (
             <div
               key={msg.id}
+              ref={index === messages.length - 1 && !isTyping ? newestMessageRef : null}
               className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.sender === "ai" && (
@@ -211,7 +216,7 @@ export const NutritionistAIPage = () => {
           ))}
 
           {isTyping && (
-            <div className="flex gap-3 justify-start items-center">
+            <div ref={newestMessageRef} className="flex gap-3 justify-start items-center">
               <div className="w-8 h-8 rounded-full bg-accent-gold text-background flex items-center justify-center font-bold">
                 <Bot className="w-5 h-5" />
               </div>
@@ -242,10 +247,10 @@ export const NutritionistAIPage = () => {
           <button
             type="submit"
             disabled={isTyping || !inputText.trim()}
-            className="w-full sm:w-auto bg-accent-gold hover:bg-yellow-400 text-background font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm"
+            className="w-full sm:w-auto bg-[#ff003b] hover:bg-[#e00034] text-white font-heading font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm"
           >
             <span>ENVOYER</span>
-            <Send className="w-4 h-4" />
+            <Send className="w-4 h-4 text-white" />
           </button>
         </form>
       </div>

@@ -258,10 +258,10 @@ export const CalculatorPage = () => {
               </div>
 
               <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <button onClick={() => navigateTo("nutritionist-ai")} className="bg-white hover:bg-gray-100 text-black font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
+                <button type="button" onClick={() => navigateTo("nutritionist-ai", { preserveScroll: true })} className="bg-white hover:bg-gray-100 text-black font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
                   <Sparkles className="w-4 h-4 text-black" /> NUTRITIONIST AI
                 </button>
-                <button onClick={() => navigateTo("coach-ia")} className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
+                <button type="button" onClick={() => navigateTo("coach-ia", { preserveScroll: true })} className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
                   <Bot className="w-4 h-4" /> OPEN COACH
                 </button>
               </div>

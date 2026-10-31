@@ -20,9 +20,29 @@ const CLIENT_TABS = new Set([
 
 const validId = (value) => value !== undefined && value !== null && value !== "";
 
+const normaliseShopRouteFilters = (filters = {}) => ({
+  filter: String(filters.filter ?? filters.is_new ?? "").trim(),
+  category: String(filters.category ?? "").trim(),
+});
+
 const readClientRoute = () => {
-  const route = decodeURIComponent(window.location.hash.replace(/^#/, "")).replace(/^\/+|\/+$/g, "");
-  if (!route) return { tab: "home" };
+  const hashRoute = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+  const [rawRoute, rawQuery = ""] = hashRoute.split("?");
+  const route = rawRoute.replace(/^\/+|\/+$/g, "");
+  if (!route) {
+    const pathTab = window.location.pathname.replace(/^\/+|\/+$/g, "");
+    if (pathTab === "shop" || pathTab === "catalog") {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        tab: "shop",
+        shopRouteFilters: normaliseShopRouteFilters({
+          filter: params.get("filter") || (params.get("is_new") === "1" ? "new" : ""),
+          category: params.get("category"),
+        }),
+      };
+    }
+    return { tab: "home" };
+  }
 
   const [tab, id] = route.split("/");
   if ((tab === "product" || tab === "product-detail") && validId(id)) {
@@ -40,16 +60,34 @@ const readClientRoute = () => {
   if (tab === "recipes" && validId(id)) {
     return { tab: "recipes", recipeId: id };
   }
+  if (tab === "shop") {
+    const params = new URLSearchParams(rawQuery);
+    return {
+      tab,
+      shopRouteFilters: normaliseShopRouteFilters({
+        filter: params.get("filter") || (params.get("is_new") === "1" ? "new" : ""),
+        category: params.get("category"),
+      }),
+    };
+  }
   return CLIENT_TABS.has(tab) ? { tab } : { tab: "home" };
 };
 
-const routeHash = (tab, id) => {
+const routeHash = (tab, id, shopRouteFilters) => {
   if (tab === "home") return "";
   if (tab === "product-detail" && validId(id)) return `#product/${id}`;
   if (tab === "pack-detail" && validId(id)) return `#pack/${id}`;
   if (tab === "brand-detail" && validId(id)) return `#brand/${id}`;
   if (tab === "blog-article" && validId(id)) return `#article/${id}`;
   if (tab === "recipes" && validId(id)) return `#recipes/${id}`;
+  if (tab === "shop") {
+    const filters = normaliseShopRouteFilters(shopRouteFilters);
+    const params = new URLSearchParams();
+    if (filters.filter) params.set("filter", filters.filter);
+    if (filters.category) params.set("category", filters.category);
+    const query = params.toString();
+    return `#shop${query ? `?${query}` : ""}`;
+  }
   return `#${tab}`;
 };
 
@@ -68,13 +106,14 @@ export const CartProvider = ({ children }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedShopCategoryIds, setSelectedShopCategoryIds] = useState([]);
+  const [shopRouteFilters, setShopRouteFilters] = useState(() => initialRoute.shopRouteFilters || {});
   const [promoCode, setPromoCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState(null); // full coupon object from API
   const [toastMessage, setToastMessage] = useState(null);
 
-  const updateRoute = (tab, id) => {
-    const nextHash = routeHash(tab, id);
+  const updateRoute = (tab, id, filters) => {
+    const nextHash = routeHash(tab, id, filters);
     if (window.location.hash !== nextHash) {
       window.history.pushState(null, "", nextHash || window.location.pathname + window.location.search);
     }
@@ -89,6 +128,7 @@ export const CartProvider = ({ children }) => {
       setSelectedBrandId(route.brandId || null);
       setSelectedArticleId(route.articleId || null);
       setSelectedRecipeId(route.recipeId || null);
+      setShopRouteFilters(route.shopRouteFilters || {});
     };
 
     window.addEventListener("hashchange", syncRouteFromUrl);
@@ -339,10 +379,14 @@ export const CartProvider = ({ children }) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const navigateTo = (tab) => {
+  const navigateTo = (tab, { preserveScroll = false, shopFilters = {} } = {}) => {
+    const nextShopFilters = tab === "shop" ? normaliseShopRouteFilters(shopFilters) : {};
     setActiveTab(tab);
-    updateRoute(tab);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShopRouteFilters(nextShopFilters);
+    updateRoute(tab, undefined, nextShopFilters);
+    if (!preserveScroll) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const openCartPage = () => {
@@ -404,6 +448,7 @@ export const CartProvider = ({ children }) => {
       setSearchQuery,
       selectedShopCategoryIds,
       setSelectedShopCategoryIds,
+      shopRouteFilters,
       subtotal,
       discountAmount,
       shippingFee,
