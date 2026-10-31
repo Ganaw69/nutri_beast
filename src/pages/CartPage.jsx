@@ -1,22 +1,17 @@
-import React, { useState } from "react";
+import React from "react";
 import { useCart } from "../context/CartContext";
 import { X, Lock, ShoppingBag, ArrowRight, Package } from "lucide-react";
 
 export const CartPage = () => {
-  const { cart, removeFromCart, updateQuantity, navigateTo } = useCart();
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState(false);
-
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discount = appliedPromo ? subtotal * 0.2 : 0;
-  const finalTotal = subtotal - discount;
-
-  const handleApplyPromo = (e) => {
-    e.preventDefault();
-    if (promoCode.trim()) {
-      setAppliedPromo(true);
-    }
-  };
+  const {
+    cart,
+    removeFromCart,
+    updateQuantity,
+    navigateTo,
+    subtotal,
+    shippingFee,
+    totalPrice,
+  } = useCart();
 
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading py-8 sm:py-12 pb-20 sm:pb-24">
@@ -59,7 +54,7 @@ export const CartPage = () => {
                   </button>
 
                   <div className="bg-white p-3 rounded-md w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0 relative shadow-md">
-                    {item.image ? <img
+                   {item.image ? <img
                       src={item.image}
                       alt={item.name}
                       className="w-full h-full object-contain mix-blend-multiply"
@@ -122,41 +117,16 @@ export const CartPage = () => {
                   </div>
                   <div className="flex justify-between items-center gap-4">
                     <span className="font-bold text-gray-400">Shipping</span>
-                    <span className="font-black text-[#d90429] uppercase">FREE</span>
+                    <span className="font-black text-[#d90429] uppercase">{shippingFee === 0 ? "FREE" : `${shippingFee.toFixed(2)} TND`}</span>
                   </div>
-                  {appliedPromo && (
-                    <div className="flex justify-between items-center gap-4 text-green-400">
-                      <span className="font-bold">Promo (-20%)</span>
-                      <span className="font-bold">-{discount.toFixed(2)} TND</span>
-                    </div>
-                  )}
                 </div>
 
                 <div className="border-t border-white/10 pt-4 flex justify-between items-baseline gap-4">
                   <span className="font-black text-sm text-gray-300 uppercase tracking-wider">Total</span>
                   <span className="font-black text-2xl sm:text-3xl text-[#d90429] tracking-tight">
-                    {finalTotal.toFixed(2)} TND
+                    {totalPrice.toFixed(2)} TND
                   </span>
                 </div>
-
-                <form
-                  onSubmit={handleApplyPromo}
-                  className="bg-[#0e0e0e] border border-white/10 rounded-xs p-3 flex flex-col sm:flex-row gap-2 sm:justify-between sm:items-center text-xs"
-                >
-                  <input
-                    type="text"
-                    placeholder="PROMO CODE"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    className="bg-transparent text-white placeholder-gray-500 font-bold text-xs uppercase focus:outline-none flex-1 pr-2 text-center sm:text-left"
-                  />
-                  <button
-                    type="submit"
-                    className="text-[#d90429] font-black uppercase hover:text-white transition-colors tracking-wider self-center sm:self-auto"
-                  >
-                    APPLY
-                  </button>
-                </form>
 
                 <button
                   onClick={() => navigateTo("checkout")}

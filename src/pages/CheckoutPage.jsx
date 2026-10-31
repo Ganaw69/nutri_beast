@@ -1,6 +1,6 @@
 ﻿import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
-import { orderService, couponService } from "../services/api";
+import { orderService } from "../services/api";
 import { Package, Check, ChevronDown, Loader2, X, CheckCircle2 } from "lucide-react";
 
 const TERMS_SECTIONS = [
@@ -109,12 +109,7 @@ export const CheckoutPage = () => {
     if (!promoInput.trim()) return;
     setCheckingCoupon(true);
     try {
-      const coupon = await couponService.findByCode(promoInput.trim().toUpperCase());
-      if (!coupon || !coupon.isActive) {
-        showToast("Code promo invalide ou expire.");
-      } else {
-        applyPromoCode(coupon);
-      }
+      await applyPromoCode(promoInput.trim());
     } catch {
       showToast("Impossible de verifier le code promo.");
     } finally {
@@ -164,7 +159,14 @@ export const CheckoutPage = () => {
               quantity: Number(quantity) * Number(item.quantity || 1),
             }));
           }
-          return [{ sku: item.sku, quantity: item.quantity || 1 }];
+          const productId = item.id ?? item.productId;
+          if (productId === undefined || productId === null || productId === "") {
+            throw new Error(`Le produit "${item.name || "sélectionné"}" est invalide.`);
+          }
+          return [{
+            product: `/api/products/${productId}`,
+            quantity: item.quantity || 1,
+          }];
         }),
       };
 

@@ -114,7 +114,7 @@ export const ProductDetailPage = () => {
           // The image API filters by `product` (the same query used in back office).
           productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
           productService.getAllPages(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
-          reviewService.getAll({ 'product.id': selectedProductId, approved: true }).catch(() => ({ 'hydra:member': [] })),
+          reviewService.getAll({ 'product.id': selectedProductId, approved: true }, true).catch(() => ({ 'hydra:member': [] })),
           flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
           immediateProduct.brand || immediateProduct.brandId == null
             ? Promise.resolve(null)
@@ -191,7 +191,7 @@ export const ProductDetailPage = () => {
     setSubmittingReview(true);
     try {
       await reviewService.create({
-        product: product['@id'] || `/api/products/${product.id}`,
+        product: `/api/products/${product.id || selectedProductId}`,
         customerName: reviewForm.customerName,
         email: reviewForm.email,
         rating: reviewForm.rating,

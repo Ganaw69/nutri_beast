@@ -103,13 +103,20 @@ export const HomePage = () => {
     let active = true;
 
     Promise.all([
-      productService.getAllPages({ isFeatured: true, isActive: true }, true).catch(() => ({ 'hydra:member': [] })),
+      productService.getAllPages({ isActive: true }, true).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
     ]).then(([prodData, couvertureData, brandData]) => {
       if (!active) return;
-      const prods = (prodData['hydra:member'] || []).filter((product) =>
+      const availableProducts = (prodData['hydra:member'] || []).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
+      );
+      const flaggedBestSellers = availableProducts.filter((product) => product.isBestSeller);
+      // Keep featured products as a backwards-compatible fallback for old
+      // catalogues that predate the dedicated best-seller flag.
+      const prods = (flaggedBestSellers.length > 0
+        ? flaggedBestSellers
+        : availableProducts.filter((product) => product.isFeatured)
       );
       // The collection already includes everything a product card needs.
       // Render it immediately; image enrichment is non-blocking below.

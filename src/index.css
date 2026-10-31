@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+.mobile-menu-drawer {
+  isolation: isolate;
+}
+
+.mobile-menu-drawer button,
+.mobile-menu-drawer p {
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
 .blog-article-content > * + * { margin-top: 1rem; }
 .blog-article-content h2,
 .blog-article-content h3,

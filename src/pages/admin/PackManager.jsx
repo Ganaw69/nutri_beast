@@ -166,7 +166,7 @@ export const PackManager = () => {
       ...(form.slug ? { slug: form.slug.trim() } : {}),
       description: form.description.trim() || null,
       type: form.type,
-      isCustomizable: form.type === 'CUSTOM' && form.isCustomizable,
+      isCustomizable: form.type === 'CUSTOM',
       ...(form.type === 'PREDEFINED'
         ? {
           basePrice: Number(form.basePrice).toFixed(2),

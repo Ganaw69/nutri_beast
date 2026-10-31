@@ -1,9 +1,31 @@
 import React from "react";
 import { useCart } from "../context/CartContext";
-import { Shield, Dumbbell, Share2, Globe } from "lucide-react";
+import { Shield, Dumbbell, Share2, Home } from "lucide-react";
 
 export const Footer = () => {
   const { navigateTo } = useCart();
+
+  const shareStore = async () => {
+    const shareData = {
+      title: "Protein Store Tunisia",
+      text: "Découvrez Protein Store Tunisia.",
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareData.url);
+        return;
+      }
+      window.prompt("Copiez ce lien pour le partager :", shareData.url);
+    } catch (error) {
+      if (error?.name !== "AbortError") window.prompt("Copiez ce lien pour le partager :", shareData.url);
+    }
+  };
 
   return (
     <footer className="bg-[#0c0c0c] border-t border-white/10 pt-16 pb-8 text-[#e5e2e1] font-heading">
@@ -31,20 +53,24 @@ export const Footer = () => {
             </p>
 
             <div className="flex items-center gap-3 pt-2">
-              <a
-                href="#"
+              <button
+                type="button"
+                onClick={shareStore}
                 className="w-8 h-8 bg-[#181818] border border-white/10 rounded flex items-center justify-center text-gray-300 hover:text-[#d90429] hover:border-[#d90429] transition-colors"
                 title="Partager"
+                aria-label="Partager Protein Store Tunisia"
               >
                 <Share2 className="w-4 h-4" />
-              </a>
-              <a
-                href="#"
+              </button>
+              <button
+                type="button"
+                onClick={() => navigateTo("home")}
                 className="w-8 h-8 bg-[#181818] border border-white/10 rounded flex items-center justify-center text-gray-300 hover:text-[#d90429] hover:border-[#d90429] transition-colors"
-                title="Site Web"
+                title="Home"
+                aria-label="Home"
               >
-                <Globe className="w-4 h-4" />
-              </a>
+                <Home className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -101,27 +127,20 @@ export const Footer = () => {
             </ul>
           </div>
 
-          {/* Column 4: NEWSLETTER */}
+          {/* Column 4: CONTACT */}
           <div className="space-y-4">
             <h4 className="font-black text-xs text-white uppercase tracking-widest">
-              NEWSLETTER
+              CONTACT US
             </h4>
             <p className="text-xs text-gray-400 font-body leading-relaxed">
-              Rejoignez l'élite et recevez nos offres exclusives.
+              Une question sur votre commande ou un produit ? Notre équipe vous répond.
             </p>
-            <form onSubmit={(e) => e.preventDefault()} className="space-y-2 pt-1">
-              <input
-                type="email"
-                placeholder="Votre email"
-                className="w-full bg-[#181818] border border-white/10 rounded-xs px-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#d90429]"
-              />
-              <button
-                type="submit"
-                className="w-full bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase tracking-wider py-3 rounded-xs transition-colors shadow-md"
-              >
-                S'ABONNER
-              </button>
-            </form>
+            <a
+              href="mailto:contact@proteinstore.tn"
+              className="inline-flex break-all text-sm font-black text-[#ff526d] underline decoration-[#d90429]/50 underline-offset-4 transition-colors hover:text-white"
+            >
+              contact@proteinstore.tn
+            </a>
           </div>
         </div>
 

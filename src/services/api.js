@@ -322,6 +322,12 @@ function applyFilters(items, path) {
   if (params.has('published')) {
     next = next.filter((item) => !!item.published === isTrue(params.get('published')));
   }
+  if (params.has('approved')) {
+    next = next.filter((item) => !!item.approved === isTrue(params.get('approved')));
+  }
+  if (params.has('rejected')) {
+    next = next.filter((item) => !!item.rejected === isTrue(params.get('rejected')));
+  }
   if (params.has('featured')) {
     next = next.filter((item) => !!item.featured === isTrue(params.get('featured')));
   }
@@ -829,6 +835,17 @@ export const resolveBrandLogo = (brand) => {
   return mediaUrl(`brands/${value.replace(/^\/?uploads\/brands\//, '')}`);
 };
 
+/** Resolve a pack image value to a URL that is safe to render in storefront views. */
+export const resolvePackImage = (pack, fallback = null) => {
+  const image = pack?.imageUrl
+    ?? pack?.image
+    ?? pack?.imagePath
+    ?? pack?.thumbnail
+    ?? pack?.thumbnailUrl;
+  const resolved = resolveUploadUrl('pack', image);
+  return resolved || fallback;
+};
+
 const resolveUploadUrl = (folder, input) => {
   if (!input) return null;
 
@@ -1188,8 +1205,10 @@ const normalizeProduct = (product) => {
       product.isActive ?? product.is_active ?? product.is_Active ?? product.active,
       true
     ),
-    isNew: normalizeBoolean(product.isNew ?? product.is_new, false),
-    isOnSale: normalizeBoolean(product.isOnSale ?? product.is_on_sale, false),
+    isFeatured: [product.isFeatured, product.is_featured, product.featured].some((value) => normalizeBoolean(value)),
+    isNew: [product.isNew, product.is_new, product.new].some((value) => normalizeBoolean(value)),
+    isBestSeller: [product.isBestSeller, product.is_best_seller, product.bestSeller, product.best_seller].some((value) => normalizeBoolean(value)),
+    isOnSale: [product.isOnSale, product.is_on_sale].some((value) => normalizeBoolean(value)),
     packing: normalizeBoolean(product.packing, false),
     montantRemise: product.montantRemise ?? product.montant_remise ?? null,
   };
@@ -1322,29 +1341,25 @@ export const productService = {
     };
   },
   async getNewPages() {
-    const [firstPage, flaggedProducts] = await Promise.all([
-      this.getNew({ page: 1, itemsPerPage: 100 }),
-      this.getAllPages({ isActive: true, isNew: true }, true),
-    ]);
-    const firstItems = firstPage['hydra:member'] || [];
-    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
-    let members = firstItems;
-    if (firstItems.length > 0 && firstItems.length < total) {
-      const pageCount = Math.ceil(total / firstItems.length);
-      const pages = await Promise.all(Array.from({ length: pageCount - 1 }, (_, index) =>
-        this.getNew({ page: index + 2, itemsPerPage: 100 })
-      ));
-      members = [...firstItems, ...pages.flatMap((page) => page['hydra:member'] || [])];
-    }
-    const byId = new Map();
-    [...members, ...(flaggedProducts['hydra:member'] || [])].forEach((product) => {
-      if (product.isNew && isAvailableProduct(product)) byId.set(String(product.id), product);
-    });
-    const availableNewProducts = [...byId.values()];
-    return { ...firstPage, 'hydra:member': availableNewProducts, 'hydra:totalItems': availableNewProducts.length };
+    // Use the dedicated endpoint for the New Products page. The response is
+    // normalized below so both is_new and isNew payloads render consistently.
+    const response = await this.getNew({ isActive: true });
+    return {
+      ...response,
+      'hydra:member': response['hydra:member'].filter(isAvailableProduct),
+    };
   },
-  getAll(params = {}, skipAuth = true) {
+  getAll(params = {}, skipAuth = true, fresh = false) {
     const path = `/products${buildQuery(params)}`;
+    if (fresh) {
+      return requestApi(path, {}, false, skipAuth).then((response) => {
+        const normalized = normalizeCollectionResponse(response);
+        return {
+          ...normalized,
+          'hydra:member': normalized['hydra:member'].map(normalizeProduct),
+        };
+      });
+    }
     return readCachedProductData(
       `collection:${skipAuth}:${path}`,
       async () => {
@@ -1358,8 +1373,8 @@ export const productService = {
    * server-side maximum to `itemsPerPage`.  Consumers can then paginate after
    * any client-side relation filtering without creating empty pages.
    */
-  async getAllPages(params = {}, skipAuth = true) {
-    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth);
+  async getAllPages(params = {}, skipAuth = true, fresh = false) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth, fresh);
     const firstItems = firstPage['hydra:member'] || [];
     const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
 
@@ -1369,7 +1384,7 @@ export const productService = {
       // A failed later page must not hide the first valid results.
       const remainingResults = await Promise.allSettled(
         Array.from({ length: pageCount - 1 }, (_, index) =>
-          this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth)
+          this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth, fresh)
         )
       );
       const remainingPages = remainingResults
@@ -1381,8 +1396,11 @@ export const productService = {
     if (normalizeBoolean(params.isActive, false)) members = members.filter(isAvailableProduct);
     return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
   },
-  getOne(id, skipAuth = true) {
+  getOne(id, skipAuth = true, fresh = false) {
     const path = `/products/${id}`;
+    if (fresh) {
+      return requestApi(path, {}, false, skipAuth).then(normalizeProduct);
+    }
     return readCachedProductData(
       `item:${skipAuth}:${path}`,
       async () => normalizeProduct(await apiFetch(path, {}, false, skipAuth))
@@ -1720,21 +1738,61 @@ export const orderService = {
 // REVIEWS
 // ============================================================
 export const reviewService = {
-  async getAll(params = {}) {
-    return apiFetch(`/reviews${buildQuery(params)}`);
+  async getAll(params = {}, skipAuth = false) {
+    // Reviews can be submitted from the storefront while the admin is open.
+    // Do not reuse the long-lived generic GET cache for moderation data.
+    const data = await requestApi(`/reviews${buildQuery(params)}`, {}, false, skipAuth);
+    return normalizeCollectionResponse(data);
   },
   /** POST /reviews — public */
   async create(data) {
-    const res = await fetch(`${BASE_URL}/reviews`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/ld+json', Accept: 'application/ld+json' },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err['hydra:description'] || 'Erreur lors de l\'envoi de l\'avis.');
+    const productId = iriToId(data?.product) ?? data?.productId;
+    if (productId == null || productId === '') {
+      throw new Error("L'identifiant du produit est requis pour envoyer un avis.");
     }
-    return res.json();
+    const payload = {
+      product: `/api/products/${productId}`,
+      customerName: String(data.customerName || '').trim(),
+      email: String(data.email || '').trim(),
+      rating: Number(data.rating),
+      comment: String(data.comment || '').trim(),
+    };
+    if (!payload.customerName || !payload.email || !payload.comment) {
+      throw new Error('Le nom, l’email et le commentaire sont obligatoires.');
+    }
+    if (!Number.isInteger(payload.rating) || payload.rating < 1 || payload.rating > 5) {
+      throw new Error('La note doit être comprise entre 1 et 5.');
+    }
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(`${BASE_URL}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/ld+json', Accept: 'application/ld+json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const violations = Array.isArray(err.violations)
+          ? err.violations.map((violation) => `${violation.propertyPath}: ${violation.message}`).join(' ')
+          : '';
+        const message = [err['hydra:description'], err.detail, violations]
+          .filter(Boolean)
+          .join(' ');
+        throw new Error(message || `Erreur lors de l'envoi de l'avis (HTTP ${res.status}).`);
+      }
+      const result = await res.json();
+      clearApiReadCache();
+      return result;
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error("Le serveur ne répond pas. Vérifiez l'API puis réessayez.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   },
   async approve(id) {
     return apiFetch(`/reviews/${id}/approve`, { method: 'PATCH' });
@@ -1751,15 +1809,41 @@ export const reviewService = {
 // COUPONS
 // ============================================================
 export const couponService = {
-  async getAll(params = {}) {
-    const response = normalizeCollectionResponse(await apiFetch(`/coupons${buildQuery(params)}`));
+  async getAll(params = {}, skipAuth = false) {
+    const response = normalizeCollectionResponse(await apiFetch(`/coupons${buildQuery(params)}`, {}, false, skipAuth));
     return { ...response, 'hydra:member': response['hydra:member'].map(normalizeCoupon) };
   },
   async getOne(id) {
     return normalizeCoupon(await apiFetch(`/coupons/${id}`));
   },
   async findByCode(code) {
-    return normalizeCoupon(await apiFetch(`/coupons/lookup${buildQuery({ code })}`));
+    const normalizedCode = String(code || '').trim().toUpperCase();
+    if (!normalizedCode) return null;
+
+    // Newer APIs expose a convenient lookup route. Keep it as a fast path,
+    // but fall back to the public collection filter because existing API
+    // deployments do not all register that custom route.
+    try {
+      const lookup = normalizeCoupon(await requestApi(
+        `/coupons/lookup${buildQuery({ code: normalizedCode })}`,
+        {},
+        false,
+        true
+      ));
+      if (lookup?.code && String(lookup.code).trim().toUpperCase() === normalizedCode) return lookup;
+    } catch {
+      // The collection fallback below supports APIs without /coupons/lookup.
+    }
+
+    const response = normalizeCollectionResponse(await requestApi(
+      `/coupons${buildQuery({ code: normalizedCode, itemsPerPage: 100 })}`,
+      {},
+      false,
+      true
+    ));
+    return response['hydra:member']
+      .map(normalizeCoupon)
+      .find((coupon) => String(coupon?.code || '').trim().toUpperCase() === normalizedCode) || null;
   },
   async create(data) {
     return apiFetch('/coupons', { method: 'POST', body: JSON.stringify(data) });
@@ -1781,7 +1865,9 @@ export const couponService = {
 // ============================================================
 export const packService = {
   async getAll(params = {}, skipAuth = false) {
-    const data = await apiFetch(`/packs${buildQuery(params)}`, {}, false, skipAuth);
+    // Pack availability can change from the admin while the builder remains
+    // open. Never serve a stale persisted catalogue for this resource.
+    const data = await requestApi(`/packs${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
   },
   async getAllPages(params = {}, skipAuth = false) {
@@ -1799,7 +1885,7 @@ export const packService = {
     return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': total };
   },
   async getOne(id, skipAuth = false) {
-    return apiFetch(`/packs/${id}`, {}, false, skipAuth);
+    return requestApi(`/packs/${id}`, {}, false, skipAuth);
   },
   async create(data) {
     return apiFetch('/packs', { method: 'POST', body: JSON.stringify(data) });

@@ -18,7 +18,6 @@ const idOf = (value) => {
   if (typeof value === "object") return value.id ?? iriToId(value["@id"] || value.iri);
   return iriToId(value) ?? value;
 };
-const isHiddenPack = (pack) => String(idOf(pack)) === "1";
 const currency = (price) => `${Number(price || 0).toFixed(2)} TND`;
 const packImageUrl = (pack) => {
   const value = pack?.imageUrl || pack?.image;
@@ -28,12 +27,12 @@ const packImageUrl = (pack) => {
   return mediaUrl(`pack/${filename}`);
 };
 const booleanValue = (value, fallback = false) => {
-  if (value === true || value === 1 || value === "1" || String(value).toLowerCase() === "true") return true;
-  if (value === false || value === 0 || value === "0" || String(value).toLowerCase() === "false") return false;
+  const normalized = typeof value === "string" ? value.toLowerCase() : value;
+  if ([true, 1, "1", "true", "yes", "on"].includes(normalized)) return true;
+  if ([false, 0, "0", "false", "no", "off"].includes(normalized)) return false;
   return fallback;
 };
 const activeValue = (record) => booleanValue(record.isActive ?? record.is_active ?? record.active ?? record.enabled, true);
-const isCustomizable = (pack) => booleanValue(pack.isCustomizable ?? pack.is_customizable ?? pack.customizable);
 const packIsCurrent = (pack) => {
   const now = Date.now();
   const startDate = pack.startDate ?? pack.start_date;
@@ -122,8 +121,9 @@ export const PackBuilderPage = () => {
       const readyPacks = collectionItems(packData).filter((pack) =>
         String(pack.type || pack.packType || "").toUpperCase() === "CUSTOM"
         && idOf(pack) != null
-        && !isHiddenPack(pack)
-        && isCustomizable(pack) && packIsCurrent(pack)
+        // CUSTOM is the authoritative pack type. Older records may have a
+        // missing or stale isCustomizable flag from the admin form.
+        && packIsCurrent(pack)
       );
       if (current) {
         setProducts(readyProducts);

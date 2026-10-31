@@ -5,6 +5,7 @@ import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { Toast } from "./components/Toast";
 import { HomePage } from "./pages/HomePage";
+import { ArrowUp } from "lucide-react";
 
 const lazyPage = (loader, exportName) => lazy(async () => {
   const module = await loader();
@@ -40,6 +41,31 @@ const PageLoader = () => (
     <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#d90429] border-t-transparent" />
   </div>
 );
+
+const BackToTopButton = () => {
+  const [visible, setVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleScroll = () => setVisible(window.scrollY > 500);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      className="fixed bottom-5 right-5 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-[#d90429] text-white shadow-lg transition hover:bg-[#b0021f] focus:outline-none focus:ring-2 focus:ring-white/70"
+      aria-label="Retour en haut"
+      title="Retour en haut"
+    >
+      <ArrowUp className="h-5 w-5" />
+    </button>
+  );
+};
 
 class PageErrorBoundary extends React.Component {
   state = { hasError: false };
@@ -123,6 +149,7 @@ const ClientApp = () => {
         </div>
         <Footer />
         <Toast />
+        <BackToTopButton />
       </div>
     </CartProvider>
   );

@@ -419,7 +419,7 @@ export const ProductManager = () => {
     setImageFiles([]);
     setImagePreviews([]);
     setPrimaryImageIndex(0);
-    setBrandSearch('');
+    setBrandSearch(displayBrandName(p.brand));
     setModal({ mode: 'edit', id: p.id });
     setSelectedFormParentCategoryId(getFormParentCategoryId(p.category));
     setForm({
@@ -440,7 +440,7 @@ export const ProductManager = () => {
     });
 
     try {
-      const fullProduct = await productService.getOne(p.id).catch(() => p);
+      const fullProduct = await productService.getOne(p.id, true, true).catch(() => p);
       setForm({
         name: fullProduct.name || '', barcode: fullProduct.barcode || '',
         shortDescription: fullProduct.shortDescription || '', description: fullProduct.description || '',
@@ -461,7 +461,7 @@ export const ProductManager = () => {
       setProductImages(await hydrateProductImages(fullProduct.id || p.id, fullProduct.productImages || p.productImages || []));
       const fullBrand = fullProduct.brand || p.brand;
       const matchedBrand = brands.find((brand) => relationToIri(brand, 'brands') === relationToIri(fullBrand, 'brands'));
-      setBrandSearch(matchedBrand?.name || '');
+      setBrandSearch(displayBrandName(matchedBrand || fullBrand));
     } catch (e) {
       setError(e.message);
     }
@@ -474,6 +474,10 @@ export const ProductManager = () => {
     try {
       const payload = {
         ...form,
+        // The API resource calls this property `new`; `is_new` is the
+        // database column and `isNew` is only the admin form name.
+        new: form.isNew,
+        isNew: undefined,
         sku: undefined,
         expirationDate: undefined,
         price: form.price ? String(parseFloat(form.price).toFixed(2)) : undefined,
@@ -1066,18 +1070,18 @@ export const ProductManager = () => {
                     placeholder="Rechercher une marque..."
                   />
                   <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-[#333] bg-[#111]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm((p) => ({ ...p, brand: '' }));
-                        setBrandSearch('');
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-sm border-b border-[#222] ${
-                        !form.brand ? 'bg-[#d90429]/10 text-white' : 'text-gray-400 hover:bg-[#1a1a1a] hover:text-white'
-                      }`}
-                    >
-                      Aucune marque
-                    </button>
+                    {!form.brand && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm((p) => ({ ...p, brand: '' }));
+                          setBrandSearch('');
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm border-b border-[#222] bg-[#d90429]/10 text-white"
+                      >
+                        Aucune marque
+                      </button>
+                    )}
                     {filteredBrands.map((b, index) => {
                       const iri = relationToIri(b, 'brands');
                       const active = form.brand === iri;

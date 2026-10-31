@@ -5,44 +5,61 @@ import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
 export const ReviewManager = () => {
   const [reviews, setReviews] = useState([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending'); // pending | approved | rejected
+  const [filter, setFilter] = useState('pending'); // all | pending | approved | rejected
   const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
 
   const fetchReviews = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
-      const params = { itemsPerPage: 50 };
-      if (filter === 'approved') params.approved = true;
-      else if (filter === 'rejected') params.rejected = true;
-      else { params.approved = false; params.rejected = false; }
-      const data = await reviewService.getAll(params);
+      // Fetch the complete moderation list. Filtering with approved/rejected
+      // query parameters is not supported consistently by every API version.
+      const data = await reviewService.getAll({ itemsPerPage: 100 });
       setReviews(data['hydra:member'] || []);
-      setTotal(data['hydra:totalItems'] || 0);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  }, [filter]);
+    } catch (e) {
+      console.error(e);
+      setReviews([]);
+      setError(e.message || 'Impossible de charger les avis.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => { fetchReviews(); }, [fetchReviews]);
+
+  const reviewStatus = (review) => {
+    if (review.approved === true || review.status === 'approved') return 'approved';
+    if (review.rejected === true || review.status === 'rejected') return 'rejected';
+    return 'pending';
+  };
 
   const handleAction = async (id, action) => {
     try {
       if (action === 'approve') await reviewService.approve(id);
       else if (action === 'reject') await reviewService.reject(id);
       else await reviewService.delete(id);
-      fetchReviews();
+      await fetchReviews();
     } catch (e) { alert(e.message); }
   };
 
-  const filtered = reviews.filter(r => !search || r.customerName?.toLowerCase().includes(search.toLowerCase()) || r.comment?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = reviews.filter((review) => {
+    const matchesStatus = filter === 'all' || reviewStatus(review) === filter;
+    const query = search.trim().toLowerCase();
+    const matchesSearch = !query
+      || review.customerName?.toLowerCase().includes(query)
+      || review.comment?.toLowerCase().includes(query)
+      || review.email?.toLowerCase().includes(query);
+    return matchesStatus && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold text-white mb-1">Avis Clients</h1>
-          <p className="text-gray-400 text-sm">{total} avis</p>
+          <p className="text-gray-400 text-sm">{filtered.length} avis</p>
         </div>
         <AdminActionButton label="Refresh" onClick={fetchReviews} className="p-2 text-gray-300 hover:text-white bg-[#222] border border-[#333]">
           <RefreshCw size={16} />
@@ -50,7 +67,7 @@ export const ReviewManager = () => {
       </div>
 
       <div className="flex gap-2">
-        {[['pending','En attente'],['approved','Approuvés'],['rejected','Rejetés']].map(([k, l]) => (
+        {[['all','Tous'],['pending','En attente'],['approved','Approuvés'],['rejected','Rejetés']].map(([k, l]) => (
           <button key={k} onClick={() => setFilter(k)}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${filter === k ? 'bg-[#d90429] text-white' : 'bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white'}`}
           >{l}</button>
@@ -67,6 +84,7 @@ export const ReviewManager = () => {
           </div>
         </div>
         <div className="divide-y divide-[#2a2a2a]">
+          {error && <div role="alert" className="p-5 text-sm text-red-300">{error}</div>}
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#d90429] animate-spin" /></div>
           ) : filtered.map(r => (
@@ -75,19 +93,30 @@ export const ReviewManager = () => {
                 <div className="flex items-center gap-3 mb-1">
                   <span className="font-bold text-white text-sm">{r.customerName}</span>
                   <div className="flex">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={`w-3 h-3 ${i < r.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`} />)}</div>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    reviewStatus(r) === 'approved'
+                      ? 'bg-emerald-400/10 text-emerald-400'
+                      : reviewStatus(r) === 'rejected'
+                        ? 'bg-yellow-400/10 text-yellow-400'
+                        : 'bg-red-400/10 text-red-400'
+                  }`}>
+                    {reviewStatus(r) === 'approved' ? 'Approuvé' : reviewStatus(r) === 'rejected' ? 'Rejeté' : 'En attente'}
+                  </span>
                 </div>
                 <p className="text-xs text-gray-300 line-clamp-2">{r.comment}</p>
-                <p className="text-xs text-gray-500 mt-1">{r.product?.name || '—'}</p>
+                <p className="text-xs text-gray-500 mt-1">{r.product?.name || r.productName || '—'}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {filter === 'pending' && <>
+                {reviewStatus(r) !== 'approved' && (
                   <AdminActionButton label="Approve" onClick={() => handleAction(r.id, 'approve')} className="p-1.5 text-gray-300 hover:text-emerald-400 hover:bg-emerald-400/10">
                     <Check size={14} />
                   </AdminActionButton>
+                )}
+                {reviewStatus(r) !== 'rejected' && (
                   <AdminActionButton label="Reject" onClick={() => handleAction(r.id, 'reject')} className="p-1.5 text-gray-300 hover:text-yellow-400 hover:bg-yellow-400/10">
                     <X size={14} />
                   </AdminActionButton>
-                </>}
+                )}
                 <AdminActionButton label="Delete" onClick={() => handleAction(r.id, 'delete')} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10">
                   <Trash2 size={14} />
                 </AdminActionButton>

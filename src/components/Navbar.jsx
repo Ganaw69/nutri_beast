@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useAdmin } from "../context/AdminContext";
 import { categoryService, productService } from "../services/api";
@@ -14,6 +14,7 @@ import {
   Calculator,
   PackagePlus,
   ArrowRight,
+  ChevronDown,
 } from "lucide-react";
 
 const CategoryNavLabel = ({ label }) => {
@@ -95,8 +96,23 @@ export const Navbar = () => {
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchSurface, setSearchSurface] = useState(null);
+  const mobileSearchInputRef = useRef(null);
 
   const promoMessage = "Livraison offerte dès 300DT d'achat !";
+
+  const openSearch = () => {
+    setMobileMenuOpen(false);
+    setShowSearchModal(true);
+  };
+
+  useEffect(() => {
+    if (!showSearchModal) return undefined;
+    const animationFrame = window.requestAnimationFrame(() => {
+      mobileSearchInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      mobileSearchInputRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [showSearchModal]);
 
   const sectionTabs = useMemo(
     () => [
@@ -268,6 +284,16 @@ export const Navbar = () => {
     if (category.children?.length > 0) {
       setOpenCategoryId((current) => current === category.id ? null : category.id);
     }
+  };
+
+  const handleMobileRootCategoryClick = (event, category) => {
+    if (category.children?.length > 0) {
+      event.preventDefault();
+      setOpenCategoryId((current) => current === category.id ? null : category.id);
+      return;
+    }
+
+    navigateToCategory(category.id);
   };
 
   const handleSectionClick = (sectionId) => {
@@ -477,7 +503,7 @@ export const Navbar = () => {
         <div className="absolute bottom-0 left-0 w-full h-[2.5px] navbar-bottom-laser" />
       </div>
 
-      <div className="relative z-10 py-1.5 px-4 overflow-hidden text-[10px] font-black tracking-[0.28em] uppercase text-center bg-[#8f1025] text-white">
+      <div className="pointer-events-none relative z-10 isolate overflow-hidden bg-[#8f1025] px-4 py-1.5 text-center text-[9px] font-black uppercase tracking-[0.16em] text-white sm:text-[10px] sm:tracking-[0.28em]">
         <div className="banner-marquee">
           <div className="banner-marquee__track">
             <div className="banner-marquee__group">
@@ -511,8 +537,8 @@ export const Navbar = () => {
         </div>
       </div>
 
-      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 pt-2 pb-2">
-        <div className="flex items-center gap-4 xl:hidden">
+      <div className="relative z-10 w-full px-4 py-4 sm:px-6 lg:px-8 lg:py-2">
+        <div className="flex min-h-16 items-center gap-2 xl:hidden">
           <button
             onClick={() => {
               setSelectedShopCategoryIds([]);
@@ -525,7 +551,7 @@ export const Navbar = () => {
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-[104px] w-auto sm:h-[120px] object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-200" 
+              className="h-12 w-auto object-contain drop-shadow-[0_0_18px_rgba(255,255,255,0.2)] transition-transform duration-200 group-hover:scale-105 sm:h-14"
             />
           </button>
 
@@ -590,11 +616,12 @@ export const Navbar = () => {
             </button>
           </div>
 
-          <div className="ml-auto mr-3 flex items-center gap-3 xl:hidden">
+          <div className="ml-auto flex items-center gap-1 xl:hidden">
             <button
-              onClick={() => setShowSearchModal(!showSearchModal)}
+              onClick={() => showSearchModal ? setShowSearchModal(false) : openSearch()}
               className="p-2.5 text-white hover:text-[#ff7f3f] transition-colors"
               title="Rechercher"
+              aria-label="Ouvrir la recherche"
             >
               <Search className="w-6 h-6" />
             </button>
@@ -611,8 +638,10 @@ export const Navbar = () => {
               )}
             </button>
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onClick={() => { setMobileMenuOpen((open) => !open); setShowSearchModal(false); }}
               className="p-2 text-white"
+              aria-expanded={mobileMenuOpen}
+              aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -691,7 +720,7 @@ export const Navbar = () => {
           </nav>
 
           <div className="absolute right-6 2xl:right-8 flex items-center gap-2 border-l border-white/25 pl-3" aria-label="Actions rapides">
-            <button onClick={() => setShowSearchModal(!showSearchModal)} className="p-2 text-white/85 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Rechercher" aria-label="Rechercher">
+            <button onClick={() => showSearchModal ? setShowSearchModal(false) : openSearch()} className="p-2 text-white/85 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Rechercher" aria-label="Rechercher">
               <Search className="w-6 h-6" />
             </button>
             <button onClick={() => navigateTo("cart")} className="relative p-2 text-white/85 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Panier" aria-label="Panier">
@@ -714,20 +743,20 @@ export const Navbar = () => {
           ))}
         </nav>
 
-        <nav className="mt-4 rounded-2xl border border-[#f0143c]/70 bg-[#070809]/95 p-2 shadow-[0_0_24px_rgba(240,20,60,0.18)]" aria-label="Services et outils">
-          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.15fr]">
+        <nav className="mt-4 hidden rounded-2xl border border-[#f0143c]/70 bg-[#070809]/95 p-2 shadow-[0_0_24px_rgba(240,20,60,0.18)] lg:block" aria-label="Services et outils">
+          <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-[1fr_1fr_1fr_1.15fr] xl:gap-1 xl:overflow-visible xl:pb-0">
             {[
               { id: "coach-ia", title: "Coach IA", subtitle: "Votre coach personnel, 24/7", Icon: Bot, onClick: () => navigateTo("coach-ia") },
               { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Des conseils adaptés à vos objectifs", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
               { id: "calculator", title: "Calculateur", subtitle: "Calculez vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator") },
             ].map(({ id, title, subtitle, Icon, onClick }) => (
-              <button key={id} type="button" onClick={onClick} className="group flex min-h-[76px] items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] sm:px-4 xl:border-r xl:border-[#f0143c]/35 xl:rounded-none">
+              <button key={id} type="button" onClick={onClick} className="group flex min-h-[76px] min-w-[270px] snap-start items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] sm:min-w-[300px] sm:px-4 xl:min-w-0 xl:border-r xl:border-[#f0143c]/35 xl:rounded-none">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/75 bg-[#10090b] text-[#ff2448] shadow-[0_0_14px_rgba(240,20,60,0.16)] transition group-hover:bg-[#f0143c]/15 group-hover:shadow-[0_0_20px_rgba(240,20,60,0.35)]"><Icon className="h-6 w-6" /></span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">{title}</span><span className="mt-1 block text-[11px] font-medium text-gray-400">{subtitle}</span></span>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f0143c]/50 text-[#ff526d] transition group-hover:bg-[#f0143c] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
               </button>
             ))}
-            <button type="button" onClick={() => navigateTo("pack-builder")} className="group flex min-h-[76px] items-center gap-3 rounded-xl bg-gradient-to-r from-[#f0143c] to-[#c9002d] px-3 py-3 text-left shadow-[0_0_20px_rgba(240,20,60,0.24)] transition hover:brightness-110 sm:px-4">
+            <button type="button" onClick={() => navigateTo("pack-builder")} className="group flex min-h-[76px] min-w-[290px] snap-start items-center gap-3 rounded-xl bg-gradient-to-r from-[#f0143c] to-[#c9002d] px-3 py-3 text-left shadow-[0_0_20px_rgba(240,20,60,0.24)] transition hover:brightness-110 sm:min-w-[320px] sm:px-4 xl:min-w-0">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/35 bg-white/10 text-white"><PackagePlus className="h-6 w-6" /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">Vos packs — Composez votre pack</span><span className="mt-1 block text-[11px] font-medium text-white/80">Créez votre sélection personnalisée</span></span>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-[#d90429] transition group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
@@ -779,6 +808,7 @@ export const Navbar = () => {
           <div className="relative max-w-xl mx-auto">
             <form onSubmit={handleSearchSubmit} className="flex gap-2">
               <input
+                ref={mobileSearchInputRef}
                 type="text"
                 placeholder="Rechercher un produit"
                 value={searchQuery}
@@ -805,37 +835,79 @@ export const Navbar = () => {
       )}
 
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-black border-t border-[#2b2b2b] p-4 sm:p-6 space-y-5 text-xs font-bold tracking-widest text-white uppercase relative z-10">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="mobile-menu-drawer flex h-[calc(100dvh-8rem)] max-h-[calc(100dvh-5rem)] min-h-0 flex-col overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white lg:hidden sm:p-6">
+          <section className="shrink-0" aria-labelledby="mobile-tools-title">
+            <h2 id="mobile-tools-title" className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Services et outils</h2>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {[
+                { id: "coach-ia", title: "Coach IA", subtitle: "Votre coach personnel, 24/7", Icon: Bot, onClick: () => navigateTo("coach-ia") },
+                { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Des conseils adaptés", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
+                { id: "calculator", title: "Calculateur", subtitle: "Kcal et macros", Icon: Calculator, onClick: () => navigateTo("calculator") },
+                { id: "pack-builder", title: "Vos packs", subtitle: "Composez votre pack", Icon: PackagePlus, onClick: () => navigateTo("pack-builder") },
+              ].map(({ id, title, subtitle, Icon, onClick }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    onClick();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex min-w-[210px] shrink-0 items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left transition-colors hover:border-[#d90429]/70 hover:bg-neutral-900"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#d90429]/60 bg-[#16090c] text-[#ff526d]">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-white">{title}</span>
+                    <span className="mt-1 block truncate text-[11px] font-normal text-gray-400">{subtitle}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[#ff526d]" />
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <div className="mt-5 grid shrink-0 grid-cols-2 gap-3">
             {sectionTabs.map((item) => (
               <button
                 key={item.id}
                 onClick={() => handleSectionClick(item.id)}
-                className="bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left"
+                className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-white"
               >
                 {item.label}
               </button>
             ))}
             <button
-              onClick={() => navigateTo("cart")}
-              className="bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left text-[#d90429]"
+              onClick={() => {
+                navigateTo("cart");
+                setMobileMenuOpen(false);
+              }}
+              className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-[#ff526d]"
             >
               Panier
             </button>
-            
           </div>
 
-          <div className="border-t border-[#3a3a3a] pt-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="mt-5 border-t border-neutral-800 pt-4">
+            <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Catégories</p>
+            <div className="space-y-2">
               {navigationCategories.map((item) => (
-                <div key={item.id}>
-                  <button onClick={() => handleRootCategoryClick(item)} className="w-full bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left normal-case tracking-normal font-semibold">
-                    {item.label} <span className="float-right text-[#ff6a2b]">{openCategoryId === item.id ? "▲" : "▼"}</span>
-                  </button>
-                  {openCategoryId === item.id && (
-                    <div className="mt-1 space-y-1 border-l border-[#ff6a2b] pl-3">
+                <div key={item.id} className="rounded-xl border border-neutral-800 bg-[#18181b]">
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={(event) => handleMobileRootCategoryClick(event, item)}
+                      className="min-w-0 flex-1 p-3 text-left font-medium text-white"
+                      aria-expanded={item.children?.length > 0 ? openCategoryId === item.id : undefined}
+                    >
+                      <span className="block truncate">{item.label}</span>
+                    </button>
+                    {item.children?.length > 0 && <button type="button" onClick={() => setOpenCategoryId((current) => current === item.id ? null : item.id)} className="p-3 text-red-500" aria-label={`${openCategoryId === item.id ? "Réduire" : "Développer"} ${item.label}`} aria-expanded={openCategoryId === item.id}><ChevronDown className={`h-4 w-4 transition-transform ${openCategoryId === item.id ? "rotate-180" : ""}`} /></button>}
+                  </div>
+                  {openCategoryId === item.id && item.children?.length > 0 && (
+                    <div className="mx-3 mb-3 space-y-1 border-l border-red-500/70 pl-3">
                       {item.children.map((child) => (
-                        <button key={child.id} onClick={() => handleSubCategoryClick(child)} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-semibold normal-case tracking-normal text-[#bdbdbd] hover:bg-[#1f1f1f] hover:text-[#ff6a2b]">
+                        <button key={child.id} onClick={() => handleSubCategoryClick(child)} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-normal text-gray-300 hover:bg-neutral-900 hover:text-white">
                           {child.name}
                         </button>
                       ))}
@@ -844,12 +916,19 @@ export const Navbar = () => {
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              {quickAccessStrip.map((item) => (
-                <button key={item.id} onClick={() => handleCategoryClick(item.id)} className="bg-[#171717] border border-[#3a3a3a] p-3 rounded-lg text-left normal-case tracking-normal font-semibold">
-                  {item.label}
-                </button>
-              ))}
+            <div className="mt-5 border-t border-neutral-800 pt-4">
+              <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Liens rapides</p>
+              <div className="grid grid-cols-2 gap-3">
+                {secondaryDesktopLinks.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === item.id) ? handleCategoryClick(item.id) : handleSectionClick(item.id)}
+                    className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-white transition-colors hover:border-[#d90429]/70"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

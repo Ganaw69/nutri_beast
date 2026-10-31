@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { couponService, resolvePackImage, resolveProductImage } from "../services/api";
 
 const CartContext = createContext();
 
@@ -139,7 +140,7 @@ export const CartProvider = ({ children }) => {
       id: `custom-pack-${pack.id}-${randomPart}`,
       itemType: "custom-pack",
       name: pack.name,
-      image: pack.imageUrl || pack.image || null,
+      image: resolvePackImage(pack),
       price: Number(quote.finalPrice),
       originalPrice: Number(quote.subtotal ?? quote.basePrice),
       quantity: Math.max(1, Number(quantity) || 1),
@@ -190,7 +191,9 @@ export const CartProvider = ({ children }) => {
       id: `predefined-pack-${pack.id}-${randomPart}`,
       itemType: "predefined-pack",
       name: pack.name,
-      image: pack.imageUrl || pack.image || null,
+      // Pack records commonly store just a filename. Resolve it before it
+      // enters the cart so the cart works in both local and deployed builds.
+      image: resolvePackImage(pack),
       price: finalPrice,
       originalPrice: Number(pack.basePrice ?? finalPrice),
       quantity: Math.max(1, Number(quantity) || 1),
@@ -209,7 +212,7 @@ export const CartProvider = ({ children }) => {
       productId: product.productId,
       sku: product.sku,
       name: product.name,
-      image: product.image || null,
+      image: resolveProductImage({ image: product.image }, null) || product.image || null,
       quantity: Number(product.quantity),
       unitPrice: Number(product.unitPrice || 0),
     }));
@@ -254,20 +257,50 @@ export const CartProvider = ({ children }) => {
     setAppliedCoupon(null);
   };
 
-  const applyPromoCode = (coupon) => {
-    // coupon is the full object from API (type: 'percentage' | 'fixed', value: "10.00")
-    if (!coupon) {
+  const applyPromoCode = async (couponOrCode) => {
+    let coupon = couponOrCode;
+    if (typeof couponOrCode === "string") {
+      try {
+        coupon = await couponService.findByCode(couponOrCode);
+      } catch {
+        showToast("Impossible de vérifier le code promo.");
+        return false;
+      }
+    }
+
+    const now = Date.now();
+    const startDate = coupon?.startDate ?? coupon?.start_date;
+    const endDate = coupon?.endDate ?? coupon?.end_date;
+    const minimumAmount = Number(coupon?.minimumAmount ?? coupon?.minimum_amount ?? 0);
+    const startsInFuture = startDate && new Date(startDate).getTime() > now;
+    const hasEnded = endDate && new Date(endDate).getTime() < now;
+    const isActive = coupon?.isActive ?? coupon?.is_active ?? coupon?.active;
+
+    if (!coupon || isActive === false || startsInFuture || hasEnded) {
       showToast("❌ Code promo invalide ou expiré.");
       return false;
     }
-    setAppliedCoupon(coupon);
-    setPromoCode(coupon.code);
-    if (coupon.type === 'percentage') {
-      setDiscount(parseFloat(coupon.value) / 100);
-    } else {
-      setDiscount(0); // fixed discount handled separately in totals
+    if (Number.isFinite(minimumAmount) && minimumAmount > subtotal) {
+      showToast(`Ce code est valable à partir de ${minimumAmount.toFixed(2)} TND.`);
+      return false;
     }
-    showToast(`🎉 Code promo "${coupon.code}" appliqué !`);
+
+    const code = String(coupon.code || "").trim().toUpperCase();
+    const rawType = String(coupon.type ?? coupon.discountType ?? coupon.discount_type ?? "").toLowerCase();
+    const type = ["percentage", "percent", "percent_off", "pourcentage"].includes(rawType)
+      ? "percentage"
+      : "fixed";
+    const value = Math.max(0, Number(coupon.value ?? coupon.amount ?? coupon.discount ?? 0) || 0);
+    if (!code || value <= 0) {
+      showToast("❌ Code promo invalide ou expiré.");
+      return false;
+    }
+
+    const normalizedCoupon = { ...coupon, code, type, value };
+    setAppliedCoupon(normalizedCoupon);
+    setPromoCode(code);
+    setDiscount(type === "percentage" ? value / 100 : 0);
+    showToast(`🎉 Code promo "${code}" appliqué !`);
     return true;
   };
 
@@ -330,6 +363,7 @@ export const CartProvider = ({ children }) => {
     }
   }
 
+  discountAmount = Math.min(subtotal, Number.isFinite(discountAmount) ? discountAmount : 0);
   const shippingFee = subtotal >= 300 || subtotal === 0 ? 0 : 7;
   const totalPrice = Math.max(0, subtotal - discountAmount) + shippingFee;
   const totalItems = cart.reduce((acc, item) => acc + (item.quantity || 1), 0);

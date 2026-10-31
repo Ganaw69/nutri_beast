@@ -23,7 +23,9 @@ export const CartDrawer = () => {
 
   const handlePromoSubmit = (e) => {
     e.preventDefault();
-    applyPromoCode(inputCode);
+    void applyPromoCode(inputCode).then((applied) => {
+      if (applied) setInputCode("");
+    });
   };
 
   return (
