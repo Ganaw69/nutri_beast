@@ -20,12 +20,14 @@ const relationName = (value, names = new Map()) => typeof value === 'object'
     || names.get(String(relationId(value))) || '—'
   : names.get(String(relationId(value))) || (value ? String(value).split('/').pop() : '—');
 const movementType = (movement) => String(movement.type || movement.movementType || movement.operation || '').toUpperCase();
-const movementReason = (movement) => movement.reason
-  || movement.order?.reference
-  || movement.orderReference
-  || (movement.order?.id ? `Commande #${movement.order.id}` : '')
-  || movement.note
-  || '—';
+const movementReason = (movement) => {
+  const rawReason = String(movement.reason || '');
+  const orderNumber = movement.order?.reference
+    || movement.orderReference
+    || rawReason.match(/\bORD[-\w]+\b/i)?.[0];
+  if (orderNumber) return orderNumber;
+  return movement.note || rawReason || '—';
+};
 const variantName = (movement) => movement.variantName
   || movement.variant?.name
   || movement.productVariant?.name
@@ -64,7 +66,12 @@ export const StockMovementManager = () => {
       setMovements(rows.map((movement) => ({
         ...movement,
         productDisplayName: relationName(movement.product || movement.productId || movement.productIri, productNames),
-        userDisplayName: relationName(movement.user || movement.createdBy || movement.userId, userNames),
+        userDisplayName: relationName(
+          movement.user || movement.createdBy || movement.performedBy || movement.actor || movement.userId,
+          userNames
+        ) !== '—'
+          ? relationName(movement.user || movement.createdBy || movement.performedBy || movement.actor || movement.userId, userNames)
+          : movement.userName || movement.createdByName || movement.performedByName || '—',
       })));
       setTotal(data?.['hydra:totalItems'] ?? data?.totalItems ?? rows.length);
     } catch (e) {
