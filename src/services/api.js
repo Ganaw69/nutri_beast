@@ -1340,9 +1340,14 @@ export const productService = {
       'hydra:member': response['hydra:member'].map(normalizeProduct),
     };
   },
+  async getBestSellers(params = {}) {
+    const response = normalizeCollectionResponse(await apiFetch(`/products/best-sellers${buildQuery(params)}`, {}, false, true));
+    return {
+      ...response,
+      'hydra:member': response['hydra:member'].map(normalizeProduct),
+    };
+  },
   async getNewPages() {
-    // Use the dedicated endpoint for the New Products page. The response is
-    // normalized below so both is_new and isNew payloads render consistently.
     const response = await this.getNew({ isActive: true });
     return {
       ...response,
