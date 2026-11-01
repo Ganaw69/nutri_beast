@@ -2164,6 +2164,21 @@ export const stockMovementService = {
   async getAll(params = {}) {
     return apiFetch(`/stock_movements${buildQuery(params)}`);
   },
+  async getAllPages(params = {}) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 });
+    const firstItems = firstPage?.['hydra:member'] || firstPage?.member || firstPage?.items || [];
+    const total = Number(firstPage?.['hydra:totalItems'] ?? firstPage?.totalItems ?? firstItems.length);
+    if (firstItems.length === 0 || firstItems.length >= total) {
+      return { ...firstPage, 'hydra:member': firstItems, 'hydra:totalItems': firstItems.length };
+    }
+    const pages = await Promise.all(
+      Array.from({ length: Math.ceil(total / firstItems.length) - 1 }, (_, index) =>
+        this.getAll({ ...params, page: index + 2, itemsPerPage: 100 })
+      )
+    );
+    const members = [...firstItems, ...pages.flatMap((page) => page?.['hydra:member'] || page?.member || page?.items || [])];
+    return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
+  },
   async getOne(id) {
     return apiFetch(`/stock_movements/${id}`);
   },

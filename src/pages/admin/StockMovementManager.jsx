@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { stockMovementService } from '../../services/api';
+import { stockMovementService, productService, userService, iriToId } from '../../services/api';
 import { Search, Loader2, RefreshCw, TrendingUp, TrendingDown, RotateCcw } from 'lucide-react';
 
 const TYPE_CONFIG = {
@@ -12,7 +12,28 @@ const TYPE_CONFIG = {
   adjust: { label: 'Ajustement', color: 'text-blue-400', bg: 'bg-blue-400/10', Icon: RotateCcw },
   return: { label: 'Retour', color: 'text-yellow-400', bg: 'bg-yellow-400/10', Icon: RotateCcw },
 };
-const relationName = (value) => typeof value === 'object' ? value?.name || value?.email || value?.username || '—' : value || '—';
+const relationId = (value) => typeof value === 'object'
+  ? value?.id ?? iriToId(value?.['@id'] || value?.iri)
+  : iriToId(value) ?? value;
+const relationName = (value, names = new Map()) => typeof value === 'object'
+  ? value?.name || value?.label || value?.email || value?.username
+    || names.get(String(relationId(value))) || '—'
+  : names.get(String(relationId(value))) || (value ? String(value).split('/').pop() : '—');
+const movementType = (movement) => String(movement.type || movement.movementType || movement.operation || '').toUpperCase();
+const movementReason = (movement) => movement.reason
+  || movement.order?.reference
+  || movement.orderReference
+  || (movement.order?.id ? `Commande #${movement.order.id}` : '')
+  || movement.note
+  || '—';
+const variantName = (movement) => movement.variantName
+  || movement.variant?.name
+  || movement.productVariant?.name
+  || movement.variant?.label
+  || movement.productVariant?.label
+  || (typeof movement.variant === 'string' ? movement.variant.split('/').pop() : '')
+  || (typeof movement.productVariant === 'string' ? movement.productVariant.split('/').pop() : '')
+  || '—';
 
 export const StockMovementManager = () => {
   const [movements, setMovements] = useState([]);
@@ -26,9 +47,25 @@ export const StockMovementManager = () => {
     setLoading(true);
     setError('');
     try {
-      const data = await stockMovementService.getAll({ page, itemsPerPage: 30 });
+      const [data, productData, userData] = await Promise.all([
+        stockMovementService.getAll({ page, itemsPerPage: 30 }),
+        productService.getAllPages({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
+        userService.getAll({ itemsPerPage: 100 }).catch(() => ({ 'hydra:member': [] })),
+      ]);
       const rows = data?.['hydra:member'] || data?.member || [];
-      setMovements(rows);
+      const productNames = new Map((productData?.['hydra:member'] || productData?.member || []).map((product) => [
+        String(product.id ?? iriToId(product['@id'])),
+        product.name,
+      ]));
+      const userNames = new Map((userData?.['hydra:member'] || userData?.member || []).map((user) => [
+        String(user.id ?? iriToId(user['@id'])),
+        user.name || user.email || user.username,
+      ]));
+      setMovements(rows.map((movement) => ({
+        ...movement,
+        productDisplayName: relationName(movement.product || movement.productId || movement.productIri, productNames),
+        userDisplayName: relationName(movement.user || movement.createdBy || movement.userId, userNames),
+      })));
       setTotal(data?.['hydra:totalItems'] ?? data?.totalItems ?? rows.length);
     } catch (e) {
       setMovements([]);
@@ -41,7 +78,7 @@ export const StockMovementManager = () => {
   const filtered = movements.filter((m) => {
     const term = search.trim().toLocaleLowerCase('fr');
     if (!term) return true;
-    return [relationName(m.product), relationName(m.variant), m.reason, relationName(m.user), m.type]
+    return [m.productDisplayName, variantName(m), movementReason(m), m.userDisplayName, movementType(m)]
       .some((value) => String(value || '').toLocaleLowerCase('fr').includes(term));
   });
 
@@ -72,14 +109,17 @@ export const StockMovementManager = () => {
                 : error ? <tr><td colSpan={9} role="alert" className="text-center py-10 text-red-300">{error}</td></tr>
                   : filtered.length === 0 ? <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-500">{search ? 'Aucun mouvement ne correspond à la recherche.' : 'Aucun mouvement de stock.'}</td></tr>
                     : filtered.map((m) => {
-                      const cfg = TYPE_CONFIG[m.type] || { label: m.type || '—', color: 'text-gray-400', bg: 'bg-gray-400/10', Icon: RotateCcw };
+                      const type = movementType(m);
+                      const cfg = TYPE_CONFIG[type]
+                        || TYPE_CONFIG[String(m.type || m.movementType || m.operation || '').toLowerCase()]
+                        || { label: type || '—', color: 'text-gray-400', bg: 'bg-gray-400/10', Icon: RotateCcw };
                       return <tr key={m.id ?? m['@id']} className="hover:bg-[#1a1a1a] transition-colors">
                         <td className="px-4 py-4 text-xs text-gray-400">{m.createdAt || m.date ? new Date(m.createdAt || m.date).toLocaleString('fr-FR') : '—'}</td>
-                        <td className="px-4 py-4 text-sm text-white font-medium">{relationName(m.product)}</td>
-                        <td className="px-4 py-4 text-sm text-gray-300">{relationName(m.variant || m.productVariant)}</td>
+                        <td className="px-4 py-4 text-sm text-white font-medium">{m.productDisplayName}</td>
+                        <td className="px-4 py-4 text-sm text-gray-300">{variantName(m)}</td>
                         <td className="px-4 py-4"><span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase ${cfg.bg} ${cfg.color}`}><cfg.Icon size={10} />{cfg.label}</span></td>
                         <td className="px-4 py-4 text-sm text-white">{m.quantity ?? '—'}</td><td className="px-4 py-4 text-sm text-gray-300">{m.previousStock ?? m.stockBefore ?? '—'}</td><td className="px-4 py-4 text-sm text-gray-300">{m.newStock ?? m.stockAfter ?? '—'}</td>
-                        <td className="px-4 py-4 text-xs text-gray-400">{m.reason || '—'}</td><td className="px-4 py-4 text-xs text-gray-400">{relationName(m.user || m.createdBy)}</td>
+                        <td className="px-4 py-4 text-xs text-gray-400">{movementReason(m)}</td><td className="px-4 py-4 text-xs text-gray-400">{m.userDisplayName}</td>
                       </tr>;
                     })}
             </tbody>

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { orderService, productService, hydrateProductsWithImages, resolveProductImage, iriToId } from '../../services/api';
 import {
   Search, Eye, X, Loader2, RefreshCw, ChevronLeft, ChevronRight,
-  Package, Truck, Check, XCircle,
+  Package, Truck, Check, XCircle, Banknote,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -37,6 +37,14 @@ const text = (value) => value === null || value === undefined || value === '' ? 
 const number = (value) => Number(value ?? 0) || 0;
 const statusKey = (value) => String(value || '').toLowerCase();
 const paymentValue = (order) => order.paymentStatus ?? order.payment_state ?? order.payment?.status ?? '';
+const paymentMethodValue = (order) => order.paymentMethod ?? order.payment_method ?? order.payment?.method ?? '';
+const paymentMethodMeta = (value) => {
+  const key = statusKey(value).replace(/[\s-]+/g, '_');
+  if (['cash_on_delivery', 'cod', 'cash', 'especes', 'espèces', 'paiement_a_la_livraison'].includes(key)) {
+    return { label: 'Paiement à la livraison', detail: 'Espèces à la réception', className: 'border-amber-400/30 bg-amber-400/10 text-amber-200' };
+  }
+  return { label: text(value), detail: '', className: 'border-white/10 bg-white/5 text-gray-300' };
+};
 const getItems = (order) => {
   const items = order.items ?? order.orderItems ?? order.order_items ?? [];
   return Array.isArray(items) ? items : [];
@@ -66,6 +74,19 @@ const StatusBadge = ({ status, payment = false }) => {
     ? ({ paid: { label: 'Payé', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' }, pending: { label: 'En attente', className: 'border-amber-500/20 bg-amber-500/10 text-amber-300' }, failed: { label: 'Échoué', className: 'border-red-500/20 bg-red-500/10 text-red-300' }, refunded: { label: 'Remboursé', className: 'border-violet-500/20 bg-violet-500/10 text-violet-300' } })[key]
     : STATUS_META[key];
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${meta?.className || 'border-white/10 bg-white/5 text-gray-300'}`}>{meta?.label || text(status)}</span>;
+};
+
+const PaymentMethodBadge = ({ value }) => {
+  const meta = paymentMethodMeta(value);
+  return (
+    <span className={`inline-flex max-w-[190px] items-center gap-2 rounded-lg border px-2.5 py-1.5 ${meta.className}`}>
+      <Banknote size={14} />
+      <span className="min-w-0">
+        <span className="block truncate text-[10px] font-black uppercase tracking-wide">{meta.label}</span>
+        {meta.detail && <span className="block text-[10px] opacity-75">{meta.detail}</span>}
+      </span>
+    </span>
+  );
 };
 
 const Field = ({ label, children }) => (
@@ -264,7 +285,7 @@ export const OrderManager = () => {
                     <td className="px-4 py-3 text-gray-300">{money(order.shippingFee ?? order.shippingCost)}</td>
                     <td className="px-4 py-3 font-bold text-white">{money(order.total)}</td>
                     <td className="px-4 py-3"><div className="flex flex-col items-start gap-1"><StatusBadge status={order.status} /><StatusBadge payment status={paymentValue(order)} /></div></td>
-                    <td className="px-4 py-3 text-xs text-gray-300">{text(order.paymentMethod ?? order.payment_method)}</td>
+                    <td className="px-4 py-3"><PaymentMethodBadge value={paymentMethodValue(order)} /></td>
                     <td className="px-4 py-3 text-right"><button type="button" onClick={() => openDetails(order)} aria-label={`Voir la commande ${order.reference || order.id}`} className="rounded-lg p-2 text-gray-300 hover:bg-[#333] hover:text-white"><Eye size={16} /></button></td>
                   </tr>;
                 })}
@@ -285,7 +306,7 @@ export const OrderManager = () => {
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
             {detailError && <div role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{detailError}</div>}
             {detailLoading ? <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-[#d90429]" /></div> : <>
-              <div className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.status} /><StatusBadge payment status={paymentValue(detail)} /><span className="text-xs text-gray-400">Paiement : {text(detail.paymentMethod ?? detail.payment_method)}</span></div>
+              <div className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.status} /><StatusBadge payment status={paymentValue(detail)} /><PaymentMethodBadge value={paymentMethodValue(detail)} /></div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Prénom et nom">{text(`${detail.firstName || ''} ${detail.lastName || ''}`.trim())}</Field><Field label="Téléphone">{text(detail.phone)}</Field><Field label="Email">{text(detail.email)}</Field>
                 <Field label="Adresse">{text(detail.address)}</Field><Field label="Ville / code postal">{text([detail.city, detail.postalCode].filter(Boolean).join(' '))}</Field><Field label="Dernière mise à jour">{dateTime(detail.updatedAt)}</Field>
