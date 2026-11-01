@@ -1757,7 +1757,7 @@ export const orderService = {
     return apiFetch(`/orders/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json' },
-      body: JSON.stringify({ paymentStatus: 'paid' }),
+      body: JSON.stringify({ paymentStatus: 'PAID' }),
     });
   },
   async getStatusHistories(params = {}) {
