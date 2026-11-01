@@ -246,6 +246,16 @@ export const Navbar = () => {
     }));
   }, [categories, categoryNavigation]);
 
+  const mobileCategories = useMemo(
+    () => navigationCategories.filter((category) => {
+      const label = normaliseSearchText(category.label);
+      const isExclusivePackCategory = /^packs?\s+exclusifs?$/.test(label)
+        || String(category.slug || category.code || "").toLowerCase().replace(/[-_]/g, " ").includes("pack exclusif");
+      return !isExclusivePackCategory;
+    }),
+    [navigationCategories]
+  );
+
   const secondaryDesktopLinks = useMemo(
     () => [
       ...quickAccessStrip,
@@ -268,6 +278,8 @@ export const Navbar = () => {
     };
 
     return secondaryDesktopLinks.filter((link) => {
+      // Packs Exclusifs is a dedicated catalogue page, not a product category.
+      if (link.id === "packs") return true;
       const aliases = categoryAliases[link.id] || [normaliseSearchText(link.label)];
       return !categoryNames.some((categoryName) => aliases.some((alias) => categoryName.includes(alias)));
     });
@@ -875,7 +887,7 @@ export const Navbar = () => {
           <div className="mt-5 border-t border-neutral-800 pt-4">
             <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Catégories</p>
             <div className="space-y-2">
-              {navigationCategories.map((item) => (
+              {mobileCategories.map((item) => (
                 <div key={item.id} className="rounded-xl border border-neutral-800 bg-[#18181b]">
                   <div className="flex items-center">
                     <button

@@ -91,6 +91,11 @@ export const Footer = () => {
                 </button>
               </li>
               <li>
+                <button type="button" onClick={() => navigateTo("order-tracking")} className="text-left hover:text-white transition-colors">
+                  Suivre ma commande
+                </button>
+              </li>
+              <li>
                 <button type="button" onClick={() => navigateTo("blog")} className="hover:text-white transition-colors">
                   Blog
                 </button>

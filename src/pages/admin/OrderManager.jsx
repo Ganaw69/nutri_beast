@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { orderService, productService, hydrateProductsWithImages, resolveProductImage, iriToId } from '../../services/api';
 import {
   Search, Eye, X, Loader2, RefreshCw, ChevronLeft, ChevronRight,
-  Package, Truck, Check, XCircle, Banknote,
+  Package, Truck, Check, XCircle, Banknote, AlertCircle, RotateCcw,
 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -31,6 +31,11 @@ const TRANSITION_META = {
   ship: { label: 'Marquer expédiée', icon: Truck },
   deliver: { label: 'Marquer livrée', icon: Check },
   cancel: { label: 'Annuler la commande', icon: XCircle },
+};
+
+const PAYMENT_ACTION_META = {
+  failed: { label: 'Échec paiement', icon: AlertCircle, className: 'border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20', requiresReason: true },
+  refunded: { label: 'Rembourser', icon: RotateCcw, className: 'border-violet-500/30 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20', requiresReason: true },
 };
 
 const text = (value) => value === null || value === undefined || value === '' ? '—' : String(value);
@@ -195,19 +200,52 @@ export const OrderManager = () => {
 
   const handleTransition = async (order, action) => {
     if (transitioning) return;
-    if (action === 'cancel' && !window.confirm(`Annuler la commande ${order.reference || `#${order.id}`} ?`)) return;
+    let reason = '';
+    if (action === 'cancel') {
+      if (!window.confirm(`Annuler la commande ${order.reference || `#${order.id}`} ?`)) return;
+      reason = window.prompt('Motif de l’annulation (obligatoire) :', '')?.trim() || '';
+      if (!reason) {
+        setDetailError('Le motif de l’annulation est obligatoire.');
+        return;
+      }
+    }
 
     setTransitioning(`${order.id}:${action}`);
     setNotice('');
     setDetailError('');
     try {
-      await orderService.transition(order.id, action);
+      await orderService.transition(order.id, action, reason);
       const [updated] = await Promise.all([orderService.getOne(order.id), fetchOrders()]);
       setDetail(updated);
       setNotice(`Commande ${updated.reference || `#${updated.id}`} mise à jour.`);
     } catch (transitionError) {
       setDetailError(errorMessage(transitionError));
       setError(errorMessage(transitionError));
+    } finally {
+      setTransitioning(null);
+    }
+  };
+
+  const handlePaymentStatus = async (order, paymentStatus) => {
+    if (transitioning) return;
+    const meta = PAYMENT_ACTION_META[paymentStatus];
+    const paymentReason = window.prompt(`Motif : ${meta.label} (obligatoire)`, '')?.trim() || '';
+    if (!paymentReason) {
+      setDetailError('Le motif du paiement est obligatoire.');
+      return;
+    }
+
+    setTransitioning(`${order.id}:payment-${paymentStatus}`);
+    setNotice('');
+    setDetailError('');
+    try {
+      await orderService.updatePaymentStatus(order.id, paymentStatus.toUpperCase(), paymentReason);
+      const [updated] = await Promise.all([orderService.getOne(order.id), fetchOrders()]);
+      setDetail(updated);
+      setNotice(`Paiement de la commande ${updated.reference || `#${updated.id}`} : ${meta.label.toLowerCase()}.`);
+    } catch (paymentError) {
+      setDetailError(errorMessage(paymentError));
+      setError(errorMessage(paymentError));
     } finally {
       setTransitioning(null);
     }
@@ -369,12 +407,16 @@ export const OrderManager = () => {
                 <Field label="Adresse">{text(detail.address)}</Field><Field label="Ville / code postal">{text([detail.city, detail.postalCode].filter(Boolean).join(' '))}</Field><Field label="Dernière mise à jour">{dateTime(detail.updatedAt)}</Field>
               </div>
               {detail.notes && <Field label="Notes">{detail.notes}</Field>}
+              {(detail.paymentReason || detail.cancelReason || detail.cancellationReason) && <section className="grid gap-3 sm:grid-cols-2">
+                {detail.paymentReason && <Field label="Motif du paiement">{detail.paymentReason}</Field>}
+                {(detail.cancelReason || detail.cancellationReason) && <Field label="Motif de l’annulation">{detail.cancelReason || detail.cancellationReason}</Field>}
+              </section>}
               <section><h3 className="mb-2 text-sm font-bold text-white">Articles ({detailItems.length})</h3><div className="overflow-hidden rounded-lg border border-[#2a2a2a]">{detailItems.length ? detailItems.map((item, index) => { const image = detailProductImages[itemProductKey(item, index)]; return <div key={item.id ?? index} className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a2a2a] p-3 last:border-0"><div className="flex min-w-0 items-center gap-3"><div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#222]">{image ? <img src={image} alt={itemName(item)} loading="lazy" className="h-full w-full object-contain" /> : <Package size={20} className="text-gray-600" />}</div><div className="min-w-0"><p className="text-sm font-semibold text-white">{itemName(item)}</p><p className="text-xs text-gray-500">{itemSku(item) ? `SKU ${itemSku(item)} · ` : ''}Quantité : {itemQuantity(item)} · Unité : {money(item.unitPrice ?? item.price)}</p></div></div><span className="text-sm font-bold text-white">{money(item.subtotal ?? item.lineSubtotal)}</span></div>; }) : <p className="p-4 text-sm text-gray-500">Aucun détail d’article fourni par l’API.</p>}</div></section>
               <section><h3 className="mb-2 text-sm font-bold text-white">Récapitulatif</h3><div className="space-y-2 rounded-lg bg-[#111] p-4 text-sm"><div className="flex justify-between text-gray-300"><span>Sous-total</span><span>{money(detail.subtotal)}</span></div><div className="flex justify-between text-gray-300"><span>Coupon</span><span>{text(detail.couponCode ?? detail.coupon?.code)}</span></div><div className="flex justify-between text-gray-300"><span>Réduction</span><span>−{money(detail.discountAmount ?? detail.discount)}</span></div><div className="flex justify-between text-gray-300"><span>Livraison</span><span>{money(detail.shippingFee ?? detail.shippingCost)}</span></div><div className="flex justify-between border-t border-white/10 pt-2 font-black text-white"><span>Total</span><span>{money(detail.total)}</span></div></div></section>
               <section><h3 className="mb-2 text-sm font-bold text-white">Historique des statuts</h3>{history.length > 0 ? <ol className="space-y-2 border-l border-[#444] pl-4">{[...history].sort((a, b) => new Date(a.createdAt || a.changedAt || a.date || 0) - new Date(b.createdAt || b.changedAt || b.date || 0)).map((entry, index) => <li key={entry.id ?? entry['@id'] ?? index} className="relative text-sm text-gray-300"><span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-[#d90429]" />{historyLabel(entry)} <span className="ml-2 text-xs text-gray-500">{dateTime(entry.createdAt ?? entry.changedAt ?? entry.date)}</span></li>)}</ol> : <p className="rounded-lg bg-[#111] p-3 text-sm text-gray-500">Aucun historique de statut disponible.</p>}</section>
             </>
           </div>
-          {!detailLoading && ((TRANSITIONS[detailStatus] || []).length > 0 || (isCashOnDelivery(detail) && statusKey(paymentValue(detail)) === 'pending')) && <footer className="flex flex-wrap gap-2 border-t border-[#2a2a2a] p-4">
+          {!detailLoading && ((TRANSITIONS[detailStatus] || []).length > 0 || Object.keys(PAYMENT_ACTION_META).length > 0 || (isCashOnDelivery(detail) && statusKey(paymentValue(detail)) === 'pending')) && <footer className="flex flex-wrap gap-2 border-t border-[#2a2a2a] p-4">
             {(TRANSITIONS[detailStatus] || []).map((action) => {
               const ActionIcon = TRANSITION_META[action].icon;
               const busy = transitioning === `${detail.id}:${action}`;
@@ -383,6 +425,13 @@ export const OrderManager = () => {
             {isCashOnDelivery(detail) && statusKey(paymentValue(detail)) === 'pending' && <button type="button" disabled={Boolean(transitioning)} onClick={() => handleCollectPayment(detail)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">
               {transitioning === `${detail.id}:collect-payment` ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} />} Encaisser
             </button>}
+            {Object.entries(PAYMENT_ACTION_META).map(([paymentStatus, meta]) => {
+              const PaymentIcon = meta.icon;
+              const busy = transitioning === `${detail.id}:payment-${paymentStatus}`;
+              return <button key={paymentStatus} type="button" disabled={Boolean(transitioning) || statusKey(paymentValue(detail)) === paymentStatus} onClick={() => handlePaymentStatus(detail, paymentStatus)} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50 ${meta.className}`}>
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <PaymentIcon size={14} />} {busy ? 'Mise à jour…' : meta.label}
+              </button>;
+            })}
           </footer>}
         </section>
       </div>}

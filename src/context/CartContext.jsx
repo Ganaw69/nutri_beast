@@ -14,6 +14,7 @@ const CLIENT_TABS = new Set([
   "coach-ia",
   "cart",
   "checkout",
+  "order-tracking",
   "blog",
   "recipes",
 ]);
@@ -41,6 +42,7 @@ const readClientRoute = () => {
         }),
       };
     }
+    if (CLIENT_TABS.has(pathTab)) return { tab: pathTab };
     return { tab: "home" };
   }
 

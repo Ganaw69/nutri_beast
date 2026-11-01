@@ -259,6 +259,15 @@ export const ShopPage = () => {
   }, [catalogueProducts, categories, quickCategoryFilters, searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, selectedQuickCategoryKeys, showNewOnly, priceMax, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / itemsPerPage));
+  const currentCategoryLabel = useMemo(() => {
+    if (showNewOnly) return "Nouveautés";
+    if (searchQuery.trim()) return `Résultats pour « ${searchQuery.trim()} »`;
+    const selectedNames = [
+      ...selectedShopCategoryIds.map((id) => categories.find((category) => sameId(category.id, id))?.name),
+      ...selectedQuickCategoryKeys.map((key) => quickCategoryFilters.find((filter) => filter.key === key)?.label),
+    ].filter(Boolean);
+    return selectedNames.length > 0 ? selectedNames.join(" · ") : "Tous les produits";
+  }, [categories, quickCategoryFilters, searchQuery, selectedQuickCategoryKeys, selectedShopCategoryIds, showNewOnly]);
   const pagedProducts = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredProducts.slice(start, start + itemsPerPage);
@@ -527,9 +536,12 @@ export const ShopPage = () => {
           {/* ================= RIGHT PRODUCT GRID ================= */}
           <main className="lg:col-span-9 space-y-6">
             <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                {loading ? 'Chargement...' : <><strong className="text-white">{totalCount}</strong> produit{totalCount !== 1 ? 's' : ''}</>}
-              </span>
+              <div>
+                <h1 className="text-lg font-black uppercase tracking-wide text-white sm:text-xl">{currentCategoryLabel}</h1>
+                <span className="mt-1 block text-xs font-bold uppercase tracking-wider text-gray-400">
+                  {loading ? 'Chargement...' : <><strong className="text-white">{totalCount}</strong> produit{totalCount !== 1 ? 's' : ''}</>}
+                </span>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
                   <span>Produits par page</span>

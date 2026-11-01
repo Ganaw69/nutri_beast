@@ -971,26 +971,28 @@ const hasEmbeddedProductImage = (product) => {
 export const hydrateProductsWithImages = async (products = [], skipAuth = true) => {
   if (!products.length) return products;
 
-  // Do not fetch a single, paginated image collection here.  When that
-  // collection is capped by the API, images belonging to products after its
-  // first page are absent on the storefront (while they still work in admin).
-  // The API already supports filtering images by product, so use it just as
-  // the back-office does. A failed image request remains non-blocking.
-  return Promise.all(products.map(async (product) => {
-    const productId = product?.id ?? iriToId(product?.['@id'] || product?.iri);
-    // List responses that already carry an image are ready to render. Avoid a
-    // second API request for every visible card in that common case.
-    if (productId == null || hasEmbeddedProductImage(product)) return product;
+  const productsWithoutImages = products.filter((product) => !hasEmbeddedProductImage(product));
+  if (productsWithoutImages.length === 0) return products;
 
-    const data = await productService
-      .getImages({ product: productId, itemsPerPage: 100 }, skipAuth)
-      .catch(() => ({ 'hydra:member': [] }));
-    const fetchedImages = data?.['hydra:member'] || data?.member || data?.items || [];
+  // Load visible product images in one request instead of one request per card.
+  const data = await productService
+    .getImages({ itemsPerPage: 100 }, skipAuth)
+    .catch(() => ({ 'hydra:member': [] }));
+  const imagesByProduct = new Map();
+  (data?.['hydra:member'] || data?.member || data?.items || []).forEach((image) => {
+    const productId = getProductImageProductId(image);
+    if (productId == null) return;
+    const key = String(productId);
+    imagesByProduct.set(key, [...(imagesByProduct.get(key) || []), image]);
+  });
+
+  return products.map((product) => {
+    if (hasEmbeddedProductImage(product)) return product;
+    const productId = product?.id ?? iriToId(product?.['@id'] || product.iri);
     const embeddedImages = Array.isArray(product.productImages) ? product.productImages : [];
-    const productImages = [...embeddedImages, ...fetchedImages];
-
+    const productImages = [...embeddedImages, ...(imagesByProduct.get(String(productId)) || [])];
     return productImages.length > 0 ? { ...product, productImages } : product;
-  }));
+  });
 };
 
 /** Pick the primary product image if present, otherwise the first image. */
@@ -1736,6 +1738,20 @@ export const orderService = {
   async getOne(id) {
     return apiFetch(`/orders/${id}`);
   },
+  async track(identifier) {
+    const value = String(identifier || '').trim();
+    if (!value) throw new Error('Le numéro de commande est requis.');
+
+    if (/^\d+$/.test(value)) {
+      return apiFetch(`/orders/${value}`, {}, false, true);
+    }
+
+    const response = await apiFetch(`/orders${buildQuery({ reference: value, itemsPerPage: 1 })}`, {}, false, true);
+    const orders = response?.['hydra:member'] || response?.member || response?.items || [];
+    const order = orders.find((item) => String(item.reference || item.orderReference || '').toLowerCase() === value.toLowerCase());
+    if (!order) throw new Error('Aucune commande trouvée avec cet identifiant.');
+    return order;
+  },
   /** POST /orders — public, no JWT needed */
   async create(orderInput) {
     const res = await fetch(`${BASE_URL}/orders`, {
@@ -1749,16 +1765,24 @@ export const orderService = {
     }
     return res.json();
   },
-  async transition(id, action) {
+  async transition(id, action, reason = '') {
     // action: 'confirm' | 'prepare' | 'ship' | 'deliver' | 'cancel'
-    return apiFetch(`/orders/${id}/${action}`, { method: 'PATCH' });
+    const options = { method: 'PATCH' };
+    if (action === 'cancel') {
+      options.headers = { 'Content-Type': 'application/json' };
+      options.body = JSON.stringify({ reason });
+    }
+    return apiFetch(`/orders/${id}/${action}`, options);
   },
-  async markPaymentCollected(id) {
+  async updatePaymentStatus(id, paymentStatus, paymentReason = '') {
     return apiFetch(`/orders/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json' },
-      body: JSON.stringify({ paymentStatus: 'PAID' }),
+      body: JSON.stringify({ paymentStatus, ...(paymentReason ? { paymentReason } : {}) }),
     });
+  },
+  async markPaymentCollected(id) {
+    return this.updatePaymentStatus(id, 'PAID');
   },
   async getStatusHistories(params = {}) {
     return apiFetch(`/order_status_histories${buildQuery(params)}`);

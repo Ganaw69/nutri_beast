@@ -11,6 +11,7 @@ const lazyPage = (loader, exportName) => lazy(async () => {
   const module = await loader();
   return { default: module[exportName] };
 });
+const SITE_URL = "https://proteinstoretunisia.tn";
 
 // Keep the landing page in the initial bundle, but load feature screens only
 // when a visitor opens them. The admin and AI dependencies were otherwise
@@ -27,6 +28,7 @@ const NutritionistAIPage = lazyPage(() => import("./pages/NutritionistAIPage"), 
 const CoachIaPage = lazyPage(() => import("./pages/CoachIaPage"), "CoachIaPage");
 const CartPage = lazyPage(() => import("./pages/CartPage"), "CartPage");
 const CheckoutPage = lazyPage(() => import("./pages/CheckoutPage"), "CheckoutPage");
+const OrderTrackingPage = lazyPage(() => import("./pages/OrderTrackingPage"), "OrderTrackingPage");
 const BlogPage = lazyPage(() => import("./pages/BlogPage"), "BlogPage");
 const BlogArticlePage = lazyPage(() => import("./pages/BlogArticlePage"), "BlogArticlePage");
 const RecipesPage = lazyPage(() => import("./pages/RecipesPage"), "RecipesPage");
@@ -64,6 +66,55 @@ const BackToTopButton = () => {
     >
       <ArrowUp className="h-5 w-5" />
     </button>
+  );
+};
+
+const SEO = () => {
+  const { activeTab } = useCart();
+  const metadata = {
+    home: ["Protein Store Tunisia | Nutrition sportive en Tunisie", "Compléments alimentaires et nutrition sportive livrés en Tunisie : whey, créatine, pré-workout, mass gainers et packs exclusifs."],
+    shop: ["Boutique de compléments alimentaires en Tunisie | Protein Store", "Découvrez nos compléments alimentaires et produits de nutrition sportive : whey, créatine, pré-workout et plus."],
+    new: ["Nouveautés nutrition sportive | Protein Store Tunisia", "Découvrez les nouveaux produits de nutrition sportive disponibles en Tunisie."],
+    packs: ["Packs exclusifs de nutrition sportive | Protein Store", "Découvrez nos packs exclusifs de compléments alimentaires et de nutrition sportive."],
+    recipes: ["Recettes sportives et nutrition | Protein Store Tunisia", "Des recettes simples et adaptées à vos objectifs sportifs et nutritionnels."],
+    blog: ["Conseils nutrition sportive | Protein Store Tunisia", "Conseils, informations et actualités sur la nutrition sportive et les compléments alimentaires."],
+    faq: ["FAQ | Protein Store Tunisia", "Les réponses aux questions fréquentes sur nos produits, commandes, paiements et livraisons."],
+    "order-tracking": ["Suivre ma commande | Protein Store Tunisia", "Consultez l’avancement de votre commande Protein Store Tunisia."],
+    "privacy-policy": ["Politique de confidentialité | Protein Store Tunisia", "Politique de confidentialité de Protein Store Tunisia."],
+    "terms-of-service": ["Conditions générales | Protein Store Tunisia", "Conditions générales de vente et d’utilisation de Protein Store Tunisia."],
+  }[activeTab] || ["Protein Store Tunisia | Nutrition sportive en Tunisie", "Compléments alimentaires et nutrition sportive livrés en Tunisie."];
+  const canonicalPath = {
+    home: "/",
+    shop: "/shop",
+    new: "/new",
+    packs: "/packs",
+    recipes: "/recipes",
+    blog: "/blog",
+    faq: "/faq",
+    "order-tracking": "/order-tracking",
+    "privacy-policy": "/privacy-policy",
+    "terms-of-service": "/terms-of-service",
+  }[activeTab] || "/";
+  const canonical = `${SITE_URL}${canonicalPath}`;
+
+  React.useEffect(() => {
+    document.title = metadata[0];
+    const description = document.querySelector('meta[name="description"]');
+    const canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (description) description.setAttribute("content", metadata[1]);
+    if (canonicalLink) canonicalLink.setAttribute("href", canonical);
+  }, [canonical, metadata]);
+
+  return (
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Protein Store Tunisia",
+      url: `${SITE_URL}/`,
+      logo: `${SITE_URL}/favicon.svg`,
+      email: "contact@proteinstore.tn",
+      areaServed: "TN",
+    }) }} />
   );
 };
 
@@ -127,6 +178,7 @@ const MainContent = () => {
           {activeTab === "coach-ia" && <CoachIaPage />}
           {activeTab === "cart" && <CartPage />}
           {activeTab === "checkout" && <CheckoutPage />}
+          {activeTab === "order-tracking" && <OrderTrackingPage />}
           {activeTab === "blog" && <BlogPage />}
           {activeTab === "blog-article" && <BlogArticlePage />}
           {activeTab === "recipes" && <RecipesPage />}
@@ -143,6 +195,7 @@ const ClientApp = () => {
   return (
     <CartProvider>
       <div className="min-h-screen bg-[#131313] text-[#e5e2e1] flex flex-col justify-between selection:bg-[#d90429] selection:text-white">
+        <SEO />
         <div>
           <Navbar />
           <MainContent />
