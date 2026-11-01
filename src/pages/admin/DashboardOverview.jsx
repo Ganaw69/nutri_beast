@@ -4,18 +4,43 @@ import { orderService, productService } from "../../services/api";
 import { TrendingUp, TrendingDown, Calendar as CalendarIcon, MoreVertical, Dumbbell, Zap, Droplet, Package, Coffee, Loader2 } from "lucide-react";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const PERIODS = [
+  { key: "today", label: "Today" },
+  { key: "month", label: "Month" },
+  { key: "year", label: "Year" },
+  { key: "custom", label: "Custom" },
+];
 
 const formatMoney = (value) => `${Number(value || 0).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} TND`;
+const dateKey = (date) => {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return "";
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+};
+const orderItems = (order) => {
+  const items = order?.items ?? order?.orderItems ?? order?.order_items ?? [];
+  return Array.isArray(items) ? items : [];
+};
+const itemProductId = (item) => {
+  const product = item?.product;
+  if (typeof product === "object") return product.id ?? product["@id"]?.split("/").pop();
+  return product ?? item?.productId ?? item?.productIri;
+};
+const itemValue = (item) => Number(item?.subtotal ?? item?.lineSubtotal ?? item?.total ?? item?.unitPrice ?? item?.price ?? 0)
+  * (item?.subtotal == null && item?.lineSubtotal == null && item?.total == null ? Number(item?.quantity ?? item?.qty ?? 1) : 1);
 
 export const DashboardOverview = () => {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState("year");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
   useEffect(() => {
     Promise.all([
-      orderService.getAll({ itemsPerPage: 100 }).catch(() => ({ "hydra:member": [] })),
-      productService.getAll({ itemsPerPage: 100 }).catch(() => ({ "hydra:member": [] })),
+      orderService.getAllPages({ itemsPerPage: 100 }).catch(() => ({ "hydra:member": [] })),
+      productService.getAllPages({ itemsPerPage: 100 }).catch(() => ({ "hydra:member": [] })),
     ]).then(([orderData, productData]) => {
       setOrders(orderData["hydra:member"] || []);
       setProducts(productData["hydra:member"] || []);
@@ -24,23 +49,60 @@ export const DashboardOverview = () => {
   }, []);
 
   const metrics = useMemo(() => {
-    const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const totalNetSales = orders.reduce((sum, order) => sum + Number(order.subtotal || order.total || 0), 0);
-    const totalOrders = orders.length;
+    const now = new Date();
+    let start;
+    let end;
+    if (period === "today") {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    } else if (period === "month") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    } else if (period === "custom") {
+      start = customStart ? new Date(`${customStart}T00:00:00`) : new Date(0);
+      end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : new Date(8640000000000000);
+    } else {
+      start = new Date(now.getFullYear(), 0, 1);
+      end = new Date(now.getFullYear() + 1, 0, 1);
+    }
+
+    const filteredOrders = orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt <= end;
+    });
+    const totalRevenue = filteredOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const totalNetSales = filteredOrders.reduce((sum, order) => sum + Number(order.subtotal || order.total || 0), 0);
+    const totalOrders = filteredOrders.length;
     const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0;
 
-    const monthly = MONTHS.map((name, monthIndex) => {
-      const monthOrders = orders.filter((order) => {
-        if (!order.createdAt) return false;
-        return new Date(order.createdAt).getMonth() === monthIndex;
-      });
+    const chartBuckets = period === "year"
+      ? MONTHS.map((name, monthIndex) => ({ name, matches: (date) => date.getMonth() === monthIndex }))
+      : period === "month"
+        ? Array.from({ length: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() }, (_, index) => {
+          const day = index + 1;
+          return { name: String(day), matches: (date) => date.getDate() === day };
+        })
+        : period === "today"
+          ? [{ name: "Today", matches: () => true }]
+          : [{ name: "Custom", matches: () => true }];
+    const monthly = chartBuckets.map(({ name, matches }) => {
+      const bucketOrders = filteredOrders.filter((order) => matches(new Date(order.createdAt)));
       return {
         name,
-        gross: monthOrders.reduce((sum, order) => sum + Number(order.total || 0), 0),
-        net: monthOrders.reduce((sum, order) => sum + Number(order.subtotal || order.total || 0), 0),
+        gross: bucketOrders.reduce((sum, order) => sum + Number(order.total || 0), 0),
+        net: bucketOrders.reduce((sum, order) => sum + Number(order.subtotal || order.total || 0), 0),
       };
     });
 
+    const productMap = new Map(products.map((product) => [String(product.id ?? product["@id"]), product]));
+    const categoryMap = new Map();
+    filteredOrders.forEach((order) => {
+      orderItems(order).forEach((item) => {
+        const product = typeof item.product === "object" ? item.product : productMap.get(String(itemProductId(item)));
+        const category = product?.category?.name || "Other";
+        categoryMap.set(category, (categoryMap.get(category) || 0) + itemValue(item));
+      });
+    });
     const topPerformers = [...products]
       .sort((a, b) => Number(b.sales || 0) - Number(a.sales || 0))
       .slice(0, 5)
@@ -55,13 +117,6 @@ export const DashboardOverview = () => {
           Dumbbell,
       }));
 
-    const categoryMap = new Map();
-    products.forEach((product) => {
-      const category = product.category?.name || "Other";
-      const current = categoryMap.get(category) || 0;
-      categoryMap.set(category, current + Number(product.sales || 0) + Number(product.stock || 0));
-    });
-
     const heatmap = [...categoryMap.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
@@ -72,7 +127,7 @@ export const DashboardOverview = () => {
       }));
 
     return { totalRevenue, totalNetSales, totalOrders, avgOrderValue, monthly, topPerformers, heatmap };
-  }, [orders, products]);
+  }, [orders, products, period, customStart, customEnd]);
 
   const maxHeatValue = Math.max(...metrics.heatmap.map((item) => item.value), 1);
 
@@ -92,14 +147,19 @@ export const DashboardOverview = () => {
           <p className="text-gray-500 text-sm">Derived from live orders and products.</p>
         </div>
         <div className="flex w-full items-center overflow-x-auto rounded border border-[#2a2a2a] bg-[#161616] sm:w-auto">
-          <button className="shrink-0 px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors sm:px-5">Today</button>
-          <button className="shrink-0 border-l border-[#2a2a2a] px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors sm:px-5">Month</button>
-          <button className="shrink-0 border-l border-[#e60033] bg-[#e60033] px-4 py-2 text-xs font-bold text-white sm:px-5">Year</button>
-          <button className="flex shrink-0 items-center gap-2 border-l border-[#2a2a2a] px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors sm:px-5">
-            Custom <CalendarIcon size={14} />
-          </button>
+          {PERIODS.map(({ key, label }) => (
+            <button key={key} type="button" onClick={() => setPeriod(key)} className={`shrink-0 px-4 py-2 text-xs font-bold transition-colors sm:px-5 ${period === key ? "bg-[#e60033] text-white" : "text-gray-400 hover:text-white"} ${key !== "today" ? "border-l border-[#2a2a2a]" : ""}`}>
+              {label} {key === "custom" && <CalendarIcon className="ml-1 inline" size={14} />}
+            </button>
+          ))}
         </div>
       </div>
+      {period === "custom" && (
+        <div className="mb-5 flex flex-wrap items-end gap-3 rounded border border-[#2a2a2a] bg-[#161616] p-4">
+          <label className="text-xs font-bold text-gray-400">From<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} className="mt-1 block rounded border border-[#333] bg-[#111] px-3 py-2 text-sm text-white" /></label>
+          <label className="text-xs font-bold text-gray-400">To<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} className="mt-1 block rounded border border-[#333] bg-[#111] px-3 py-2 text-sm text-white" /></label>
+        </div>
+      )}
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5 lg:mb-6 lg:grid-cols-4 lg:gap-6">
         <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-5">
