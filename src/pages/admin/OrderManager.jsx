@@ -82,10 +82,10 @@ const historyLabel = (entry) => {
 };
 const errorMessage = (error) => error?.message || 'Une erreur est survenue lors de la requête.';
 
-const StatusBadge = ({ status, payment = false }) => {
+const StatusBadge = ({ status, payment = false, cashOnDelivery = false }) => {
   const key = statusKey(status);
   const meta = payment
-    ? ({ paid: { label: 'Payé', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' }, pending: { label: 'En attente', className: 'border-amber-500/20 bg-amber-500/10 text-amber-300' }, failed: { label: 'Échoué', className: 'border-red-500/20 bg-red-500/10 text-red-300' }, refunded: { label: 'Remboursé', className: 'border-violet-500/20 bg-violet-500/10 text-violet-300' } })[key]
+    ? ({ paid: { label: 'Payé', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' }, pending: { label: cashOnDelivery ? 'À encaisser' : 'Paiement en attente', className: 'border-amber-500/20 bg-amber-500/10 text-amber-300' }, failed: { label: 'Échoué', className: 'border-red-500/20 bg-red-500/10 text-red-300' }, refunded: { label: 'Remboursé', className: 'border-violet-500/20 bg-violet-500/10 text-violet-300' } })[key]
     : STATUS_META[key];
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase ${meta?.className || 'border-white/10 bg-white/5 text-gray-300'}`}>{meta?.label || text(status)}</span>;
 };
@@ -319,7 +319,7 @@ export const OrderManager = () => {
                     <td className="px-4 py-3 text-gray-300">{money(order.discountAmount ?? order.discount)}</td>
                     <td className="px-4 py-3 text-gray-300">{money(order.shippingFee ?? order.shippingCost)}</td>
                     <td className="px-4 py-3 font-bold text-white">{money(order.total)}</td>
-                    <td className="px-4 py-3"><div className="flex flex-col items-start gap-1"><StatusBadge status={order.status} /><StatusBadge payment status={paymentValue(order)} /></div></td>
+                    <td className="px-4 py-3"><div className="flex flex-col items-start gap-1"><StatusBadge status={order.status} /><StatusBadge payment status={paymentValue(order)} cashOnDelivery={paymentMethodMeta(paymentMethodValue(order)).label === 'Paiement à la livraison'} /></div></td>
                     <td className="px-4 py-3"><PaymentMethodBadge value={paymentMethodValue(order)} /></td>
                     <td className="px-4 py-3 text-right"><button type="button" onClick={() => openDetails(order)} aria-label={`Voir la commande ${order.reference || order.id}`} className="rounded-lg p-2 text-gray-300 hover:bg-[#333] hover:text-white"><Eye size={16} /></button></td>
                   </tr>;
@@ -342,7 +342,7 @@ export const OrderManager = () => {
             {detailError && <div role="alert" className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">{detailError}</div>}
             {detailLoading && <div className="flex items-center gap-2 rounded-lg border border-[#333] bg-[#111] px-3 py-2 text-xs text-gray-400"><Loader2 className="h-4 w-4 animate-spin text-[#d90429]" /> Actualisation des détails…</div>}
             <>
-              <div className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.status} /><StatusBadge payment status={paymentValue(detail)} /><PaymentMethodBadge value={paymentMethodValue(detail)} /></div>
+              <div className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.status} /><StatusBadge payment status={paymentValue(detail)} cashOnDelivery={paymentMethodMeta(paymentMethodValue(detail)).label === 'Paiement à la livraison'} /><PaymentMethodBadge value={paymentMethodValue(detail)} /></div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Prénom et nom">{text(`${detail.firstName || ''} ${detail.lastName || ''}`.trim())}</Field><Field label="Téléphone">{text(detail.phone)}</Field><Field label="Email">{text(detail.email)}</Field>
                 <Field label="Adresse">{text(detail.address)}</Field><Field label="Ville / code postal">{text([detail.city, detail.postalCode].filter(Boolean).join(' '))}</Field><Field label="Dernière mise à jour">{dateTime(detail.updatedAt)}</Field>
