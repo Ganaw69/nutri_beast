@@ -377,8 +377,37 @@ export const ProductManager = () => {
     }
   }, []);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
+  const hydrateProductsImages = useCallback(async (items) => {
+    if (items.length === 0) return items;
+    const productsWithoutImages = items.filter((product) => {
+      const images = Array.isArray(product.productImages) ? product.productImages : [];
+      return images.length === 0 || images.some((image) => !getProductImageSource(image));
+    });
+    if (productsWithoutImages.length === 0) return items;
+
+    try {
+      const imageData = await productService.getImages({ itemsPerPage: 100 });
+      const imagesByProduct = new Map();
+      collectionItems(imageData).forEach((image) => {
+        const productId = getProductImageProductId(image);
+        if (productId == null) return;
+        const key = String(productId);
+        imagesByProduct.set(key, [...(imagesByProduct.get(key) || []), image]);
+      });
+      return items.map((product) => ({
+        ...product,
+        productImages: mergeProductImages(
+          product.productImages || [],
+          imagesByProduct.get(String(product.id)) || []
+        ),
+      }));
+    } catch (_) {
+      return items;
+    }
+  }, []);
+
+  const fetchProducts = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const params = {};
       if (searchTerm) params.name = searchTerm;
@@ -396,19 +425,11 @@ export const ProductManager = () => {
         return matchesCategory && matchesSearch;
       });
       const pageProducts = matchingProducts.slice((page - 1) * 20, page * 20);
-      const productsWithDetails = await Promise.all(
-        pageProducts.map(async (product) => {
-          const detailedProduct = await productService.getOne(product.id).catch(() => product);
-          const productId = detailedProduct.id || product.id;
-          const productImages = await hydrateProductImages(productId, detailedProduct.productImages || product.productImages || []);
-          return { ...detailedProduct, productImages };
-        })
-      );
-      setProducts(productsWithDetails);
+      setProducts(await hydrateProductsImages(pageProducts));
       setTotal(matchingProducts.length);
     } catch (e) { setError(e.message); }
-    setLoading(false);
-  }, [page, searchTerm, selectedFilterCategoryIds, hydrateProductImages]);
+    if (!silent) setLoading(false);
+  }, [page, searchTerm, selectedFilterCategoryIds, hydrateProductsImages]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -536,7 +557,24 @@ export const ProductManager = () => {
       setImagePreviews([]);
       setPrimaryImageIndex(0);
       setProductImages([]);
-      fetchProducts();
+      const savedProduct = {
+        ...(products.find((product) => String(product.id) === String(savedId)) || {}),
+        ...(saved && typeof saved === 'object' ? saved : {}),
+        ...form,
+        id: savedId,
+        isNew: form.isNew,
+        isBestSeller: form.isBestSeller,
+        isFeatured: form.isFeatured,
+        isOnSale: form.isOnSale,
+        productImages: saved?.productImages || [],
+      };
+      setProducts((current) => {
+        const exists = current.some((product) => String(product.id) === String(savedId));
+        if (exists) return current.map((product) => String(product.id) === String(savedId) ? savedProduct : product);
+        return page === 1 ? [savedProduct, ...current].slice(0, 20) : current;
+      });
+      setTotal((current) => products.some((product) => String(product.id) === String(savedId)) ? current : current + 1);
+      void fetchProducts({ silent: true });
     } catch (e) { setError(e.message); }
     setSaving(false);
   };
