@@ -27,6 +27,12 @@ const relationToIri = (value, resource) => {
 
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || data?.items || [];
 const displayName = (item) => item?.name || item?.brandName || item?.brand_name || item?.nom || item?.title || item?.label || '';
+const isTruthyFlag = (...values) => values.some((value) => (
+  value === true
+  || value === 1
+  || value === '1'
+  || (typeof value === 'string' && value.toLowerCase() === 'true')
+));
 const displayBrandName = (brand) => {
   if (typeof brand === 'string') {
     const reference = brand.split('/').filter(Boolean).pop();
@@ -429,7 +435,7 @@ export const ProductManager = () => {
       minimumStock: p.minimumStock || '3', weight: p.weight != null ? String(p.weight) : '',
       dateProduit: dateInputValue(p.dateProduit),
       isActive: p.isActive ?? true, isFeatured: p.isFeatured ?? false,
-      isNew: p.isNew ?? false, isBestSeller: p.isBestSeller ?? false, isOnSale: p.isOnSale ?? false,
+      isNew: isTruthyFlag(p.isNew, p.is_new, p.new), isBestSeller: isTruthyFlag(p.isBestSeller, p.is_best_seller, p.bestSeller, p.best_seller), isOnSale: p.isOnSale ?? false,
       packing: p.packing ?? false, montantRemise: p.montantRemise ?? p.montant_remise ?? '',
       category: relationToIri(p.category, 'categories'),
       brand: relationToIri(p.brand, 'brands'),
@@ -448,7 +454,7 @@ export const ProductManager = () => {
       minimumStock: fullProduct.minimumStock || '3', weight: fullProduct.weight != null ? String(fullProduct.weight) : '',
         dateProduit: dateInputValue(fullProduct.dateProduit),
         isActive: fullProduct.isActive ?? true, isFeatured: fullProduct.isFeatured ?? false,
-        isNew: fullProduct.isNew ?? false, isBestSeller: fullProduct.isBestSeller ?? false, isOnSale: fullProduct.isOnSale ?? false,
+        isNew: isTruthyFlag(fullProduct.isNew, fullProduct.is_new, fullProduct.new), isBestSeller: isTruthyFlag(fullProduct.isBestSeller, fullProduct.is_best_seller, fullProduct.bestSeller, fullProduct.best_seller), isOnSale: fullProduct.isOnSale ?? false,
         packing: fullProduct.packing ?? false, montantRemise: fullProduct.montantRemise ?? fullProduct.montant_remise ?? '',
         category: relationToIri(fullProduct.category, 'categories'),
         brand: relationToIri(fullProduct.brand, 'brands'),
@@ -478,6 +484,8 @@ export const ProductManager = () => {
         // database column and `isNew` is only the admin form name.
         new: form.isNew,
         isNew: undefined,
+        bestSeller: form.isBestSeller,
+        isBestSeller: undefined,
         sku: undefined,
         expirationDate: undefined,
         price: form.price ? String(parseFloat(form.price).toFixed(2)) : undefined,
@@ -486,7 +494,9 @@ export const ProductManager = () => {
         minimumStock: form.minimumStock !== '' ? parseInt(form.minimumStock) : undefined,
         weight: form.weight === '' ? null : String(form.weight).trim(),
         dateProduit: form.dateProduit ? `${form.dateProduit}T00:00:00+00:00` : null,
-        montantRemise: form.packing && form.montantRemise !== '' ? String(Number(form.montantRemise).toFixed(2)) : null,
+        montantRemise: String(
+          Number(form.packing && form.montantRemise !== '' ? form.montantRemise : 0).toFixed(2)
+        ),
         category: form.category || undefined,
         brand: form.brand || undefined,
         productOptions: form.productOptions,
