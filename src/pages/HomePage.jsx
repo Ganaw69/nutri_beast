@@ -30,6 +30,8 @@ const couvertureDesktopImage = (couverture) => (
   couverture?.image
   ?? couverture?.imageDesktop
   ?? couverture?.image_desktop
+  ?? couverture?.desktopImageUrl
+  ?? couverture?.desktop_image_url
   ?? couverture?.desktopImage
   ?? couverture?.desktop_image
   ?? couverture?.imageUrl
@@ -41,6 +43,8 @@ const couvertureMobileImage = (couverture) => (
   ?? couverture?.imageMobile
   ?? couverture?.mobileImage
   ?? couverture?.mobile_image
+  ?? couverture?.mobileImageUrl
+  ?? couverture?.mobile_image_url
   ?? couverture?.imageMobileUrl
   ?? couverture?.image_mobile_url
 );
