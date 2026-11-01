@@ -501,12 +501,12 @@ export const ProductManager = () => {
     try {
       const payload = {
         ...form,
-        // The API resource calls this property `new`; `is_new` is the
-        // database column and `isNew` is only the admin form name.
-        new: form.isNew,
-        isNew: undefined,
-        bestSeller: form.isBestSeller,
-        isBestSeller: undefined,
+        // The API serializes these fields as `new` and `bestSeller`, while
+        // writes use the entity property names mapped to the database columns.
+        new: undefined,
+        isNew: form.isNew,
+        bestSeller: undefined,
+        isBestSeller: form.isBestSeller,
         sku: undefined,
         expirationDate: undefined,
         price: form.price ? String(parseFloat(form.price).toFixed(2)) : undefined,
