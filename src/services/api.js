@@ -1753,6 +1753,13 @@ export const orderService = {
     // action: 'confirm' | 'prepare' | 'ship' | 'deliver' | 'cancel'
     return apiFetch(`/orders/${id}/${action}`, { method: 'PATCH' });
   },
+  async markPaymentCollected(id) {
+    return apiFetch(`/orders/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify({ paymentStatus: 'paid' }),
+    });
+  },
   async getStatusHistories(params = {}) {
     return apiFetch(`/order_status_histories${buildQuery(params)}`);
   },

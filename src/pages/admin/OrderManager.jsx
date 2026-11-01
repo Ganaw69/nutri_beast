@@ -45,6 +45,7 @@ const paymentMethodMeta = (value) => {
   }
   return { label: text(value), detail: '', className: 'border-white/10 bg-white/5 text-gray-300' };
 };
+const isCashOnDelivery = (order) => paymentMethodMeta(paymentMethodValue(order)).label === 'Paiement à la livraison';
 const getItems = (order) => {
   const items = order.items ?? order.orderItems ?? order.order_items ?? [];
   return Array.isArray(items) ? items : [];
@@ -212,6 +213,26 @@ export const OrderManager = () => {
     }
   };
 
+  const handleCollectPayment = async (order) => {
+    if (transitioning) return;
+    if (!window.confirm(`Confirmer l'encaissement de ${money(order.total)} pour ${order.reference || `#${order.id}`} ?`)) return;
+
+    setTransitioning(`${order.id}:collect-payment`);
+    setNotice('');
+    setDetailError('');
+    try {
+      await orderService.markPaymentCollected(order.id);
+      const [updated] = await Promise.all([orderService.getOne(order.id), fetchOrders()]);
+      setDetail(updated);
+      setNotice(`Paiement de la commande ${updated.reference || `#${updated.id}`} encaissé.`);
+    } catch (paymentError) {
+      setDetailError(errorMessage(paymentError));
+      setError(errorMessage(paymentError));
+    } finally {
+      setTransitioning(null);
+    }
+  };
+
   const detailStatus = statusKey(detail?.status);
   const detailItems = detail ? getItems(detail) : [];
   const historyValue = detail?.statusHistories ?? detail?.statusHistory ?? [];
@@ -353,7 +374,16 @@ export const OrderManager = () => {
               <section><h3 className="mb-2 text-sm font-bold text-white">Historique des statuts</h3>{history.length > 0 ? <ol className="space-y-2 border-l border-[#444] pl-4">{[...history].sort((a, b) => new Date(a.createdAt || a.changedAt || a.date || 0) - new Date(b.createdAt || b.changedAt || b.date || 0)).map((entry, index) => <li key={entry.id ?? entry['@id'] ?? index} className="relative text-sm text-gray-300"><span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-[#d90429]" />{historyLabel(entry)} <span className="ml-2 text-xs text-gray-500">{dateTime(entry.createdAt ?? entry.changedAt ?? entry.date)}</span></li>)}</ol> : <p className="rounded-lg bg-[#111] p-3 text-sm text-gray-500">Aucun historique de statut disponible.</p>}</section>
             </>
           </div>
-          {!detailLoading && (TRANSITIONS[detailStatus] || []).length > 0 && <footer className="flex flex-wrap gap-2 border-t border-[#2a2a2a] p-4">{TRANSITIONS[detailStatus].map((action) => { const ActionIcon = TRANSITION_META[action].icon; const busy = transitioning === `${detail.id}:${action}`; return <button key={action} type="button" disabled={Boolean(transitioning)} onClick={() => handleTransition(detail, action)} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50 ${action === 'cancel' ? 'border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20' : 'bg-[#d90429] text-white hover:bg-[#b90322]'}`}>{busy ? <Loader2 size={14} className="animate-spin" /> : <ActionIcon size={14} />}{busy ? 'Mise à jour…' : TRANSITION_META[action].label}</button>; })}</footer>}
+          {!detailLoading && ((TRANSITIONS[detailStatus] || []).length > 0 || (isCashOnDelivery(detail) && statusKey(paymentValue(detail)) === 'pending')) && <footer className="flex flex-wrap gap-2 border-t border-[#2a2a2a] p-4">
+            {(TRANSITIONS[detailStatus] || []).map((action) => {
+              const ActionIcon = TRANSITION_META[action].icon;
+              const busy = transitioning === `${detail.id}:${action}`;
+              return <button key={action} type="button" disabled={Boolean(transitioning)} onClick={() => handleTransition(detail, action)} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50 ${action === 'cancel' ? 'border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20' : 'bg-[#d90429] text-white hover:bg-[#b90322]'}`}>{busy ? <Loader2 size={14} className="animate-spin" /> : <ActionIcon size={14} />}{busy ? 'Mise à jour…' : TRANSITION_META[action].label}</button>;
+            })}
+            {isCashOnDelivery(detail) && statusKey(paymentValue(detail)) === 'pending' && <button type="button" disabled={Boolean(transitioning)} onClick={() => handleCollectPayment(detail)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">
+              {transitioning === `${detail.id}:collect-payment` ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} />} Encaisser
+            </button>}
+          </footer>}
         </section>
       </div>}
     </div>
