@@ -1,6 +1,10 @@
 import React from "react";
 import { useCart } from "../context/CartContext";
-import { Shield, Dumbbell, Share2, Home } from "lucide-react";
+import { Shield, Dumbbell, Share2, Home, Mail, Phone } from "lucide-react";
+
+const CONTACT_EMAIL = "contact@proteinstore.tn";
+const CONTACT_PHONE = "+216 56 711 048";
+const CONTACT_PHONE_LINK = "+21656711048";
 
 export const Footer = () => {
   const { navigateTo } = useCart();
@@ -140,12 +144,23 @@ export const Footer = () => {
             <p className="text-xs text-gray-400 font-body leading-relaxed">
               Une question sur votre commande ou un produit ? Notre équipe vous répond.
             </p>
-            <a
-              href="mailto:contact@proteinstore.tn"
-              className="inline-flex break-all text-sm font-black text-[#ff526d] underline decoration-[#d90429]/50 underline-offset-4 transition-colors hover:text-white"
-            >
-              contact@proteinstore.tn
-            </a>
+            <div className="space-y-2">
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="inline-flex items-center gap-2 break-all text-sm font-black text-[#ff526d] underline decoration-[#d90429]/50 underline-offset-4 transition-colors hover:text-white"
+              >
+                <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {CONTACT_EMAIL}
+              </a>
+              <a
+                href={`tel:${CONTACT_PHONE_LINK}`}
+                className="inline-flex items-center gap-2 text-sm font-black text-[#ff526d] underline decoration-[#d90429]/50 underline-offset-4 transition-colors hover:text-white"
+                aria-label={`Appeler le ${CONTACT_PHONE}`}
+              >
+                <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {CONTACT_PHONE}
+              </a>
+            </div>
           </div>
         </div>
 

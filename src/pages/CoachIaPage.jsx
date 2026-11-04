@@ -1,10 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { coachApi } from "../services/coachApi";
-import { findCoachProductRecommendation } from "../services/coachProductMatcher";
 import { useCart } from "../context/CartContext";
-
-const COACH_USER_ID_STORAGE_KEY = "nutri_beast_coach_user_id";
 
 const createMessage = (sender, text, extra = {}) => ({
   id: `${sender}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -12,21 +9,6 @@ const createMessage = (sender, text, extra = {}) => ({
   text,
   ...extra,
 });
-
-const getCoachUserId = () => {
-  try {
-    const existingId = window.localStorage.getItem(COACH_USER_ID_STORAGE_KEY);
-    if (existingId) return existingId;
-
-    const newId = typeof window.crypto?.randomUUID === "function"
-      ? window.crypto.randomUUID()
-      : `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    window.localStorage.setItem(COACH_USER_ID_STORAGE_KEY, newId);
-    return newId;
-  } catch {
-    return `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-};
 
 const initialMessages = () => [
   createMessage("ai", "Bonjour Athlete ! Posez une question à Coach Max sur vos objectifs, votre entraînement ou votre nutrition."),
@@ -37,20 +19,10 @@ export const CoachIaPage = () => {
   const [messages, setMessages] = useState(initialMessages);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [apiStatus, setApiStatus] = useState("checking");
+  const [apiStatus, setApiStatus] = useState("online");
   const messagesContainerRef = useRef(null);
   const newestMessageRef = useRef(null);
-  const userIdRef = useRef(getCoachUserId());
   const requestControllerRef = useRef(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    coachApi.health(controller.signal)
-      .then(() => setApiStatus("online"))
-      .catch(() => setApiStatus("offline"));
-
-    return () => controller.abort();
-  }, []);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -76,36 +48,20 @@ export const CoachIaPage = () => {
     requestControllerRef.current = controller;
 
     try {
-      // Choose from our catalogue before the Coach request. The card is shown
-      // first and the same product description is sent as structured context
-      // so the AI can validate this exact recommendation.
-      const recommendation = await findCoachProductRecommendation(text).catch(() => null);
-      if (requestControllerRef.current !== controller) return;
-
-      if (recommendation) {
-        setMessages((previousMessages) => [
-          ...previousMessages,
-          createMessage("ai", `Produit du catalogue sélectionné pour votre demande : ${recommendation.name}. Coach Max va confirmer s'il vous convient.`, {
-            type: "product-recommendation",
-            product: recommendation,
-          }),
-        ]);
-      }
-
-      const response = await coachApi.sendMessage({
-        message: text,
-        userId: userIdRef.current,
-        language: "auto",
-        productContext: recommendation?.context || null,
-        signal: controller.signal,
-      });
-      setMessages((previousMessages) => [...previousMessages, createMessage("ai", response.reply)]);
+      const response = await coachApi.sendMessage({ message: text, signal: controller.signal });
+      const recommendedProducts = Array.isArray(response.recommended_products)
+        ? response.recommended_products
+        : [];
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        createMessage("ai", response.reply_text, { recommendedProducts }),
+      ]);
       setApiStatus("online");
     } catch (error) {
       if (error.name !== "AbortError") {
         setMessages((previousMessages) => [
           ...previousMessages,
-          createMessage("ai", "Le Coach IA est momentanément indisponible. Vérifiez que son serveur est démarré, puis réessayez."),
+          createMessage("ai", error.message || "Le Coach IA est momentanément indisponible."),
         ]);
         setApiStatus("offline");
       }
@@ -205,34 +161,45 @@ export const CoachIaPage = () => {
                 }`}
               >
                 <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
-                {message.type === "product-recommendation" && message.product && (
+                {message.recommendedProducts?.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                  {message.recommendedProducts.map((product, productIndex) => {
+                    const productId = product.id ?? product.product_id ?? product.productId;
+                    const productName = product.name ?? product.product_name ?? "Produit recommandé";
+                    const productImage = product.image ?? product.image_url ?? product.imageUrl;
+                    const productHref = product.href || (productId ? `#product/${productId}` : null);
+                    return (
                   <a
-                    href={message.product.href}
+                    key={`${productId || productName}-${productIndex}`}
+                    href={productHref || "#"}
                     onClick={(event) => {
                       event.preventDefault();
-                      viewProductDetails(message.product.id);
+                      if (productId) viewProductDetails(productId);
                     }}
-                    className="mt-3 flex items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
-                    aria-label={`Voir le produit ${message.product.name}`}
+                    className="flex items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
+                    aria-label={`Voir le produit ${productName}`}
                   >
-                    {message.product.image ? (
-                      <img src={message.product.image} alt="" className="h-12 w-12 rounded-lg bg-white object-contain" />
+                    {productImage ? (
+                      <img src={productImage} alt="" className="h-12 w-12 rounded-lg bg-white object-contain" />
                     ) : (
                       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-accent-gold/15 text-accent-gold">
                         <ShoppingBag className="h-5 w-5" />
                       </span>
                     )}
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base font-bold text-white">{message.product.name}</span>
+                      <span className="block truncate text-base font-bold text-white">{productName}</span>
                       <span className="block truncate text-sm text-gray-300">
-                        {[message.product.brand, message.product.category].filter(Boolean).join(" · ") || "Produit Nutri Beast"}
+                        {[product.brand, product.category].filter(Boolean).join(" · ") || "Produit Nutri Beast"}
                       </span>
-                      {message.product.price !== null && (
-                        <span className="mt-1 block text-sm font-bold text-accent-gold">{message.product.price.toFixed(2)} TND</span>
+                      {product.price !== undefined && product.price !== null && (
+                        <span className="mt-1 block text-sm font-bold text-accent-gold">{Number(product.price).toFixed(2)} TND</span>
                       )}
                     </span>
                     <ExternalLink className="h-4 w-4 shrink-0 text-accent-gold" aria-hidden="true" />
                   </a>
+                    );
+                  })}
+                  </div>
                 )}
               </div>
 

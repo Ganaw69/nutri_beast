@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, resolveProductImage } from "../services/api";
-import { ArrowRight, Bot, Gauge, MoveUpRight, ShoppingBag, Sparkles, Zap } from "lucide-react";
+import { hydrateProductsWithImages, productService, resolveProductImage } from "../services/api";
+import { ArrowRight, Bot, Gauge, Loader2, MoveUpRight, ShoppingBag, Sparkles, Zap } from "lucide-react";
 
 const normalizeProduct = (p) => ({
+  ...p,
   id: p.id,
   name: p.name,
-  price: parseFloat(p.price || 0),
+  price: Number(p.price || 0),
   image: resolveProductImage(p, null),
-  category: p.category?.name || "",
+  category: p.category?.name || p.categoryName || "",
+  inStock: p.inStock ?? Number(p.stock ?? 1) > 0,
 });
+
+const collectionItems = (data) => data?.["hydra:member"] || data?.member || data?.items || (Array.isArray(data) ? data : []);
 
 const stripAccents = (value) =>
   (value || "")
@@ -19,13 +23,15 @@ const stripAccents = (value) =>
     .toLowerCase();
 
 export const CalculatorPage = () => {
-  const { navigateTo, addToCart } = useCart();
+  const { navigateTo, addToCart, viewProductDetails } = useCart();
   const [age, setAge] = useState("25");
   const [gender, setGender] = useState("H");
   const [weight, setWeight] = useState(82);
   const [height, setHeight] = useState(185);
   const [goal, setGoal] = useState("bulk");
   const [catalog, setCatalog] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState("");
   const [results, setResults] = useState({
     targetCalories: 2850,
     proteinGrams: 180,
@@ -38,11 +44,37 @@ export const CalculatorPage = () => {
   });
 
   useEffect(() => {
-    productService.getAllPages({ isActive: true }, true)
-      // Recommendation cards only use fields included in the collection.
-      // Avoid requesting a full product document for every catalogue entry.
-      .then((data) => setCatalog((data?.["hydra:member"] || []).map(normalizeProduct)))
-      .catch(() => setCatalog([]));
+    let active = true;
+
+    const loadCatalog = async () => {
+      setCatalogLoading(true);
+      setCatalogError("");
+
+      try {
+        // Bypass the persistent catalogue cache so the recommendations always
+        // reflect products currently available in the backend.
+        const data = await productService.getAllPages({ isActive: true }, true, true);
+        const products = collectionItems(data).filter((product) =>
+          product?.id != null && product?.isActive !== false && product?.brand?.isActive !== false
+        );
+
+        // Collection responses can omit the image object. Hydrate the real
+        // product-image records before rendering the recommendation cards.
+        const productsWithImages = await hydrateProductsWithImages(products, true).catch(() => products);
+
+        if (active) setCatalog(productsWithImages.map(normalizeProduct));
+      } catch {
+        if (active) {
+          setCatalog([]);
+          setCatalogError("Les recommandations produits ne sont pas disponibles pour le moment.");
+        }
+      } finally {
+        if (active) setCatalogLoading(false);
+      }
+    };
+
+    void loadCatalog();
+    return () => { active = false; };
   }, []);
 
   const calculateMacros = () => {
@@ -90,10 +122,15 @@ export const CalculatorPage = () => {
 
   const productsByNeed = useMemo(() => {
     const text = (product) => stripAccents(`${product.name} ${product.category}`);
-    const protein = catalog.find((p) => /whey|protein/.test(text(p))) || catalog[0];
-    const creatine = catalog.find((p) => /creatine/.test(text(p))) || catalog[1] || catalog[0];
+    const protein = catalog.find((p) => /whey|protein|proteine|isolate|gainer/.test(text(p)));
+    const creatine = catalog.find((p) => /creatine/.test(text(p)));
     return { protein, creatine };
   }, [catalog]);
+
+  const recommendations = useMemo(() => [
+    { id: "protein", label: "PROTEIN", product: productsByNeed.protein },
+    { id: "creatine", label: "FORCE & POWER", product: productsByNeed.creatine },
+  ].filter(({ product }) => product), [productsByNeed]);
 
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading py-12 pb-24">
@@ -258,10 +295,10 @@ export const CalculatorPage = () => {
               </div>
 
               <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <button type="button" onClick={() => navigateTo("nutritionist-ai", { preserveScroll: true })} className="bg-white hover:bg-gray-100 text-black font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
+                <button type="button" onClick={() => navigateTo("nutritionist-ai")} className="bg-white hover:bg-gray-100 text-black font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
                   <Sparkles className="w-4 h-4 text-black" /> NUTRITIONIST AI
                 </button>
-                <button type="button" onClick={() => navigateTo("coach-ia", { preserveScroll: true })} className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
+                <button type="button" onClick={() => navigateTo("coach-ia")} className="bg-[#d90429] hover:bg-[#b0021f] text-white font-black text-xs uppercase px-5 py-4 rounded-xs flex items-center justify-center gap-2 transition-colors shadow-md">
                   <Bot className="w-4 h-4" /> OPEN COACH
                 </button>
               </div>
@@ -271,45 +308,59 @@ export const CalculatorPage = () => {
 
         <div className="space-y-6 pt-6">
           <h2 className="font-black text-xl text-white uppercase tracking-wider">RECOMMENDED STACK</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg p-6 text-black flex items-center justify-between gap-6 shadow-md font-heading">
-              <div className="w-28 h-28 bg-[#f4f4f4] rounded-md p-2 flex items-center justify-center shrink-0">
-                <img src={productsByNeed.protein?.image || "https://images.unsplash.com/photo-1593095948071-474c5cc2989d?auto=format&fit=crop&q=80&w=800"} alt={productsByNeed.protein?.name || "Protein"} className="w-full h-full object-contain mix-blend-multiply" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <span className="bg-[#d90429] text-white text-[9px] font-black px-2.5 py-1 rounded-xs uppercase tracking-wider inline-block">PROTEIN</span>
-                <h3 className="font-black text-lg text-black uppercase leading-tight hover:text-[#d90429] transition-colors cursor-pointer" onClick={() => productsByNeed.protein && viewProductDetails(productsByNeed.protein.id)}>
-                  {productsByNeed.protein?.name || "Live protein pick"}
-                </h3>
-                <p className="text-xs text-gray-500 font-body">Recommended from the live catalog.</p>
-                <div className="flex items-center justify-between pt-2">
-                  <span className="font-black text-lg text-black">{productsByNeed.protein ? `${productsByNeed.protein.price.toFixed(2)} TND` : "-"}</span>
-                  <button onClick={() => productsByNeed.protein && addToCart(productsByNeed.protein)} className="w-9 h-9 bg-black hover:bg-[#d90429] text-white rounded-xs flex items-center justify-center transition-colors shadow-md" title="Add to cart">
-                    <ShoppingBag className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+          {catalogLoading ? (
+            <div className="flex min-h-48 items-center justify-center rounded-lg border border-white/10 bg-[#1c1c1c] text-sm font-bold text-gray-300">
+              <Loader2 className="mr-3 h-5 w-5 animate-spin text-[#d90429]" aria-hidden="true" />
+              Chargement des produits disponibles…
             </div>
-
-            <div className="bg-white rounded-lg p-6 text-black flex items-center justify-between gap-6 shadow-md font-heading">
-              <div className="w-28 h-28 bg-[#f4f4f4] rounded-md p-2 flex items-center justify-center shrink-0">
-                <img src={productsByNeed.creatine?.image || "https://images.unsplash.com/photo-1579722821273-0f6c7d44362f?auto=format&fit=crop&q=80&w=800"} alt={productsByNeed.creatine?.name || "Creatine"} className="w-full h-full object-contain mix-blend-multiply" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <span className="bg-[#d90429] text-white text-[9px] font-black px-2.5 py-1 rounded-xs uppercase tracking-wider inline-block">FORCE & POWER</span>
-                <h3 className="font-black text-lg text-black uppercase leading-tight hover:text-[#d90429] transition-colors cursor-pointer" onClick={() => productsByNeed.creatine && viewProductDetails(productsByNeed.creatine.id)}>
-                  {productsByNeed.creatine?.name || "Live creatine pick"}
-                </h3>
-                <p className="text-xs text-gray-500 font-body">Recommended from the live catalog.</p>
-                <div className="flex items-center justify-between pt-2">
-                  <span className="font-black text-lg text-black">{productsByNeed.creatine ? `${productsByNeed.creatine.price.toFixed(2)} TND` : "-"}</span>
-                  <button onClick={() => productsByNeed.creatine && addToCart(productsByNeed.creatine)} className="w-9 h-9 bg-black hover:bg-[#d90429] text-white rounded-xs flex items-center justify-center transition-colors shadow-md" title="Add to cart">
-                    <ShoppingBag className="w-4 h-4" />
+          ) : recommendations.length === 0 ? (
+            <p className="rounded-lg border border-white/10 bg-[#1c1c1c] p-6 text-sm text-gray-300">
+              {catalogError || "Aucun produit protéiné ou créatine disponible n’a été trouvé dans le catalogue."}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {recommendations.map(({ id, label, product }) => (
+                <article key={id} className="flex items-center justify-between gap-6 rounded-lg bg-white p-6 text-black shadow-md">
+                  <button
+                    type="button"
+                    onClick={() => viewProductDetails(product.id)}
+                    className="flex h-28 w-28 shrink-0 items-center justify-center rounded-md bg-[#f4f4f4] p-2"
+                    aria-label={`Voir ${product.name}`}
+                  >
+                    {product.image ? (
+                      <img src={product.image} alt={product.name} className="h-full w-full object-contain mix-blend-multiply" />
+                    ) : (
+                      <span className="text-center text-[10px] font-black uppercase tracking-wider text-gray-500">Image indisponible</span>
+                    )}
                   </button>
-                </div>
-              </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <span className="inline-block rounded-xs bg-[#d90429] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">{label}</span>
+                    <button
+                      type="button"
+                      onClick={() => viewProductDetails(product.id)}
+                      className="block text-left text-lg font-black uppercase leading-tight text-black transition-colors hover:text-[#d90429]"
+                    >
+                      {product.name}
+                    </button>
+                    <p className="text-xs text-gray-500 font-body">Produit disponible dans le catalogue.</p>
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                      <span className="font-black text-lg text-black">{product.price.toFixed(2)} TND</span>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(product)}
+                        disabled={!product.inStock}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xs bg-black text-white shadow-md transition-colors hover:bg-[#d90429] disabled:cursor-not-allowed disabled:bg-gray-400"
+                        title={product.inStock ? "Ajouter au panier" : "Rupture de stock"}
+                        aria-label={product.inStock ? `Ajouter ${product.name} au panier` : `${product.name} est en rupture de stock`}
+                      >
+                        <ShoppingBag className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

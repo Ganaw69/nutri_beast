@@ -17,17 +17,14 @@ If you are developing a production application, we recommend using TypeScript wi
 
 ## Coach IA API
 
-Coach IA calls `https://represent-five-lynn-page.trycloudflare.com/v1/chat` by default and checks `GET /health` when the page opens. The API receives `{ message, user_id, language: "auto" }`; no OpenRouter key is ever sent by the browser.
+Coach IA sends `POST /api/coach` through the Symfony API. The JSON body is
+`{ "message": "<user message>", "language": "fr" }`; backend credentials and
+model configuration never enter the browser bundle.
 
-When a visitor asks which supplement to buy or use, the storefront selects a matching live-catalogue product, posts its link in the conversation, and additionally sends a `product_context` object to `/v1/chat`. The Coach API should add that object to its model context and confirm or correct the selected product using its supplied description and nutrition facts.
-
-For a deployed Coach API, set its public HTTPS base URL before building the storefront:
-
-```ini
-VITE_COACH_API_BASE_URL=https://coach-api.example.com
-```
-
-`COACH_API_HOST`, `COACH_API_PORT`, and `OPENROUTER_API_KEY` belong only in the Coach API server's `.env`. Configure the API's `COACH_API_ALLOWED_ORIGIN` to allow the storefront origin.
+For local development, start the Symfony API on the origin configured by
+`VITE_API_BASE_URL` (currently `http://127.0.0.1:8000`). Vite proxies `/api`
+and `/uploads` to that origin, so the frontend cannot work against live data
+until the API process is running.
 
 ### Production environment
 
@@ -39,8 +36,6 @@ Copy [`.env.example`](./.env.example) to `.env.production`, replace every
 - `VITE_MEDIA_BASE_URL` for uploaded product media; it can match the main API
   origin when uploads are served there.
 - `VITE_NUTRITION_API_BASE_URL` for the Nutritionist AI service.
-- `VITE_COACH_API_BASE_URL` for the Coach IA service.
-
-Only public URLs may use the `VITE_` prefix. Keep `OPENROUTER_API_KEY` and all
-other backend credentials in the corresponding server environment, never in
-this storefront repository or browser bundle.
+Only public URLs may use the `VITE_` prefix. Keep model keys and all other
+backend credentials in the Symfony server environment, never in this storefront
+repository or browser bundle.

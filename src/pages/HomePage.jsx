@@ -30,8 +30,6 @@ const couvertureDesktopImage = (couverture) => (
   couverture?.image
   ?? couverture?.imageDesktop
   ?? couverture?.image_desktop
-  ?? couverture?.desktopImageUrl
-  ?? couverture?.desktop_image_url
   ?? couverture?.desktopImage
   ?? couverture?.desktop_image
   ?? couverture?.imageUrl
@@ -43,8 +41,6 @@ const couvertureMobileImage = (couverture) => (
   ?? couverture?.imageMobile
   ?? couverture?.mobileImage
   ?? couverture?.mobile_image
-  ?? couverture?.mobileImageUrl
-  ?? couverture?.mobile_image_url
   ?? couverture?.imageMobileUrl
   ?? couverture?.image_mobile_url
 );
@@ -350,7 +346,7 @@ export const HomePage = () => {
             </div>
             <div className="pt-2">
               <button
-                onClick={() => navigateTo("coach-ia", { preserveScroll: true })}
+                onClick={() => navigateTo("coach-ia")}
                 className="bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-8 py-4 rounded-xs shadow-lg transition-colors"
               >
                 DÉMARRER LE QUIZ (2 MIN)
@@ -394,12 +390,6 @@ export const HomePage = () => {
               </p>
             </div>
 
-            <button
-              onClick={() => navigateTo("calculator", { preserveScroll: true })}
-              className="inline-flex items-center gap-2 bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-6 py-3 rounded-xs transition-colors w-fit"
-            >
-              DEFINE MY GOAL <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -429,7 +419,12 @@ export const HomePage = () => {
                 image: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=900",
               },
             ].map(({ icon: Icon, title, desc, image }) => (
-              <div key={title} className="group relative min-h-[340px] overflow-hidden bg-[#181818] border border-white/10 hover:border-[#d90429]/70 rounded-xl transition-colors">
+              <button
+                type="button"
+                key={title}
+                onClick={() => navigateTo("calculator")}
+                className="group relative min-h-[340px] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-[#181818] text-left transition-all duration-200 hover:-translate-y-1 hover:border-[#d90429]/70 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d90429]"
+              >
                 <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-55 grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-black/10" />
                 <div className="relative z-10 h-full min-h-[340px] flex flex-col justify-end p-7">
@@ -439,7 +434,7 @@ export const HomePage = () => {
                   <h3 className="font-black text-base text-white uppercase tracking-wider">{title}</h3>
                   <p className="text-sm text-gray-200 font-body leading-relaxed mt-2">{desc}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

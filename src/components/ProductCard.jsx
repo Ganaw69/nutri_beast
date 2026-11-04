@@ -5,6 +5,7 @@ import { ShoppingBag } from "lucide-react";
 export const ProductCard = ({ product }) => {
   const { addToCart, viewProductDetails } = useCart();
   const hasImage = !!product.image;
+  const inStock = product.inStock !== false && Number(product.stock ?? 1) > 0;
   const hasDiscount = product.isOnSale
     || (Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price))
     || (Number(product.originalPrice) > Number(product.price));
@@ -36,6 +37,11 @@ export const ProductCard = ({ product }) => {
               </span>
             ))}
           </div>
+        )}
+        {!inStock && (
+          <span className="absolute right-3 top-3 z-10 rounded-full bg-[#d90429] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-xs">
+            RUPTURE DE STOCK
+          </span>
         )}
 
         {hasImage ? (
@@ -82,9 +88,10 @@ export const ProductCard = ({ product }) => {
 
           {/* Red Square Shopping Bag Button */}
           <button
-            onClick={() => addToCart(product)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#d90429] text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111]"
-            title="Ajouter au panier"
+            onClick={() => inStock && addToCart(product)}
+            disabled={!inStock}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#d90429] text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111]"
+            title={inStock ? "Ajouter au panier" : "Indisponible"}
           >
             <ShoppingBag className="w-4 h-4 text-white fill-white/20" />
           </button>

@@ -114,6 +114,13 @@ export const CartProvider = ({ children }) => {
   const [appliedCoupon, setAppliedCoupon] = useState(null); // full coupon object from API
   const [toastMessage, setToastMessage] = useState(null);
 
+  useEffect(() => {
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
   const updateRoute = (tab, id, filters) => {
     const nextHash = routeHash(tab, id, filters);
     if (window.location.hash !== nextHash) {
@@ -147,6 +154,10 @@ export const CartProvider = ({ children }) => {
   };
 
   const addToCart = (product, flavor = null, size = null, qty = 1) => {
+    if (product?.inStock === false || Number(product?.stock ?? 1) <= 0) {
+      showToast("Ce produit est en rupture de stock.");
+      return false;
+    }
     const targetFlavor = flavor || (product.flavors ? product.flavors[0] : "");
     const targetSize = size || (product.sizes ? product.sizes[0] : "");
 
@@ -168,6 +179,7 @@ export const CartProvider = ({ children }) => {
       }
     });
     showToast(`🛒 Ajouté au panier: ${product.name}`);
+    return true;
   };
 
   const addCustomPackToCart = (pack, quote, quantity = 1) => {

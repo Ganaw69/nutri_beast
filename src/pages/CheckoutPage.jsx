@@ -127,6 +127,10 @@ export const CheckoutPage = () => {
       showToast("Votre panier est vide.");
       return;
     }
+    if (cart.some((item) => item.itemType !== "custom-pack" && item.itemType !== "predefined-pack" && (item.inStock === false || Number(item.stock ?? 1) <= 0))) {
+      showToast("Retirez les produits en rupture de stock avant de commander.");
+      return;
+    }
 
     setSubmitting(true);
     try {

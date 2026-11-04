@@ -15,7 +15,13 @@ import {
   PackagePlus,
   ArrowRight,
   ChevronDown,
+  Mail,
+  Phone,
 } from "lucide-react";
+
+const CONTACT_EMAIL = "contact@proteinstore.tn";
+const CONTACT_PHONE = "+216 56 711 048";
+const CONTACT_PHONE_LINK = "+21656711048";
 
 const CategoryNavLabel = ({ label }) => {
   const words = String(label || "").trim().split(/\s+/).filter(Boolean);
@@ -90,6 +96,8 @@ export const Navbar = () => {
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchSurface, setSearchSurface] = useState(null);
+  const [navbarHeight, setNavbarHeight] = useState(0);
+  const navbarRef = useRef(null);
   const mobileSearchInputRef = useRef(null);
 
   const promoMessage = "Livraison offerte dès 300DT d'achat !";
@@ -107,6 +115,35 @@ export const Navbar = () => {
     });
     return () => window.cancelAnimationFrame(animationFrame);
   }, [showSearchModal]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    const updateNavbarHeight = () => {
+      if (navbarRef.current) {
+        setNavbarHeight(navbarRef.current.getBoundingClientRect().height);
+      }
+    };
+
+    updateNavbarHeight();
+    window.addEventListener("resize", updateNavbarHeight);
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(updateNavbarHeight)
+      : null;
+    if (observer && navbarRef.current) observer.observe(navbarRef.current);
+
+    return () => {
+      window.removeEventListener("resize", updateNavbarHeight);
+      if (observer) observer.disconnect();
+    };
+  }, []);
 
   const sectionTabs = useMemo(
     () => [
@@ -341,7 +378,7 @@ export const Navbar = () => {
     }
 
     if (sectionId === "calculator") {
-      navigateTo("calculator", { preserveScroll: true });
+      navigateTo("calculator");
       setMobileMenuOpen(false);
       return;
     }
@@ -461,7 +498,7 @@ export const Navbar = () => {
   };
 
   return (
-    <header className="relative z-40 w-full bg-[#050505]/98 backdrop-blur-xl border-b border-[#2e261b] font-heading overflow-visible">
+    <header ref={navbarRef} className="relative z-40 w-full bg-[#050505]/98 backdrop-blur-xl border-b border-[#2e261b] font-heading overflow-visible">
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <div className="navbar-red-shine-beam absolute top-0 bottom-0 w-[45%] opacity-40 blur-xl bg-gradient-to-r from-transparent via-[#ff1a3c] to-transparent pointer-events-none" />
         <div className="absolute inset-0 flex items-center opacity-45">
@@ -555,6 +592,26 @@ export const Navbar = () => {
         </div>
       </div>
 
+      <div className="relative z-10 border-b border-white/10 bg-black/80 px-4 py-2.5 text-xs font-bold text-white/80 sm:px-6 sm:text-sm lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-6 gap-y-1.5 sm:justify-start">
+          <a
+            href={`tel:${CONTACT_PHONE_LINK}`}
+            className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
+            aria-label={`Appeler le ${CONTACT_PHONE}`}
+          >
+            <Phone className="h-4 w-4 text-[#ff526d]" aria-hidden="true" />
+            <span>{CONTACT_PHONE}</span>
+          </a>
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
+          >
+            <Mail className="h-4 w-4 text-[#ff526d]" aria-hidden="true" />
+            <span>{CONTACT_EMAIL}</span>
+          </a>
+        </div>
+      </div>
+
       <div className="relative z-10 w-full px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-2">
         <div className="flex min-h-28 items-center gap-2 xl:hidden">
           <button
@@ -569,7 +626,7 @@ export const Navbar = () => {
             <img 
               src={logo} 
               alt="Nutri Beast" 
-              className="h-20 w-auto max-w-[42vw] object-contain drop-shadow-[0_0_20px_rgba(255,0,59,0.7)] transition-transform duration-200 group-hover:scale-105 sm:h-24"
+              className="h-32 w-auto max-w-[46vw] object-contain drop-shadow-[0_0_20px_rgba(255,0,59,0.7)] transition-transform duration-200 group-hover:scale-105 sm:h-36"
             />
           </button>
 
@@ -591,47 +648,6 @@ export const Navbar = () => {
                 </button>
               );
             })}
-          </div>
-
-          <div className="hidden xl:flex flex-1 justify-center">
-            <div className="relative w-full max-w-xl">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#d90429]" />
-              <input
-                type="text"
-                placeholder="Rechercher"
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onFocus={() => setSearchSurface("desktop")}
-                onBlur={() => window.setTimeout(() => setSearchSurface(null), 150)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSearchSubmit(e);
-                  }
-                }}
-                className="w-full rounded-lg bg-[#11100e] text-white placeholder:text-white/60 border border-[#d90429] px-12 py-3 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[#d90429] focus:border-[#d90429]"
-              />
-              <ProductSearchSuggestions
-                products={searchSuggestions}
-                loading={searchLoading}
-                visible={searchSurface === "desktop" && Boolean(searchQuery.trim())}
-                onSelect={selectSearchSuggestion}
-              />
-            </div>
-          </div>
-
-          <div className="hidden xl:flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => navigateTo("cart")}
-              className="relative p-2.5 text-white hover:text-white/70 transition-colors"
-              title="Panier"
-            >
-              <ShoppingBag className="w-6 h-6" />
-              {totalItems > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-[#d90429] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-lg">
-                  {totalItems}
-                </span>
-              )}
-            </button>
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1 xl:hidden">
@@ -748,6 +764,45 @@ export const Navbar = () => {
           </div>
         </div>
 
+        {showSearchModal && (
+          <div className="hidden xl:block border-t border-white/20 pt-3">
+            <form onSubmit={handleSearchSubmit} className="mx-auto flex max-w-3xl items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#ff526d]" aria-hidden="true" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Rechercher un produit"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => setSearchSurface("desktop")}
+                  onBlur={() => window.setTimeout(() => setSearchSurface(null), 150)}
+                  className="w-full rounded-lg border border-[#d90429] bg-[#11100e] px-12 py-3 text-sm font-medium text-white placeholder:text-white/60 focus:border-[#ff526d] focus:outline-none focus:ring-1 focus:ring-[#ff526d]"
+                  aria-label="Rechercher un produit"
+                />
+                <ProductSearchSuggestions
+                  products={searchSuggestions}
+                  loading={searchLoading}
+                  visible={searchSurface === "desktop" && Boolean(searchQuery.trim())}
+                  onSelect={selectSearchSuggestion}
+                />
+              </div>
+              <button type="submit" className="rounded-lg bg-[#d90429] px-5 py-3 text-xs font-black uppercase tracking-wide text-white transition-colors hover:bg-[#b0021f]">
+                Rechercher
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowSearchModal(false); setSearchSurface(null); }}
+                className="rounded-lg p-3 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Fermer la recherche"
+                title="Fermer la recherche"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </form>
+          </div>
+        )}
+
         <nav className="hidden xl:flex items-center justify-center gap-1 2xl:gap-2 border-t border-white/25 pt-3 mt-1" aria-label="Accès rapides">
           {secondaryDesktopLinks.map((item) => (
             <button
@@ -764,13 +819,13 @@ export const Navbar = () => {
         <nav className="mt-4 hidden rounded-2xl border border-[#f0143c]/70 bg-[#070809]/95 p-2 shadow-[0_0_24px_rgba(240,20,60,0.18)] lg:block" aria-label="Services et outils">
           <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden xl:grid xl:grid-cols-[1fr_1fr_1fr_1.15fr] xl:gap-1 xl:overflow-visible xl:pb-0">
             {[
-              { id: "coach-ia", title: "Coach IA", subtitle: "Chatbot IA disponible 24/7 pour vos questions sportives", Icon: Bot, onClick: () => navigateTo("coach-ia", { preserveScroll: true }) },
-              { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Chatbot expert en nutrition et régimes", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai", { preserveScroll: true }) },
-              { id: "calculator", title: "Calculateur", subtitle: "Chatbot assistant pour calculer vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator", { preserveScroll: true }) },
-            ].map(({ id, title, subtitle, Icon, onClick }) => (
+              { id: "coach-ia", title: "Coach IA", subtitle: "Votre coach personnel", indication: "CHATBOT IA · 24/7", Icon: Bot, onClick: () => navigateTo("coach-ia") },
+              { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Votre expert nutrition et régimes", indication: "CHATBOT IA · NUTRITION", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
+              { id: "calculator", title: "Calculateur", subtitle: "Calculez vos calories et macros", indication: "OUTIL NUTRITIONNEL", Icon: Calculator, onClick: () => navigateTo("calculator") },
+            ].map(({ id, title, subtitle, indication, Icon, onClick }) => (
               <button key={id} type="button" onClick={onClick} className="group flex min-h-[76px] min-w-[270px] snap-start items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] sm:min-w-[300px] sm:px-4 xl:min-w-0 xl:border-r xl:border-[#f0143c]/35 xl:rounded-none">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/75 bg-[#10090b] text-[#ff2448] shadow-[0_0_14px_rgba(240,20,60,0.16)] transition group-hover:bg-[#f0143c]/15 group-hover:shadow-[0_0_20px_rgba(240,20,60,0.35)]"><Icon className="h-6 w-6" /></span>
-                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">{title}</span><span className="mt-1 block text-[11px] font-medium text-[#ff003b]">{subtitle}</span></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-black text-white">{title}</span><span className="mt-1 block text-[9px] font-black tracking-wide text-[#ff526d]">{indication}</span><span className="mt-0.5 block text-[11px] font-medium text-gray-400">{subtitle}</span></span>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#f0143c]/50 text-[#ff526d] transition group-hover:bg-[#f0143c] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
               </button>
             ))}
@@ -822,7 +877,7 @@ export const Navbar = () => {
       </div>
 
       {showSearchModal && (
-        <div className="bg-black border-t border-b border-[#2b2b2b] p-4 animate-fadeIn relative z-10">
+        <div className="relative z-10 border-t border-b border-[#2b2b2b] bg-black p-4 animate-fadeIn xl:hidden">
           <div className="relative max-w-xl mx-auto">
             <form onSubmit={handleSearchSubmit} className="flex gap-2">
               <input
@@ -853,16 +908,19 @@ export const Navbar = () => {
       )}
 
       {mobileMenuOpen && (
-        <div className="mobile-menu-drawer flex h-[calc(100dvh-8rem)] max-h-[calc(100dvh-5rem)] min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white lg:hidden sm:p-6">
+        <div
+          className="mobile-menu-drawer absolute left-0 right-0 z-[60] flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white shadow-2xl shadow-black/60 xl:hidden sm:p-6"
+          style={{ top: `${navbarHeight}px`, height: `calc(100vh - ${navbarHeight}px)` }}
+        >
           <section className="shrink-0" aria-labelledby="mobile-tools-title">
             <h2 id="mobile-tools-title" className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Services et outils</h2>
             <div className="grid w-full grid-cols-2 gap-2">
               {[
-                { id: "coach-ia", title: "Coach IA", subtitle: "Chatbot IA disponible 24/7 pour vos questions sportives", Icon: Bot, onClick: () => navigateTo("coach-ia", { preserveScroll: true }) },
-                { id: "nutritionist-ai", title: "Nutrition IA", subtitle: "Chatbot expert en nutrition et régimes", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai", { preserveScroll: true }) },
-                { id: "calculator", title: "Calculateur", subtitle: "Chatbot assistant pour calculer vos besoins (kcal, macros...)", Icon: Calculator, onClick: () => navigateTo("calculator", { preserveScroll: true }) },
-                { id: "pack-builder", title: "Vos packs", subtitle: "Composez votre pack", Icon: PackagePlus, onClick: () => navigateTo("pack-builder") },
-              ].map(({ id, title, subtitle, Icon, onClick }) => (
+              { id: "coach-ia", title: "Coach IA", indication: "CHATBOT IA · 24/7", subtitle: "Votre coach personnel", Icon: Bot, onClick: () => navigateTo("coach-ia") },
+              { id: "nutritionist-ai", title: "Nutrition IA", indication: "CHATBOT IA · NUTRITION", subtitle: "Votre expert nutrition et régimes", Icon: Dumbbell, onClick: () => navigateTo("nutritionist-ai") },
+              { id: "calculator", title: "Calculateur", indication: "OUTIL NUTRITIONNEL", subtitle: "Calculez vos calories et macros", Icon: Calculator, onClick: () => navigateTo("calculator") },
+              { id: "pack-builder", title: "Vos packs", indication: "PACKS", subtitle: "Composez votre pack", Icon: PackagePlus, onClick: () => navigateTo("pack-builder") },
+              ].map(({ id, title, subtitle, indication, Icon, onClick }) => (
                 <button
                   key={id}
                   type="button"
@@ -870,15 +928,17 @@ export const Navbar = () => {
                     onClick();
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex min-w-0 items-start gap-2 rounded-xl border p-2.5 text-left transition-colors ${id === "pack-builder" ? "border-[#ff003b] bg-[#ff003b] text-white hover:bg-[#e00034]" : "border-neutral-800 bg-neutral-900/80 hover:border-[#d90429]/70 hover:bg-neutral-900"}`}
+                  className={`flex min-w-0 items-center gap-2 rounded-xl border p-2.5 text-left transition-all active:scale-[0.98] ${id === "pack-builder" ? "border-[#ff003b] bg-[#ff003b] text-white hover:bg-[#e00034]" : "border-neutral-800 bg-neutral-900/80 hover:border-[#d90429]/70 hover:bg-neutral-900"}`}
                 >
                   <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${id === "pack-builder" ? "border-white/40 bg-white/10 text-white" : "border-[#d90429]/60 bg-[#16090c] text-[#ff526d]"}`}>
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-bold text-white">{title}</span>
-                    <span className={`mt-0.5 block line-clamp-2 text-[9px] leading-3 font-normal ${id === "pack-builder" ? "text-white" : "text-[#ff003b]"}`}>{subtitle}</span>
+                    <span className={`mt-0.5 block truncate text-[8px] leading-3 font-black tracking-wide ${id === "pack-builder" ? "text-white" : "text-[#ff526d]"}`}>{indication}</span>
+                    <span className={`mt-1 block truncate text-[9px] leading-3 ${id === "pack-builder" ? "text-white/85" : "text-gray-400"}`}>{subtitle}</span>
                   </span>
+                  <ArrowRight className={`h-4 w-4 shrink-0 ${id === "pack-builder" ? "text-white" : "text-[#ff526d]"}`} />
                 </button>
               ))}
             </div>

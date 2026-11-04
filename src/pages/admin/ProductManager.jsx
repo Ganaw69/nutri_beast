@@ -201,6 +201,7 @@ export const ProductManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedParentCategoryId, setSelectedParentCategoryId] = useState('');
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('');
+  const [stockFilter, setStockFilter] = useState('');
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit', data? }
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedFormParentCategoryId, setSelectedFormParentCategoryId] = useState('');
@@ -422,14 +423,16 @@ export const ProductManager = () => {
           : iriToId(category);
         const matchesCategory = allowedCategoryIds.size === 0 || allowedCategoryIds.has(String(productCategoryId));
         const matchesSearch = !searchTerm || String(product.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-        return matchesCategory && matchesSearch;
+        const matchesStock = !stockFilter
+          || (stockFilter === 'out' ? Number(product.stock || 0) <= 0 : Number(product.stock || 0) > 0);
+        return matchesCategory && matchesSearch && matchesStock;
       });
       const pageProducts = matchingProducts.slice((page - 1) * 20, page * 20);
       setProducts(await hydrateProductsImages(pageProducts));
       setTotal(matchingProducts.length);
     } catch (e) { setError(e.message); }
     if (!silent) setLoading(false);
-  }, [page, searchTerm, selectedFilterCategoryIds, hydrateProductsImages]);
+  }, [page, searchTerm, selectedFilterCategoryIds, stockFilter, hydrateProductsImages]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -747,6 +750,16 @@ export const ProductManager = () => {
             ))}
           </select>
           <select
+            value={stockFilter}
+            onChange={(e) => { setStockFilter(e.target.value); setPage(1); }}
+            aria-label="Filtrer par disponibilité"
+            className="min-w-40 bg-[#222] border border-[#333] text-sm text-white rounded-lg px-3 py-2 focus:outline-none focus:border-[#d90429]"
+          >
+            <option value="">Tous les stocks</option>
+            <option value="in">En stock</option>
+            <option value="out">Rupture de stock</option>
+          </select>
+          <select
             value={selectedSubCategoryId}
             onChange={(e) => setSelectedSubCategoryId(e.target.value)}
             disabled={!selectedParentCategoryId}
@@ -799,9 +812,10 @@ export const ProductManager = () => {
                   <td className="px-5 py-4 text-xs font-mono text-gray-400">{p.sku || '—'}</td>
                   <td className="px-5 py-4 font-bold text-white">{parseFloat(p.price || 0).toFixed(2)} TND</td>
                   <td className="px-5 py-4">
-                    <span className={`text-sm font-bold ${(p.stock || 0) < (p.minimumStock || 5) ? 'text-red-400' : 'text-gray-300'}`}>
+                    <span className={`text-sm font-bold ${(p.stock || 0) <= 0 ? 'text-red-400' : (p.stock || 0) < (p.minimumStock || 5) ? 'text-yellow-400' : 'text-gray-300'}`}>
                       {p.stock ?? 0}
                     </span>
+                    {Number(p.stock || 0) <= 0 && <span className="ml-2 inline-flex rounded-full bg-[#d90429]/15 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#ff526d]">Rupture de stock</span>}
                   </td>
                   <td className="px-5 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${p.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'}`}>

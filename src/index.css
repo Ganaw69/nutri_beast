@@ -4,6 +4,9 @@
 
 .mobile-menu-drawer {
   isolation: isolate;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .mobile-menu-drawer button,

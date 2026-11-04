@@ -2101,8 +2101,8 @@ export const bannerService = {
 // COUVERTURES
 // ============================================================
 export const couvertureService = {
-  async getAll(skipAuth = true) {
-    const data = await apiFetch('/couvertures', {}, false, skipAuth);
+  async getAll() {
+    const data = await apiFetch('/couvertures');
     // The Couverture API returns API Platform's compact `member` key,
     // while other endpoints in this application often return `hydra:member`.
     return normalizeCollectionResponse(data);

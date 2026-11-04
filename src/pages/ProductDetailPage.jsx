@@ -346,7 +346,7 @@ export const ProductDetailPage = () => {
               disabled={!product.inStock}
               className="flex-1 bg-[#d90429] hover:bg-[#b0021f] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-heading font-black text-xs uppercase tracking-wider py-4 px-6 rounded-xl shadow-xl shadow-[#d90429]/30 flex items-center justify-center gap-3 transition-all"
             >
-              <ShoppingCart className="w-5 h-5" /> AJOUTER AU PANIER
+              <ShoppingCart className="w-5 h-5" /> {product.inStock ? 'AJOUTER AU PANIER' : 'INDISPONIBLE'}
             </button>
           </div>
 
