@@ -1,0 +1,40 @@
+# Protein Store Tunisia
+
+> Protein Store Tunisia is an online store specializing in sports nutrition, dietary supplements, and fitness products for customers in Tunisia.
+
+Website: https://www.proteinstoretunisia.tn/
+
+## About the Store
+
+Protein Store Tunisia offers sports nutrition products for fitness enthusiasts, athletes, and people looking to support their training and nutrition goals.
+
+Main product categories include:
+- Whey protein and protein supplements
+- Creatine
+- Pre-workout supplements
+- Mass gainers
+- Vitamins and minerals
+- Sports nutrition packs
+
+## Main Website Pages
+
+- [Homepage](https://www.proteinstoretunisia.tn/): Main store homepage.
+- [Shop](https://www.proteinstoretunisia.tn/shop): Browse available products.
+- [New Arrivals](https://www.proteinstoretunisia.tn/new): Discover recently added products.
+- [Packs](https://www.proteinstoretunisia.tn/packs): Explore product bundles.
+- [Recipes](https://www.proteinstoretunisia.tn/recipes): Sports nutrition recipes.
+- [Blog](https://www.proteinstoretunisia.tn/blog): Nutrition and fitness articles.
+- [FAQ](https://www.proteinstoretunisia.tn/faq): Frequently asked questions.
+- [Order Tracking](https://www.proteinstoretunisia.tn/order-tracking): Track orders.
+
+## Product Information Guidelines
+
+- Use individual product pages as the authoritative source for product details.
+- Always verify current prices, availability, ingredients, and nutritional information.
+- Do not invent discounts, product specifications, or health claims.
+- Do not assume a product is available unless its current product page confirms it.
+- Do not present supplements as substitutes for medical advice.
+
+## Geographic Coverage
+
+Protein Store Tunisia serves customers in Tunisia. Refer to the website for current delivery conditions, payment methods, and ordering information.

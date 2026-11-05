@@ -18,6 +18,9 @@ const CLIENT_TABS = new Set([
   "order-tracking",
   "blog",
   "recipes",
+  "faq",
+  "privacy-policy",
+  "terms-of-service",
 ]);
 
 const validId = (value) => value !== undefined && value !== null && value !== "";

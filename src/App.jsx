@@ -11,7 +11,7 @@ const lazyPage = (loader, exportName) => lazy(async () => {
   const module = await loader();
   return { default: module[exportName] };
 });
-const SITE_URL = "https://proteinstoretunisia.tn";
+const SITE_URL = "https://www.proteinstoretunisia.tn";
 
 // Keep the landing page in the initial bundle, but load feature screens only
 // when a visitor opens them. The admin and AI dependencies were otherwise
@@ -111,7 +111,7 @@ const SEO = () => {
       "@type": "Organization",
       name: "Protein Store Tunisia",
       url: `${SITE_URL}/`,
-      logo: `${SITE_URL}/favicon.svg`,
+      logo: `${SITE_URL}/favicon.png`,
       email: "contact@proteinstore.tn",
       areaServed: "TN",
     }) }} />

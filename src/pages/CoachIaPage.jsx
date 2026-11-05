@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { coachApi } from "../services/coachApi";
-import { resolveProductImage } from "../services/api";
+import { productService, resolveProductImage } from "../services/api";
 import { useCart } from "../context/CartContext";
 
 const createMessage = (sender, text, extra = {}) => ({
@@ -14,6 +14,97 @@ const createMessage = (sender, text, extra = {}) => ({
 const initialMessages = () => [
   createMessage("ai", "Bonjour Athlete ! Posez une question à Coach Max sur vos objectifs, votre entraînement ou votre nutrition."),
 ];
+
+
+const renderMessageText = (text) => {
+  const parts = String(text ?? "").split(
+    /(\[[^\]]+\]\((?:https?:\/\/[^)\s]+|#[^)\s]+)\))/g
+  );
+
+  return parts.map((part, index) => {
+    const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+
+    if (!match) return part;
+
+    const [, label, rawHref] = match;
+    let href = rawHref;
+
+    try {
+      const url = new URL(rawHref, window.location.origin);
+
+      if (
+        ["127.0.0.1", "localhost"].includes(url.hostname) &&
+        url.port === "5173"
+      ) {
+        href = `${window.location.origin}${url.pathname}${url.search}${url.hash}`;
+      } else {
+        href = url.href;
+      }
+    } catch {
+      return part;
+    }
+
+    const internal = href.startsWith("#") ||
+      href.startsWith(window.location.origin);
+
+    return (
+      <a
+        key={`message-link-${index}`}
+        href={href}
+        className="text-accent-gold underline underline-offset-2 hover:text-white"
+        {...(!internal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {label}
+      </a>
+    );
+  });
+};
+
+
+const loadRecommendedProducts = async (replyText, apiProducts = []) => {
+  const products = [...(Array.isArray(apiProducts) ? apiProducts : [])];
+  const knownIds = new Set(products.map((product) =>
+    String(product.id ?? product.product_id ?? product.productId ?? "")
+  ));
+
+  const productIds = [
+    ...new Set(
+      [...String(replyText ?? "").matchAll(/#product\/(\d+)/g)]
+        .map((match) => match[1])
+    ),
+  ];
+
+  const missingIds = productIds.filter((id) => !knownIds.has(String(id)));
+
+  const fetched = await Promise.allSettled(
+    missingIds.map((id) => productService.getOne(id))
+  );
+
+  fetched.forEach((result) => {
+    if (result.status === "fulfilled" && result.value) {
+      products.push(result.value);
+    }
+  });
+
+  return products.map((product) => {
+    const id = product.id ?? product.product_id ?? product.productId;
+    const price = Number(product.salePrice ?? product.price);
+
+    return {
+      ...product,
+      id,
+      name: product.name ?? product.product_name ?? "Produit recommandé",
+      brand: product.brand?.name ?? product.brand ?? "",
+      category: product.category?.name ?? product.category ?? "",
+      price: Number.isFinite(price) ? price : null,
+      image: resolveProductImage({
+        ...product,
+        image: product.image ?? product.image_url ?? product.imageUrl,
+      }),
+      href: id ? `#product/${encodeURIComponent(id)}` : null,
+    };
+  });
+};
 
 export const CoachIaPage = () => {
   const { viewProductDetails } = useCart();
@@ -50,9 +141,10 @@ export const CoachIaPage = () => {
 
     try {
       const response = await coachApi.sendMessage({ message: text, signal: controller.signal });
-      const recommendedProducts = Array.isArray(response.recommended_products)
-        ? response.recommended_products
-        : [];
+      const recommendedProducts = await loadRecommendedProducts(
+        response.reply_text,
+        response.recommended_products
+      );
       setMessages((previousMessages) => [
         ...previousMessages,
         createMessage("ai", response.reply_text, { recommendedProducts }),
@@ -161,7 +253,7 @@ export const CoachIaPage = () => {
                     : "bg-surface-high border border-white/10 text-on-surface rounded-bl-none"
                 }`}
               >
-                <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>
+                <p className="whitespace-pre-wrap leading-relaxed">{renderMessageText(message.text)}</p>
                 {message.recommendedProducts?.length > 0 && (
                   <div className="mt-3 space-y-2">
                   {message.recommendedProducts.map((product, productIndex) => {
@@ -172,6 +264,13 @@ export const CoachIaPage = () => {
                       image: product.image ?? product.image_url ?? product.imageUrl,
                     });
                     const productHref = product.href || (productId ? `#product/${productId}` : null);
+                    const productMeta = [product.brand, product.category]
+                      .filter((value) =>
+                        typeof value === "string" &&
+                        value.trim() &&
+                        !/^(?:https?:\/\/[^/]+)?\/api\//i.test(value.trim())
+                      )
+                      .join(" · ");
                     return (
                   <a
                     key={`${productId || productName}-${productIndex}`}
@@ -193,7 +292,7 @@ export const CoachIaPage = () => {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-base font-bold text-white">{productName}</span>
                       <span className="block truncate text-sm text-gray-300">
-                        {[product.brand, product.category].filter(Boolean).join(" · ") || "Produit Nutri Beast"}
+                        {productMeta || "Produit Nutri Beast"}
                       </span>
                       {product.price !== undefined && product.price !== null && (
                         <span className="mt-1 block text-sm font-bold text-accent-gold">{Number(product.price).toFixed(2)} TND</span>
