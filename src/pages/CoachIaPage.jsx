@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { coachApi } from "../services/coachApi";
+import { resolveProductImage } from "../services/api";
 import { useCart } from "../context/CartContext";
 
 const createMessage = (sender, text, extra = {}) => ({
@@ -166,7 +167,10 @@ export const CoachIaPage = () => {
                   {message.recommendedProducts.map((product, productIndex) => {
                     const productId = product.id ?? product.product_id ?? product.productId;
                     const productName = product.name ?? product.product_name ?? "Produit recommandé";
-                    const productImage = product.image ?? product.image_url ?? product.imageUrl;
+                    const productImage = resolveProductImage({
+                      ...product,
+                      image: product.image ?? product.image_url ?? product.imageUrl,
+                    });
                     const productHref = product.href || (productId ? `#product/${productId}` : null);
                     return (
                   <a

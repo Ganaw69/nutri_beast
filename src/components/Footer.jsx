@@ -3,8 +3,8 @@ import { useCart } from "../context/CartContext";
 import { Shield, Dumbbell, Share2, Home, Mail, Phone } from "lucide-react";
 
 const CONTACT_EMAIL = "contact@proteinstore.tn";
-const CONTACT_PHONE = "+216 56 711 048";
-const CONTACT_PHONE_LINK = "+21656711048";
+const CONTACT_PHONE = "+216 53 928 675";
+const CONTACT_PHONE_LINK = "+21653928675";
 
 export const Footer = () => {
   const { navigateTo } = useCart();

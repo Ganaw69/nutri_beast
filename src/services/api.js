@@ -9,7 +9,9 @@ import { PRODUCTS as DEMO_PRODUCTS_SOURCE } from '../data/products';
 
 // Use Vite's same-origin proxy in development. Direct browser calls to the
 // local HTTPS API fail when its self-signed certificate is not trusted.
-const BASE_URL = import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_BASE_URL || 'https://127.0.0.1:8000/api');
+const isLocalhostUrl = (value) => /^(https?:)?\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(String(value || ''));
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+const BASE_URL = import.meta.env.DEV || isLocalhostUrl(configuredApiBase) ? '/api' : configuredApiBase;
 const USE_DEMO_API = import.meta.env.DEV && import.meta.env.VITE_FORCE_LIVE_API !== 'true';
 const API_ORIGIN = (() => {
   if (typeof window === 'undefined') return '';
@@ -21,9 +23,10 @@ const API_ORIGIN = (() => {
 })();
 // In live-API development, uploads belong to the API host, not the Vite host.
 // Keep relative media URLs only when the app is deliberately using demo data.
+const configuredMediaBase = import.meta.env.VITE_MEDIA_BASE_URL || API_ORIGIN;
 const MEDIA_BASE = import.meta.env.DEV
   ? ''
-  : (import.meta.env.VITE_MEDIA_BASE_URL || API_ORIGIN || 'https://127.0.0.1:8000');
+  : (isLocalhostUrl(configuredMediaBase) ? API_ORIGIN : configuredMediaBase);
 const DEMO_JWT = 'eyJhbGciOiJub25lIn0.eyJleHAiOjQ3OTk5OTk5OTl9.';
 
 const clone = (value) => {
@@ -800,9 +803,12 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
 export const mediaUrl = (path) => {
   if (!path) return null;
   const value = String(path).trim();
-  if (/^(https?:)?\/\//i.test(value)) return value;
-  const uploadsPath = value.match(/(?:^|\/)uploads\/(.+)$/i);
-  const normalizedPath = uploadsPath ? `/uploads/${uploadsPath[1]}` : `/uploads/${value.replace(/^\/+/, '')}`;
+  if (/^(https?:)?\/\//i.test(value) && !isLocalhostUrl(value)) {
+    return value;
+  }
+  const urlPath = /^(https?:)?\/\//i.test(value) ? new URL(value).pathname : value;
+  const uploadsPath = urlPath.match(/(?:^|\/)uploads\/(.+)$/i);
+  const normalizedPath = uploadsPath ? `/uploads/${uploadsPath[1]}` : `/uploads/${urlPath.replace(/^\/+/, '')}`;
   return MEDIA_BASE ? `${MEDIA_BASE}${normalizedPath}` : normalizedPath;
 };
 
@@ -864,7 +870,8 @@ const resolveUploadUrl = (folder, input) => {
 
   const value = String(input).trim();
   if (!value) return null;
-  if (value.startsWith('http')) return value;
+  if (value.startsWith('http') && !isLocalhostUrl(value)) return value;
+  if (value.startsWith('http')) return mediaUrl(value);
   if (value.startsWith('/api/') || value.startsWith('api/')) return null;
 
   const normalized = value.startsWith('/') ? value : `/${value}`;
@@ -933,7 +940,8 @@ const normalizeProductImagePath = (input) => {
 
   const value = String(input).trim();
   if (!value) return null;
-  if (value.startsWith('http')) return value;
+  if (value.startsWith('http') && !isLocalhostUrl(value)) return value;
+  if (value.startsWith('http')) return mediaUrl(value);
   if (value.startsWith('/api/') || value.startsWith('api/')) return null;
   if (value.startsWith('/uploads/products/') || value.startsWith('uploads/products/')) {
     return value.startsWith('/') ? value : `/${value}`;

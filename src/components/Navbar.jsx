@@ -4,6 +4,7 @@ import { useAdmin } from "../context/AdminContext";
 import { categoryService, productService } from "../services/api";
 import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
 import logo from "../assets/logo.png";
+import { FREE_SHIPPING_LABEL } from "../config/store";
 import {
   Search,
   ShoppingBag,
@@ -20,8 +21,8 @@ import {
 } from "lucide-react";
 
 const CONTACT_EMAIL = "contact@proteinstore.tn";
-const CONTACT_PHONE = "+216 56 711 048";
-const CONTACT_PHONE_LINK = "+21656711048";
+const CONTACT_PHONE = "+216 53 928 675";
+const CONTACT_PHONE_LINK = "+21653928675";
 
 const CategoryNavLabel = ({ label }) => {
   const words = String(label || "").trim().split(/\s+/).filter(Boolean);
@@ -100,7 +101,7 @@ export const Navbar = () => {
   const navbarRef = useRef(null);
   const mobileSearchInputRef = useRef(null);
 
-  const promoMessage = "Livraison offerte dès 300DT d'achat !";
+  const promoMessage = `${FREE_SHIPPING_LABEL} !`;
 
   const openSearch = () => {
     setMobileMenuOpen(false);

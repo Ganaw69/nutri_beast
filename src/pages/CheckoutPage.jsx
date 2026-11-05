@@ -1,6 +1,7 @@
 ﻿import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { orderService } from "../services/api";
+import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 import { Package, Check, ChevronDown, Loader2, X, CheckCircle2 } from "lucide-react";
 
 const TERMS_SECTIONS = [
@@ -29,7 +30,7 @@ const TERMS_SECTIONS = [
     title: "Article 4 - Commande et validation de commande",
     paragraphs: [
       "4.1. Les commandes sont effectuées sur le site internet Protein Store Tunisia.",
-      "4.2. Les commandes peuvent également être effectuées par WhatsApp au +216 56 711 048 tous les jours.",
+      "4.2. Les commandes peuvent également être effectuées par WhatsApp au +216 53 928 675 tous les jours.",
       "4.3. Les informations contractuelles relatives à la commande, dont notamment le numéro de commande, feront l'objet d'une confirmation par voie e-mail en temps utile.",
       "4.4. La société Protein Store Tunisia se réserve le droit de refuser toute commande d'un client avec lequel existerait ou aurait existé un litige.",
       "4.5. Le Client déclare avoir la pleine capacité juridique lui permettant de s'engager au titre des présentes conditions générales de vente.",
@@ -47,7 +48,7 @@ const TERMS_SECTIONS = [
     paragraphs: [
       "Les produits commandés sur le site Protein Store Tunisia font l'objet d'une livraison via l'un de nos transporteurs ou d'une livraison directement sur place dans nos locaux (retrait au magasin).",
       "Le client devra indiquer son adresse exacte et un numéro de téléphone joignable lors de la passation de sa commande.",
-      "Les frais de livraison sont de 7 TND pour les commandes inférieures à 300 TND. La livraison est gratuite à partir de 300 TND d'achat.",
+      `Les frais de livraison sont de 7 TND pour les commandes inférieures à ${FREE_SHIPPING_THRESHOLD} TND. La livraison est gratuite à partir de ${FREE_SHIPPING_THRESHOLD} TND d'achat.`,
       "6.1. Retrait au magasin : le client devra se munir du numéro de commande qui lui a été transmis par e-mail. La commande ne pourra être prise que par le client mentionné sur celle-ci. Ce client devra vérifier la conformité des produits mis à sa disposition.",
       "6.2. Livraison à domicile : après que le client a effectué sa commande et choisi la livraison par transporteur, il sera contacté par notre service clientèle, qui validera avec lui les coordonnées, la date et l'heure de livraison. En cas d'accord, le client s'engage à payer le transporteur sur place et à signer sa commande. Dans le cas contraire, le client rendra la commande au transporteur et annulera sa livraison.",
       "6.3. En cas de livraison, d'expédition ou de mise à disposition retardée, vous serez informé(e) par e-mail et par téléphone de l'avancement de votre commande. Nous mettons tout en œuvre pour respecter les délais et vous garantir une expérience d'achat optimale.",
@@ -62,7 +63,7 @@ const TERMS_SECTIONS = [
   {
     title: "Article 8 - Notre service clientèle",
     paragraphs: [
-      "Pour tout renseignement, le client peut contacter le service clientèle par téléphone au +216 56 711 048 ou au +216 58 030 304, du lundi au samedi de 9 h 30 à 21 h et le dimanche de 11 h à 17 h 30. Le client peut également envoyer un e-mail à l'adresse de contact indiquée sur le site pour toute demande de renseignement ou réclamation.",
+      "Pour tout renseignement, le client peut contacter le service clientèle par téléphone au +216 53 928 675 , du lundi au samedi de 9 h 30 à 21 h et le dimanche de 11 h à 17 h 30. Le client peut également envoyer un e-mail à l'adresse de contact indiquée sur le site pour toute demande de renseignement ou réclamation.",
     ],
   },
 ];

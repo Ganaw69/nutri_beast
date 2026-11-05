@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { CartProvider, useCart } from "./context/CartContext";
 import { AdminProvider, useAdmin } from "./context/AdminContext";
 import { Navbar } from "./components/Navbar";
@@ -160,6 +160,26 @@ const AdminApp = () => {
 // Client App
 const MainContent = () => {
   const { activeTab } = useCart();
+
+  useEffect(() => {
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
+    const resetScroll = () => {
+      document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      window.scrollTo(0, 0);
+    };
+
+    resetScroll();
+    const frameId = window.requestAnimationFrame(resetScroll);
+    const timeoutIds = [100, 300, 800].map((delay) => window.setTimeout(resetScroll, delay));
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, [activeTab]);
 
   return (
     <main className="min-h-screen">

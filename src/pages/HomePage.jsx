@@ -333,7 +333,7 @@ export const HomePage = () => {
             <div>
               <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">ALGORITHME DE PERFORMANCE</h2>
               <p className="text-xs text-gray-300 font-body leading-relaxed mt-2">
-                Ne devinez plus. Notre algorithme exclusif analyse vos objectifs, votre niveau d'activitÃ© et votre morphologie pour vous recommander le stack de supplÃ©ments optimale.
+                Ne devinez plus. Notre algorithme exclusif analyse vos objectifs, votre niveau d’activité et votre morphologie pour vous recommander la sélection optimale de suppléments.
               </p>
             </div>
             <div className="space-y-3">
@@ -383,10 +383,10 @@ export const HomePage = () => {
                 <span className="w-1.5 h-4 bg-[#d90429] inline-block" /> OBJECTIFS CLIENT
               </div>
               <h2 className="font-black text-4xl sm:text-5xl text-white uppercase tracking-tight mt-3">
-                Client goals
+                Objectifs clients
               </h2>
               <p className="text-sm text-gray-400 font-body mt-3 max-w-3xl leading-relaxed">
-                Simple, direct recommendations to help each client find the products that match their goal.
+                Des recommandations simples et précises pour aider chaque client à trouver les produits adaptés à son objectif.
               </p>
             </div>
 
@@ -396,26 +396,25 @@ export const HomePage = () => {
             {[
               {
                 icon: Flame,
-                title: "CUTTING / FAT LOSS",
-                desc: "For clients who want to keep energy high while improving body composition.",
+                title: "SÈCHE / PERTE DE GRAS",
+                desc: "Pour garder un bon niveau d’énergie tout en améliorant sa composition corporelle.",
                 image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&q=80&w=900",
               },
               {
                 icon: Dumbbell,
-                title: "MUSCLE GAIN",
-                desc: "For those who want more strength, more size, and steady progress.",
+                title: "PRISE DE MUSCLE",
+                desc: "Pour développer sa force, sa masse musculaire et progresser régulièrement.",
                 image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&q=80&w=900",
               },
               {
                 icon: Target,
-                title: "PERFORMANCE",
-                desc: "To improve training intensity, focus, and explosiveness.",
+                desc: "Pour améliorer l’intensité, la concentration et l’explosivité à l’entraînement.",
                 image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=900",
               },
               {
                 icon: HeartPulse,
-                title: "RECOVERY",
-                desc: "To recover better between sessions and support cleaner muscle regeneration.",
+                title: "RÉCUPÉRATION",
+                desc: "Pour mieux récupérer entre les séances et favoriser la régénération musculaire.",
                 image: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=900",
               },
             ].map(({ icon: Icon, title, desc, image }) => (

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { couponService, resolvePackImage, resolveProductImage } from "../services/api";
+import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 
 const CartContext = createContext();
 
@@ -114,12 +115,25 @@ export const CartProvider = ({ children }) => {
   const [appliedCoupon, setAppliedCoupon] = useState(null); // full coupon object from API
   const [toastMessage, setToastMessage] = useState(null);
 
+  const scrollToTop = () => {
+    const reset = () => {
+      document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      window.scrollTo(0, 0);
+    };
+
+    reset();
+    window.requestAnimationFrame(() => {
+      reset();
+      window.setTimeout(reset, 120);
+    });
+  };
+
   useEffect(() => {
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, []);
+    scrollToTop();
+  }, [activeTab]);
 
   const updateRoute = (tab, id, filters) => {
     const nextHash = routeHash(tab, id, filters);
@@ -362,35 +376,35 @@ export const CartProvider = ({ children }) => {
     setSelectedProductId(productId);
     setActiveTab("product-detail");
     updateRoute("product-detail", productId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   const viewPackDetails = (packId) => {
     setSelectedPackId(packId);
     setActiveTab("pack-detail");
     updateRoute("pack-detail", packId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   const viewBrandDetails = (brandId) => {
     setSelectedBrandId(brandId);
     setActiveTab("brand-detail");
     updateRoute("brand-detail", brandId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   const viewBlogArticle = (articleId) => {
     setSelectedArticleId(articleId);
     setActiveTab("blog-article");
     updateRoute("blog-article", articleId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   const viewRecipe = (recipeId) => {
     setSelectedRecipeId(recipeId);
     setActiveTab("recipes");
     updateRoute("recipes", recipeId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   const navigateTo = (tab, { preserveScroll = false, shopFilters = {} } = {}) => {
@@ -399,14 +413,14 @@ export const CartProvider = ({ children }) => {
     setShopRouteFilters(nextShopFilters);
     updateRoute(tab, undefined, nextShopFilters);
     if (!preserveScroll) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollToTop();
     }
   };
 
   const openCartPage = () => {
     setActiveTab("cart");
     updateRoute("cart");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop();
   };
 
   // Calculations
@@ -422,7 +436,7 @@ export const CartProvider = ({ children }) => {
   }
 
   discountAmount = Math.min(subtotal, Number.isFinite(discountAmount) ? discountAmount : 0);
-  const shippingFee = subtotal >= 300 || subtotal === 0 ? 0 : 7;
+  const shippingFee = subtotal >= FREE_SHIPPING_THRESHOLD || subtotal === 0 ? 0 : 7;
   const totalPrice = Math.max(0, subtotal - discountAmount) + shippingFee;
   const totalItems = cart.reduce((acc, item) => acc + (item.quantity || 1), 0);
 

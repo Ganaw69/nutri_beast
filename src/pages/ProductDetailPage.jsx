@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, reviewService, flavorService, brandService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
+import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
   ChevronLeft, Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen
@@ -355,7 +356,7 @@ export const ProductDetailPage = () => {
         <aside className="space-y-4 lg:col-span-12 xl:col-span-2" aria-label="Services et offres Protein Store Tunisia">
           <div className="overflow-hidden rounded-2xl border border-white/15 bg-[#0d1013] shadow-xl shadow-black/30">
             {[
-              { Icon: Truck, title: "Livraison offerte", detail: "dès 300 TND" },
+              { Icon: Truck, title: "Livraison offerte", detail: `dès ${FREE_SHIPPING_THRESHOLD} TND` },
               { Icon: ShieldCheck, title: "Paiement", detail: "à la livraison" },
               { Icon: Headphones, title: "Service client", detail: "à votre écoute" },
               { Icon: BadgeCheck, title: "Produits", detail: "100% originaux" },

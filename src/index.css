@@ -30,11 +30,18 @@
 .blog-article-content img { max-width: 100%; height: auto; border-radius: 0.75rem; }
 
 @layer base {
+  html {
+    min-height: 100%;
+    scroll-behavior: auto;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     background-color: #131313;
     color: #e5e2e1;
     font-family: 'Inter', sans-serif;
     overflow-x: hidden;
+    min-height: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {

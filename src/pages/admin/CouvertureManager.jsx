@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Edit2, Image, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Archive, Check, Edit2, Image, Loader2, Plus, Trash2, Upload, X } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 import { brandService, couvertureService, mediaUrl } from '../../services/api';
 
@@ -151,6 +151,18 @@ export const CouvertureManager = () => {
     }
   };
 
+  const handleToggleActive = async (couverture) => {
+    const nextActive = couverture.active === false;
+    try {
+      const data = new FormData();
+      data.append('active', String(nextActive));
+      await couvertureService.update(couverture.id, data);
+      await fetchCouvertures();
+    } catch (requestError) {
+      window.alert(requestError.message);
+    }
+  };
+
   const inputClass = 'w-full bg-[#222] border border-[#333] text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-[#d90429]';
   const labelClass = 'block text-xs font-bold text-gray-400 uppercase mb-1.5';
   const current = modal?.couverture;
@@ -195,6 +207,13 @@ export const CouvertureManager = () => {
                 <div className="text-xs text-gray-400"><span className="font-bold text-white mr-2">Index {couverture.index ?? 0}</span><span className="bg-[#333] px-2 py-0.5 rounded">{couverture.navigationType || 'url'}</span></div>
                 <div className="flex gap-2">
                   <AdminActionButton label="Modifier" onClick={() => openEdit(couverture)} className="p-1.5 text-gray-300 hover:text-white hover:bg-[#333]"><Edit2 size={14} /></AdminActionButton>
+                  <AdminActionButton
+                    label={couverture.active === false ? 'Activer' : 'Désactiver'}
+                    onClick={() => handleToggleActive(couverture)}
+                    className={`p-1.5 hover:bg-[#333] ${couverture.active === false ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-300 hover:text-amber-200'}`}
+                  >
+                    <Archive size={14} />
+                  </AdminActionButton>
                   <AdminActionButton label="Supprimer" onClick={() => handleDelete(couverture.id)} className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-red-400/10"><Trash2 size={14} /></AdminActionButton>
                 </div>
               </div>
