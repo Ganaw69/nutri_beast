@@ -18,6 +18,12 @@ import {
   ChevronDown,
   Mail,
   Phone,
+  Tag,
+  Gift,
+  Star,
+  Venus,
+  CookingPot,
+  Newspaper,
 } from "lucide-react";
 
 const CONTACT_EMAIL = "contact@proteinstore.tn";
@@ -186,11 +192,11 @@ export const Navbar = () => {
 
   const quickAccessStrip = useMemo(
     () => [
-      { id: "snacks", label: "Snacks & Drinks" },
-      { id: "packs", label: "Packs Exclusifs" },
-      { id: "new", label: "Nouveautés" },
-      { id: "women", label: "Santé de la Femme" },
-      { id: "accessories", label: "Accessoires" },
+      { id: "snacks", label: "Snacks & Drinks", Icon: Tag },
+      { id: "packs", label: "Packs Exclusifs", Icon: Gift },
+      { id: "new", label: "Nouveautés", Icon: Star },
+      { id: "women", label: "Santé de la Femme", Icon: Venus },
+      { id: "accessories", label: "Accessoires", Icon: Dumbbell },
     ],
     []
   );
@@ -297,8 +303,8 @@ export const Navbar = () => {
   const secondaryDesktopLinks = useMemo(
     () => [
       ...quickAccessStrip,
-      { id: "recipes", label: "Recettes" },
-      { id: "blog", label: "Blog" },
+      { id: "recipes", label: "Recettes", Icon: CookingPot },
+      { id: "blog", label: "Blog", Icon: Newspaper },
     ],
     [quickAccessStrip]
   );
@@ -701,7 +707,7 @@ export const Navbar = () => {
                   <CategoryNavLabel label={item.label} />{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
                 </button>
                 {item.children && openCategoryId === item.id && (
-                  <div className="absolute right-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
+                  <div className="absolute left-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
                     {item.children.map((child) => (
                       <button key={child.id} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
                         {child.name}
@@ -742,7 +748,7 @@ export const Navbar = () => {
                   <CategoryNavLabel label={item.label} />{item.children && <span className="ml-1 text-[9px]">{openCategoryId === item.id ? "▲" : "▼"}</span>}
                 </button>
                 {item.children && openCategoryId === item.id && (
-                  <div className="absolute left-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
+                  <div className="absolute right-0 top-full z-50 min-w-[250px] rounded-xl border border-white/25 bg-[#111] p-2 shadow-2xl">
                     {item.children.map((child) => (
                       <button key={child.id} type="button" onClick={() => handleSubCategoryClick(child)} className="block w-full rounded-lg px-3 py-2 text-left text-sm font-bold normal-case tracking-normal text-white transition-colors hover:bg-white/10">
                         {child.name}
@@ -804,15 +810,16 @@ export const Navbar = () => {
           </div>
         )}
 
-        <nav className="hidden xl:flex items-center justify-center gap-1 2xl:gap-2 border-t border-white/25 pt-3 mt-1" aria-label="Accès rapides">
-          {secondaryDesktopLinks.map((item) => (
+        <nav className="hidden xl:flex items-center justify-center rounded-lg border border-[#f0143c]/30 bg-black/35 px-2 py-1.5" aria-label="Accès rapides">
+          {secondaryDesktopLinks.map(({ id, label, Icon }) => (
             <button
-              key={item.id}
+              key={id}
               type="button"
-              onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === item.id) ? handleCategoryClick(item.id) : handleSectionClick(item.id)}
-              className="whitespace-nowrap rounded-md px-2 py-2 text-sm 2xl:px-3 2xl:text-[17px] font-black uppercase tracking-wide text-white transition-colors hover:bg-white/10"
+              onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === id) ? handleCategoryClick(id) : handleSectionClick(id)}
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border-r border-white/15 px-4 py-2.5 text-sm font-black uppercase tracking-wide text-white transition-colors last:border-r-0 hover:bg-white/10 hover:text-[#ff8a9d] 2xl:px-5 2xl:text-base"
             >
-              {item.label}
+              <Icon className="h-5 w-5 shrink-0 text-[#ff526d]" aria-hidden="true" />
+              {label}
             </button>
           ))}
         </nav>
