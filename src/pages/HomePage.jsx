@@ -2,9 +2,11 @@
 import { useCart } from "../context/CartContext";
 import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
-import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2, Target, Dumbbell, Flame, HeartPulse } from "lucide-react";
+import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import logo from "../assets/logo.png";
-import collagenBiotinImage from "../assets/pack-collagene-biotine-peau-cheveux-ongles.png";
+import packHommeImage from "../assets/pack-homme.jpeg";
+import packFemmeImage from "../assets/pack-femme.jpeg";
+import packBuilderBanner from "../assets/objectif.jpeg";
 
 const normalizeProduct = (p) => ({
   id: p.id,
@@ -124,9 +126,11 @@ const parseCouvertureDestination = (couverture) => {
 };
 
 export const HomePage = () => {
-  const { navigateTo, setSearchQuery, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails, viewPackDetails } = useCart();
+  const { navigateTo, setSearchQuery, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
+  const [newProducts, setNewProducts] = useState([]);
+  const [newProductsOffset, setNewProductsOffset] = useState(0);
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
@@ -137,17 +141,21 @@ export const HomePage = () => {
 
     Promise.all([
       productService.getBestSellers({ isActive: true }).catch(() => productService.getAllPages({ isActive: true }, true)),
+      productService.getNew({ isActive: true }).catch(() => ({ 'hydra:member': [] })),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([prodData, couvertureData, brandData]) => {
+    ]).then(([bestSellersData, newProductsData, couvertureData, brandData]) => {
       if (!active) return;
-      const availableProducts = (prodData['hydra:member'] || []).filter((product) =>
+      const availableProducts = collectionItems(bestSellersData).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
       );
-      const prods = availableProducts;
+      const availableNewProducts = collectionItems(newProductsData).filter((product) =>
+        product.isActive !== false && product.brand?.isActive !== false
+      );
       // The collection already includes everything a product card needs.
       // Render it immediately; image enrichment is non-blocking below.
-      setBestSellers(prods.map(normalizeProduct));
+      setBestSellers(availableProducts.map(normalizeProduct));
+      setNewProducts(availableNewProducts.map(normalizeProduct));
       const couvertures = (couvertureData['hydra:member'] || couvertureData.member || [])
         .filter((couverture) => (
           (couverture.active ?? couverture.isActive ?? couverture.is_active ?? couverture.enabled ?? true) !== false
@@ -158,8 +166,13 @@ export const HomePage = () => {
       setBrands(collectionItems(brandData).filter((brand) => brand.active !== false && brand.isActive !== false));
       setLoading(false);
 
-      void hydrateProductsWithImages(prods).then((productsWithImages) => {
-        if (active) setBestSellers(productsWithImages.map(normalizeProduct));
+      void Promise.all([
+        hydrateProductsWithImages(availableProducts),
+        hydrateProductsWithImages(availableNewProducts),
+      ]).then(([bestSellersWithImages, newProductsWithImages]) => {
+        if (!active) return;
+        setBestSellers(bestSellersWithImages.map(normalizeProduct));
+        setNewProducts(newProductsWithImages.map(normalizeProduct));
       });
     });
 
@@ -167,12 +180,20 @@ export const HomePage = () => {
   }, []);
 
   useEffect(() => {
-    if (bestSellers.length <= 3) return undefined;
+    if (bestSellers.length <= 4) return undefined;
     const interval = window.setInterval(() => {
-      setBestSellerOffset((current) => (current + 3) % bestSellers.length);
+      setBestSellerOffset((current) => (current + 4) % bestSellers.length);
     }, 4500);
     return () => window.clearInterval(interval);
   }, [bestSellers.length]);
+
+  useEffect(() => {
+    if (newProducts.length <= 4) return undefined;
+    const interval = window.setInterval(() => {
+      setNewProductsOffset((current) => (current + 4) % newProducts.length);
+    }, 4500);
+    return () => window.clearInterval(interval);
+  }, [newProducts.length]);
 
   useEffect(() => {
     setActiveHeroIndex(0);
@@ -189,9 +210,6 @@ export const HomePage = () => {
   const activeHeroBrandId = heroDestination?.type === 'brand' ? heroDestination.value : null;
   const heroBgImage = resolveCouvertureImage(couvertureDesktopImage(heroCouverture));
   const heroMobileBgImage = resolveCouvertureImage(couvertureMobileImage(heroCouverture));
-  const openCollagenPack = () => {
-    viewPackDetails(22);
-  };
   const showNextHeroCouverture = () => {
     if (heroCouvertures.length < 2) return;
     setActiveHeroIndex((current) => (current + 1) % heroCouvertures.length);
@@ -223,9 +241,13 @@ export const HomePage = () => {
   const heroHasDestination = Boolean(heroDestination);
   const logoBrands = brands.filter((brand) => resolveBrandLogo(brand));
 
-  const visibleBestSellers = bestSellers.length <= 3
+  const visibleNewProducts = newProducts.length <= 4
+    ? newProducts
+    : Array.from({ length: 4 }, (_, index) => newProducts[(newProductsOffset + index) % newProducts.length]);
+
+  const visibleBestSellers = bestSellers.length <= 4
     ? bestSellers
-    : Array.from({ length: 3 }, (_, index) => bestSellers[(bestSellerOffset + index) % bestSellers.length]);
+    : Array.from({ length: 4 }, (_, index) => bestSellers[(bestSellerOffset + index) % bestSellers.length]);
 
   return (
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading pb-20 space-y-16">
@@ -247,42 +269,32 @@ export const HomePage = () => {
         </div>}
       </section>}
 
-      {/* ================= 2. PROMOTION PACK ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="collagen-promo-panel grid overflow-hidden rounded-2xl border border-[#d90429]/55 shadow-[0_0_10px_rgba(217,4,41,0.5),0_0_30px_rgba(217,4,41,0.25)] transition-shadow duration-300 hover:shadow-[0_0_13px_rgba(255,82,109,0.75),0_0_35px_rgba(217,4,41,0.35)] md:min-h-[340px] md:grid-cols-2">
-          <div className="flex flex-col items-start justify-center px-7 py-9 text-white sm:px-10 md:px-12 md:py-12">
-            <p className="text-3xl font-black uppercase leading-[1.08] tracking-tight text-white sm:text-4xl lg:text-5xl">
-              Pack Collagène<br />+ Biotine
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2.5 text-[11px] font-black uppercase sm:text-xs">
-              {['Peau', 'Cheveux', 'Ongles'].map((benefit) => (
-                <span key={benefit} className="rounded-md border border-[#ff596e]/50 bg-[#9f1018]/90 px-4 py-2.5 text-white shadow-[0_0_12px_rgba(217,4,41,0.25)]">{benefit}</span>
-              ))}
-            </div>
-            <div className="mt-5 flex flex-wrap items-baseline gap-3">
-              <span className="text-lg font-bold text-gray-400 line-through decoration-[#ff2948] decoration-2">200,000 TND</span>
-              <span className="text-3xl font-black text-[#ff2948] drop-shadow-[0_0_12px_rgba(217,4,41,0.45)]">120,000 <span className="text-base">TND</span></span>
-            </div>
-            <button
-              type="button"
-              onClick={openCollagenPack}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-6 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_18px_rgba(217,4,41,0.4)] transition-transform hover:scale-105 hover:bg-[#b0021f]"
-            >
-              Je découvre <ArrowRight className="h-4 w-4" />
-            </button>
+      {/* ================= 2. NOUVEAUTÉS À DÉCOUVRIR ================= */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="flex items-end justify-between border-b border-white/10 pb-4">
+          <div>
+            <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOUVEAUTÉS À DÉCOUVRIR</h2>
+            <p className="text-xs text-gray-400 font-body mt-1">Les derniers produits ajoutés à notre sélection.</p>
           </div>
-
-          <div className="flex items-center justify-center px-7 pb-8 md:px-10 md:py-8">
-            <button type="button" onClick={openCollagenPack} aria-label="Voir le détail du pack Collagène et Biotine" className="inline-flex max-w-full rotate-1 cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-transparent shadow-[0_0_24px_rgba(217,4,41,0.28)] transition-transform duration-500 hover:rotate-0 focus:outline-none focus:ring-2 focus:ring-white">
-              <img
-                src={collagenBiotinImage}
-                alt="Pack collagène et biotine pour la peau, les cheveux et les ongles"
-                className="block h-auto max-h-[360px] w-auto max-w-full object-contain"
-                loading="lazy"
-              />
-            </button>
-          </div>
+          <button
+            onClick={() => navigateTo("shop", { shopFilters: { filter: "new" } })}
+            className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
+          >
+            VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
+          </button>
         </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 text-[#d90429] animate-spin" />
+          </div>
+        ) : newProducts.length > 0 ? (
+          <div key={newProductsOffset} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-[bestSellerVertical_0.55s_ease-out]">
+            {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500 text-sm">Aucune nouveauté pour l'instant.</div>
+        )}
       </section>
 
       {/* ================= 3. NOS BEST SELLERS ================= */}
@@ -305,7 +317,7 @@ export const HomePage = () => {
             <Loader2 className="w-8 h-8 text-[#d90429] animate-spin" />
           </div>
         ) : bestSellers.length > 0 ? (
-          <div key={bestSellerOffset} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-[bestSellerVertical_0.55s_ease-out]">
+          <div key={bestSellerOffset} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-[bestSellerVertical_0.55s_ease-out]">
             {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
           </div>
         ) : (
@@ -313,46 +325,46 @@ export const HomePage = () => {
         )}
       </section>
 
-      {/* ================= 4. COACH IA / QUIZ ================= */}
+      {/* ================= 4. PACKS HOMME / FEMME ================= */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#0e0e0e] border border-white/10 rounded-xl p-6 sm:p-10">
-          <div className="lg:col-span-5 relative rounded-lg overflow-hidden border border-white/10 min-h-[420px] flex items-end p-6">
-            <img
-              src="https://images.unsplash.com/photo-1546483875-ad9014c88eba?auto=format&fit=crop&q=80&w=800"
-              alt="Monochrome Athlete"
-              className="absolute inset-0 w-full h-full object-cover grayscale contrast-125 opacity-80"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-            <div className="relative z-10 bg-black/85 border border-white/10 backdrop-blur-md p-4 rounded-lg w-full space-y-1">
-              <p className="text-xs italic text-white font-body">"Precision is the only path to power."</p>
-              <div className="text-[10px] font-black text-[#d90429] tracking-widest uppercase">COACH AMIN, HEAD TRAINER</div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-7 space-y-6">
-            <div>
-              <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">ALGORITHME DE PERFORMANCE</h2>
-              <p className="text-xs text-gray-300 font-body leading-relaxed mt-2">
-                Ne devinez plus. Notre algorithme exclusif analyse vos objectifs, votre niveau d’activité et votre morphologie pour vous recommander la sélection optimale de suppléments.
-              </p>
-            </div>
-            <div className="space-y-3">
-              {["DÉFINISSEZ VOTRE OBJECTIF PRINCIPAL", "ANALYSEZ VOS HABITUDES D'ENTRAÎNEMENT", "OBTENEZ VOTRE STACK PERSONNALISÉE"].map((step, i) => (
-                <div key={i} className="flex items-center gap-4 bg-[#181818] p-4 rounded-lg border border-white/5">
-                  <div className="w-8 h-8 bg-[#d90429] text-white font-black text-sm rounded flex items-center justify-center shrink-0">{i + 1}</div>
-                  <span className="font-bold text-xs text-white uppercase">{step}</span>
-                </div>
-              ))}
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={() => navigateTo("coach-ia")}
-                className="bg-white hover:bg-gray-200 text-black font-black text-xs uppercase tracking-wider px-8 py-4 rounded-xs shadow-lg transition-colors"
-              >
-                DÉMARRER LE QUIZ (2 MIN)
-              </button>
-            </div>
-          </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {[
+            {
+              title: "Pack Homme",
+              description: "Performance, prise de masse et récupération réunies dans une sélection prête à l'emploi.",
+              image: packHommeImage,
+              action: "Découvrir le pack homme",
+            },
+            {
+              title: "Pack Femme",
+              description: "Beauté, vitalité et performance dans une sélection adaptée à vos objectifs.",
+              image: packFemmeImage,
+              action: "Découvrir le pack femme",
+            },
+          ].map(({ title, description, image, action }) => (
+            <article key={title} className="group overflow-hidden rounded-2xl border border-white/15 bg-[#0e0e0e] shadow-xl shadow-black/35">
+              <div className="aspect-[3/2] overflow-hidden bg-[#191919]">
+                <img
+                  src={image}
+                  alt={title}
+                  loading="lazy"
+                  className="h-full w-full object-contain transition-transform duration-700 group-hover:scale-[1.025]"
+                />
+              </div>
+              <div className="flex min-h-[220px] flex-col items-start justify-end border-t border-white/10 bg-gradient-to-br from-[#1d1d1d] to-[#0c0c0c] p-6 sm:p-8">
+                <span className="mb-3 rounded-full border border-[#ff526d]/45 bg-[#d90429]/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#ff9aaa]">Sélection Protein Store</span>
+                <h2 className="text-3xl font-black uppercase tracking-tight text-white sm:text-4xl">{title}</h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-gray-300">{description}</p>
+                <button
+                  type="button"
+                  onClick={() => navigateTo("packs")}
+                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_18px_rgba(217,4,41,0.45)] transition hover:bg-[#b0021f] group-hover:translate-x-1"
+                >
+                  {action} <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -374,69 +386,23 @@ export const HomePage = () => {
           ))}
         </div>
       </section>
-      {/* ================= 6. OBJECTIFS CLIENT ================= */}
+      {/* ================= 6. COMPOSER VOTRE PACK ================= */}
       <section className="w-full px-4 sm:px-6 lg:px-8 pb-4">
-        <div className="w-full bg-[#0e0e0e] border border-white/10 rounded-xl p-8 sm:p-12 lg:p-16 shadow-2xl shadow-black/20">
-          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-8">
-            <div>
-              <div className="inline-flex items-center gap-2 text-[#d90429] font-black text-[10px] tracking-[0.28em] uppercase">
-                <span className="w-1.5 h-4 bg-[#d90429] inline-block" /> OBJECTIFS CLIENT
-              </div>
-              <h2 className="font-black text-4xl sm:text-5xl text-white uppercase tracking-tight mt-3">
-                Objectifs clients
-              </h2>
-              <p className="text-sm text-gray-400 font-body mt-3 max-w-3xl leading-relaxed">
-                Des recommandations simples et précises pour aider chaque client à trouver les produits adaptés à son objectif.
-              </p>
-            </div>
-
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-            {[
-              {
-                icon: Flame,
-                title: "SÈCHE / PERTE DE GRAS",
-                desc: "Pour garder un bon niveau d’énergie tout en améliorant sa composition corporelle.",
-                image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&q=80&w=900",
-              },
-              {
-                icon: Dumbbell,
-                title: "PRISE DE MUSCLE",
-                desc: "Pour développer sa force, sa masse musculaire et progresser régulièrement.",
-                image: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&q=80&w=900",
-              },
-              {
-                icon: Target,
-                desc: "Pour améliorer l’intensité, la concentration et l’explosivité à l’entraînement.",
-                image: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=900",
-              },
-              {
-                icon: HeartPulse,
-                title: "RÉCUPÉRATION",
-                desc: "Pour mieux récupérer entre les séances et favoriser la régénération musculaire.",
-                image: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=900",
-              },
-            ].map(({ icon: Icon, title, desc, image }) => (
-              <button
-                type="button"
-                key={title}
-                onClick={() => navigateTo("calculator")}
-                className="group relative min-h-[340px] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-[#181818] text-left transition-all duration-200 hover:-translate-y-1 hover:border-[#d90429]/70 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d90429]"
-              >
-                <img src={image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-55 grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-black/10" />
-                <div className="relative z-10 h-full min-h-[340px] flex flex-col justify-end p-7">
-                  <div className="w-12 h-12 rounded-lg bg-[#d90429] border border-[#ff4961] flex items-center justify-center mb-5 shadow-lg shadow-black/30">
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="font-black text-base text-white uppercase tracking-wider">{title}</h3>
-                  <p className="text-sm text-gray-200 font-body leading-relaxed mt-2">{desc}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigateTo("pack-builder")}
+          className="group relative block w-full overflow-hidden rounded-2xl border border-[#d90429]/45 bg-[#100708] text-left shadow-[0_0_28px_rgba(217,4,41,0.2)] transition hover:-translate-y-0.5 hover:border-[#ff526d] hover:shadow-[0_0_35px_rgba(217,4,41,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          aria-label="Composer votre pack personnalisé"
+        >
+          <img
+            src={packBuilderBanner}
+            alt="Composez votre propre pack de compléments selon vos objectifs"
+            className="h-44 w-full object-cover object-left transition-transform duration-500 group-hover:scale-[1.015] sm:h-auto"
+          />
+          <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg shadow-black/30 transition group-hover:bg-[#b0021f] sm:bottom-5 sm:right-5 sm:px-5 sm:py-3 sm:text-xs">
+            Composer votre pack <ArrowRight className="h-4 w-4" />
+          </span>
+        </button>
       </section>
 
       {/* ================= 7. À PROPOS ================= */}
