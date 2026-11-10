@@ -6,7 +6,7 @@ import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight
 import logo from "../assets/logo.png";
 import packHommeImage from "../assets/pack-homme.jpeg";
 import packFemmeImage from "../assets/pack-femme.jpeg";
-import packBuilderBanner from "../assets/objectif.jpeg";
+import packBuilderBanner from "../assets/objectif.png";
 
 const normalizeProduct = (p) => ({
   id: p.id,
@@ -270,7 +270,7 @@ export const HomePage = () => {
       </section>}
 
       {/* ================= 2. NOUVEAUTÉS À DÉCOUVRIR ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10 space-y-6">
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
             <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOUVEAUTÉS À DÉCOUVRIR</h2>
@@ -298,10 +298,10 @@ export const HomePage = () => {
       </section>
 
       {/* ================= 3. NOS BEST SELLERS ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10 space-y-6">
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
-            <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOS BEST SELLERS</h2>
+            <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOS MEILLEURS VENTES</h2>
             <p className="text-xs text-gray-400 font-body mt-1">Le carburant préféré de nos athlètes d'élite.</p>
           </div>
           <button
@@ -326,7 +326,7 @@ export const HomePage = () => {
       </section>
 
       {/* ================= 4. PACKS HOMME / FEMME ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10">
         <div className="grid gap-6 md:grid-cols-2">
           {[
             {
@@ -343,7 +343,7 @@ export const HomePage = () => {
             },
           ].map(({ title, description, image, action }) => (
             <article key={title} className="group overflow-hidden rounded-2xl border border-white/15 bg-[#0e0e0e] shadow-xl shadow-black/35">
-              <div className="aspect-[3/2] overflow-hidden bg-[#191919]">
+              <div className="aspect-[1.65/1] overflow-hidden bg-[#191919]">
                 <img
                   src={image}
                   alt={title}
@@ -369,18 +369,18 @@ export const HomePage = () => {
       </section>
 
       {/* ================= 5. TRUST BADGES ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-white/10">
+      <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-5 border-t border-white/10">
           {[
             { icon: Truck, title: 'LIVRAISON RAPIDE', desc: 'Expédition sous 24/48h partout en Tunisie.' },
             { icon: FlaskConical, title: 'TESTÉ EN LABO', desc: 'Pureté garantie et sans substance interdite.' },
             { icon: ShieldCheck, title: 'EXPERTISE 25 ANS', desc: 'Formulation de niveau supérieur recommandée.' },
           ].map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="flex items-center gap-4 p-5 bg-[#181818] border border-white/5 rounded-lg">
-              <Icon className="w-8 h-8 text-white shrink-0" />
+            <div key={title} className="flex min-h-24 items-center gap-5 rounded-xl border border-white/10 bg-[#181818] p-6 sm:p-7">
+              <Icon className="h-10 w-10 text-white shrink-0" />
               <div>
-                <h4 className="font-black text-xs text-white uppercase">{title}</h4>
-                <p className="text-[11px] text-gray-400 font-body mt-0.5">{desc}</p>
+                <h4 className="font-black text-sm sm:text-base text-white uppercase">{title}</h4>
+                <p className="mt-1 text-sm text-gray-300 font-body leading-relaxed">{desc}</p>
               </div>
             </div>
           ))}
@@ -406,20 +406,23 @@ export const HomePage = () => {
       </section>
 
       {/* ================= 7. À PROPOS ================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 overflow-hidden rounded-xl border border-white/10 bg-[#0e0e0e] shadow-2xl shadow-black/20">
-          <div className="min-h-[320px] bg-gradient-to-br from-[#242424] via-[#111] to-[#050505] flex items-center justify-center p-10 sm:p-14">
-            <img src={logo} alt="Nutri Beast" className="w-full max-w-sm object-contain drop-shadow-[0_0_35px_rgba(217,4,41,0.28)]" />
+      <section className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 overflow-hidden rounded-2xl border border-[#ff173f] bg-[#080808] shadow-[0_0_32px_rgba(217,4,41,0.16)] lg:min-h-[420px] lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="relative isolate flex min-h-[280px] items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_55%_48%,rgba(255,0,34,0.8),rgba(126,0,13,0.42)_38%,transparent_70%),linear-gradient(135deg,#150305,#080808_76%)] p-7 sm:min-h-[360px] sm:p-9 lg:min-h-[420px]">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-70 [background:repeating-linear-gradient(132deg,transparent_0,transparent_36px,rgba(255,16,48,0.12)_37px,rgba(255,16,48,0.12)_39px,transparent_40px,transparent_67px)]" />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(132deg,transparent_0%,transparent_12%,rgba(255,15,45,0.85)_12.2%,rgba(255,15,45,0.85)_12.5%,transparent_12.8%,transparent_17%,rgba(255,15,45,0.34)_17.2%,transparent_17.5%,transparent_84%,rgba(255,15,45,0.35)_84.2%,transparent_84.6%,transparent_89%,rgba(255,15,45,0.9)_89.2%,rgba(255,15,45,0.9)_89.5%,transparent_89.8%)]" />
+            <div aria-hidden="true" className="about-red-light pointer-events-none absolute inset-y-0 left-0 z-[1] w-1/2" />
+            <img src={logo} alt="Nutri Beast" className="relative z-10 w-full max-w-[500px] object-contain drop-shadow-[0_0_42px_rgba(255,0,32,0.55)]" />
           </div>
-          <div className="flex flex-col justify-center p-8 sm:p-12 lg:p-16">
-            <div className="inline-flex items-center gap-2 text-[#d90429] font-black text-[10px] tracking-[0.28em] uppercase">
-              <span className="w-1.5 h-4 bg-[#d90429] inline-block" /> À PROPOS DE PROTEIN STORE TUNISIA
+          <div className="flex flex-col justify-center px-7 py-9 sm:px-9 lg:px-11 xl:px-12">
+            <div className="inline-flex items-center gap-2.5 text-[#ff173f] font-black text-[10px] sm:text-xs tracking-[0.25em] uppercase">
+              <span className="h-5 w-1.5 bg-[#ff173f] inline-block" /> À PROPOS DE PROTEIN STORE TUNISIA
             </div>
-            <h2 className="mt-4 font-black text-3xl sm:text-4xl text-white uppercase tracking-tight">Votre performance, notre mission.</h2>
-            <p className="mt-5 text-sm sm:text-base leading-relaxed text-gray-300 font-body">
+            <h2 className="mt-5 max-w-[620px] font-black text-3xl sm:text-4xl xl:text-[42px] leading-[1.08] text-white uppercase tracking-tight">Votre performance, notre mission.</h2>
+            <p className="mt-6 max-w-[620px] text-sm sm:text-base leading-[1.55] text-gray-300 font-body">
              <b>Protein Store Tunisia</b> sélectionne des compléments de qualité pour accompagner chaque athlète, du premier entraînement aux objectifs les plus ambitieux. Notre shop réunit des produits fiables, des conseils simples et les essentiels pour progresser avec confiance.
             </p>
-            <button onClick={() => navigateTo("shop")} className="mt-8 inline-flex w-fit items-center gap-2 bg-[#d90429] hover:bg-[#b0021f] px-6 py-3.5 text-xs font-black uppercase tracking-wider text-white transition-colors">
+            <button onClick={() => navigateTo("shop")} className="mt-8 inline-flex w-fit items-center gap-3 bg-[#ed0730] hover:bg-[#c90028] px-7 py-4 text-xs font-black uppercase tracking-wider text-white shadow-[0_0_20px_rgba(237,7,48,0.2)] transition-colors">
               Découvrir le shop <ArrowRight className="w-4 h-4" />
             </button>
           </div>

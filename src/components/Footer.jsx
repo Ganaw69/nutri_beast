@@ -33,7 +33,7 @@ export const Footer = () => {
 
   return (
     <footer className="bg-[#0c0c0c] border-t border-white/10 pt-16 pb-8 text-[#e5e2e1] font-heading">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+      <div className="w-full px-5 sm:px-8 lg:px-12 2xl:px-16 space-y-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 pb-12 border-b border-white/10">
           {/* Column 1: Brand Info & Crest */}
           <div className="space-y-4">
@@ -52,7 +52,7 @@ export const Footer = () => {
               </div>
             </div>
 
-            <p className="text-xs text-gray-400 font-body leading-relaxed max-w-xs">
+            <p className="text-sm text-gray-300 font-body leading-relaxed max-w-sm">
               La destination n°1 en Tunisie pour les athlètes exigeants. Performance, précision, et puissance dans chaque dose.
             </p>
 
@@ -80,10 +80,10 @@ export const Footer = () => {
 
           {/* Column 2: NAVIGATION */}
           <div className="space-y-4">
-            <h4 className="font-black text-xs text-white uppercase tracking-widest">
+            <h4 className="font-black text-sm text-white uppercase tracking-widest">
               NAVIGATION
             </h4>
-            <ul className="space-y-2 text-xs text-gray-400 font-body">
+            <ul className="space-y-3 text-sm text-gray-300 font-body">
               <li>
                 <button type="button" onClick={() => navigateTo("shop")} className="hover:text-white transition-colors">
                   Shop
@@ -114,10 +114,10 @@ export const Footer = () => {
 
           {/* Column 3: AIDE & INFOS */}
           <div className="space-y-4">
-            <h4 className="font-black text-xs text-white uppercase tracking-widest">
+            <h4 className="font-black text-sm text-white uppercase tracking-widest">
               AIDE & INFOS
             </h4>
-            <ul className="space-y-2 text-xs text-gray-400 font-body">
+            <ul className="space-y-3 text-sm text-gray-300 font-body">
               <li>
                 <button onClick={() => navigateTo("faq")} className="hover:text-white transition-colors">
                   FAQ
@@ -125,12 +125,12 @@ export const Footer = () => {
               </li>
               <li>
                 <button onClick={() => navigateTo("privacy-policy")} className="hover:text-white transition-colors">
-                  Privacy Policy
-                </button>
+Politique de confidentialité                </button>
               </li>
               <li>
                 <button onClick={() => navigateTo("terms-of-service")} className="hover:text-white transition-colors">
-                  Terms of Service
+                  Conditions générales d’utilisation et de vente
+
                 </button>
               </li>
             </ul>
@@ -138,10 +138,10 @@ export const Footer = () => {
 
           {/* Column 4: CONTACT */}
           <div className="space-y-4">
-            <h4 className="font-black text-xs text-white uppercase tracking-widest">
+            <h4 className="font-black text-sm text-white uppercase tracking-widest">
               CONTACT US
             </h4>
-            <p className="text-xs text-gray-400 font-body leading-relaxed">
+            <p className="text-sm text-gray-300 font-body leading-relaxed">
               Une question sur votre commande ou un produit ? Notre équipe vous répond.
             </p>
             <div className="space-y-2">
@@ -165,7 +165,7 @@ export const Footer = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-gray-500 gap-4 font-bold tracking-wider">
+        <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-4 font-bold tracking-wider">
           <p>© 2026 PROTEIN STORE TUNISIA. CONÇU POUR DÉPASSER.</p>
           <p>CREATED BY HAIZ SOLUTIONS</p>
           <div className="uppercase text-gray-400">
