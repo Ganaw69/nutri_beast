@@ -816,7 +816,7 @@ export const Navbar = () => {
               key={id}
               type="button"
               onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === id) ? handleCategoryClick(id) : handleSectionClick(id)}
-              className="quick-access-link inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap border-r border-[#f0143c]/30 px-2 py-3 text-xs font-black uppercase tracking-wide text-white transition-colors last:border-r-0 xl:px-3 xl:text-sm 2xl:px-5 2xl:text-base"
+              className="quick-access-link inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap border-r-[3px] border-[#f0143c]/30 px-2 py-3 text-xs font-black uppercase tracking-wide text-white transition-colors last:border-r-0 xl:px-3 xl:text-sm 2xl:px-5 2xl:text-base"
             >
               <Icon className="h-5 w-5 shrink-0 text-[#ff526d]" aria-hidden="true" />
               {label}
