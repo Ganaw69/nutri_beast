@@ -600,7 +600,14 @@ export const Navbar = () => {
       </div>
 
       <div className="relative z-10 border-b border-white/10 bg-black/80 px-4 py-2.5 text-xs font-bold text-white/80 sm:px-6 sm:text-sm lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-6 gap-y-1.5 sm:justify-start">
+        <div className="mx-auto flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-1.5">
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
+          >
+            <Mail className="h-4 w-4 text-[#ff526d]" aria-hidden="true" />
+            <span>{CONTACT_EMAIL}</span>
+          </a>
           <a
             href={`tel:${CONTACT_PHONE_LINK}`}
             className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
@@ -608,13 +615,6 @@ export const Navbar = () => {
           >
             <Phone className="h-4 w-4 text-[#ff526d]" aria-hidden="true" />
             <span>{CONTACT_PHONE}</span>
-          </a>
-          <a
-            href={`mailto:${CONTACT_EMAIL}`}
-            className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
-          >
-            <Mail className="h-4 w-4 text-[#ff526d]" aria-hidden="true" />
-            <span>{CONTACT_EMAIL}</span>
           </a>
         </div>
       </div>
@@ -810,13 +810,13 @@ export const Navbar = () => {
           </div>
         )}
 
-        <nav className="hidden xl:flex items-center justify-center rounded-lg border border-[#f0143c]/30 bg-black/35 px-2 py-1.5" aria-label="Accès rapides">
+        <nav className="quick-access-nav hidden w-full xl:flex items-stretch rounded-lg bg-black/35" aria-label="Accès rapides">
           {secondaryDesktopLinks.map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === id) ? handleCategoryClick(id) : handleSectionClick(id)}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md border-r border-white/15 px-4 py-2.5 text-sm font-black uppercase tracking-wide text-white transition-colors last:border-r-0 hover:bg-white/10 hover:text-[#ff8a9d] 2xl:px-5 2xl:text-base"
+              className="quick-access-link inline-flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap border-r border-[#f0143c]/30 px-2 py-3 text-xs font-black uppercase tracking-wide text-white transition-colors last:border-r-0 xl:px-3 xl:text-sm 2xl:px-5 2xl:text-base"
             >
               <Icon className="h-5 w-5 shrink-0 text-[#ff526d]" aria-hidden="true" />
               {label}
