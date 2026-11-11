@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { bannerService } from '../services/api';
+import { bannerService, setRuntimeAdminToken } from '../services/api';
 
 const AdminContext = createContext();
 
@@ -11,6 +11,11 @@ const ADMIN_TOKEN_KEY = 'admin_jwt';
 const ADMIN_AUTH_KEY = 'admin_authenticated';
 const ADMIN_REMEMBER_KEY = 'admin_remember_me';
 const ADMIN_EMAIL_KEY = 'admin_email';
+const CACHE_KEY_PREFIXES = [
+  'nutri_beast_api_read_v1:',
+  'nutri_beast_product_read_v1:',
+  'nutri_beast_admin_pack_products_v1',
+];
 
 const DEFAULT_NAVIGATION = [
   { id: 'home', label: 'Accueil', url: '/', enabled: true, type: 'link' },
@@ -61,6 +66,55 @@ const readStoredJson = (key, fallback) => {
   }
 };
 
+const readStorage = (storage, key) => {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const removeStorage = (storage, key) => {
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Storage can be disabled or unavailable in a private browsing context.
+  }
+};
+
+const writeStorage = (storage, key, value) => {
+  try {
+    storage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const clearAppReadCaches = () => {
+  try {
+    Object.keys(localStorage)
+      .filter((key) => CACHE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // A failed cache cleanup must never prevent a login.
+  }
+};
+
+const clearStoredAuth = () => {
+  [sessionStorage, localStorage].forEach((storage) => {
+    removeStorage(storage, ADMIN_TOKEN_KEY);
+    removeStorage(storage, ADMIN_AUTH_KEY);
+  });
+};
+
+const persistAuth = (storage, token) => {
+  if (!writeStorage(storage, ADMIN_TOKEN_KEY, token)) return false;
+  if (writeStorage(storage, ADMIN_AUTH_KEY, 'true')) return true;
+  removeStorage(storage, ADMIN_TOKEN_KEY);
+  return false;
+};
+
 const isJwtExpired = (token) => {
   if (!token || typeof token !== 'string') return true;
   const parts = token.split('.');
@@ -94,9 +148,7 @@ export function useAdmin() {
 
 export const AdminProvider = ({ children }) => {
   const [adminToken, setAdminToken] = useState(() =>
-    sessionStorage.getItem(ADMIN_TOKEN_KEY) ||
-    localStorage.getItem(ADMIN_TOKEN_KEY) ||
-    null
+    readStorage(sessionStorage, ADMIN_TOKEN_KEY) || readStorage(localStorage, ADMIN_TOKEN_KEY) || null
   );
   const [navigation, setNavigation] = useState(() =>
     readStoredJson(NAVIGATION_STORAGE_KEY, DEFAULT_NAVIGATION)
@@ -112,51 +164,60 @@ export const AdminProvider = ({ children }) => {
   const login = (token, options = {}) => {
     const rememberMe = !!options.rememberMe;
 
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    sessionStorage.removeItem(ADMIN_AUTH_KEY);
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem(ADMIN_AUTH_KEY);
+    clearStoredAuth();
+    let remembered = false;
+    let stored = persistAuth(rememberMe ? localStorage : sessionStorage, token);
 
-    const storage = rememberMe ? localStorage : sessionStorage;
-    storage.setItem(ADMIN_TOKEN_KEY, token);
-    storage.setItem(ADMIN_AUTH_KEY, 'true');
-    localStorage.setItem(ADMIN_REMEMBER_KEY, rememberMe ? 'true' : 'false');
-
-    if (typeof options.email === 'string' && options.email.trim()) {
-      localStorage.setItem(ADMIN_EMAIL_KEY, options.email.trim());
+    // Long-lived catalogue caches can fill localStorage. Remove only this
+    // app's disposable read caches, retry persistent auth once, then use a
+    // session token if persistent storage remains unavailable.
+    if (!stored && rememberMe) {
+      clearAppReadCaches();
+      stored = persistAuth(localStorage, token);
+    }
+    if (stored) {
+      remembered = rememberMe;
     } else {
-      localStorage.removeItem(ADMIN_EMAIL_KEY);
+      persistAuth(sessionStorage, token);
     }
 
+    writeStorage(localStorage, ADMIN_REMEMBER_KEY, remembered ? 'true' : 'false');
+
+    if (typeof options.email === 'string' && options.email.trim()) {
+      writeStorage(localStorage, ADMIN_EMAIL_KEY, options.email.trim());
+    } else {
+      removeStorage(localStorage, ADMIN_EMAIL_KEY);
+    }
+
+    setRuntimeAdminToken(token);
     setAdminToken(token);
+    return { remembered };
   };
 
   const logout = () => {
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    sessionStorage.removeItem(ADMIN_AUTH_KEY);
-    localStorage.removeItem(ADMIN_TOKEN_KEY);
-    localStorage.removeItem(ADMIN_AUTH_KEY);
+    clearStoredAuth();
+    setRuntimeAdminToken(null);
     setAdminToken(null);
   };
 
   const updateNavigation = (items) => {
     setNavigation(items);
-    localStorage.setItem(NAVIGATION_STORAGE_KEY, JSON.stringify(items));
+    writeStorage(localStorage, NAVIGATION_STORAGE_KEY, JSON.stringify(items));
   };
 
   const updateCategoryNavigation = (nextConfig) => {
     setCategoryNavigation(nextConfig);
-    localStorage.setItem(CATEGORY_NAV_STORAGE_KEY, JSON.stringify(nextConfig));
+    writeStorage(localStorage, CATEGORY_NAV_STORAGE_KEY, JSON.stringify(nextConfig));
   };
 
   const updateBanner = (nextBanner) => {
     setBanner(nextBanner);
-    localStorage.setItem(BANNER_STORAGE_KEY, JSON.stringify(nextBanner));
+    writeStorage(localStorage, BANNER_STORAGE_KEY, JSON.stringify(nextBanner));
   };
 
   const updateSalesStats = (nextStats) => {
     setSalesStats(nextStats);
-    localStorage.setItem(SALES_STATS_STORAGE_KEY, JSON.stringify(nextStats));
+    writeStorage(localStorage, SALES_STATS_STORAGE_KEY, JSON.stringify(nextStats));
   };
 
   const isAuthenticated = !!adminToken;

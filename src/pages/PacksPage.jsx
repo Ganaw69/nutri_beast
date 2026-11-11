@@ -3,10 +3,11 @@ import { useCart } from "../context/CartContext";
 import {
   iriToId,
   hydrateProductsWithImages,
-  mediaUrl,
   packProductService,
   packService,
   productService,
+  resolvePackDetailImage,
+  resolvePackImage,
   resolveProductImage,
 } from "../services/api";
 import { ArrowLeft, ChevronLeft, ChevronRight, Eye, Loader2, Package, ShoppingBag } from "lucide-react";
@@ -25,13 +26,16 @@ const isActive = (record) => {
   return [true, 1, "1", "true", "yes", "on"].includes(typeof value === "string" ? value.toLowerCase() : value);
 };
 const isAvailable = (pack) => isActive(pack);
-const packImageUrl = (pack) => {
-  const raw = pack?.imageUrl || pack?.image;
-  const value = typeof raw === "object" ? raw?.url || raw?.image || raw?.path : raw;
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
-  const filename = String(value).replace(/^\/?uploads\/pack\//, "").replace(/^\/+/, "");
-  return mediaUrl(`pack/${filename}`);
+const packGender = (pack) => {
+  const value = pack?.gender ?? pack?.sexe;
+  return ["homme", "femme", "unisex"].includes(value) ? value : "unisex";
+};
+const genderLabel = (gender) => ({ homme: "Homme", femme: "Femme", unisex: "Unisexe" }[gender] || "Unisexe");
+const PackImage = ({ pack, detail = false, alt, className }) => {
+  const [failed, setFailed] = useState(false);
+  const src = detail ? resolvePackDetailImage(pack) : resolvePackImage(pack);
+  if (!src || failed) return <Package className="h-16 w-16 text-gray-400" aria-label="Image indisponible" />;
+  return <img src={src} alt={alt} loading={detail ? "eager" : "lazy"} decoding="async" onError={() => setFailed(true)} className={className} />;
 };
 const packReadError = (error) => {
   if (/\b(401|403)\b|jwt token/i.test(error?.message || "")) {
@@ -43,18 +47,17 @@ const packItems = (pack) => Array.isArray(pack?.packProducts) ? pack.packProduct
 const typeLabel = (pack) => pack.type === "CUSTOM" ? "Personnalisable" : "Pack prédéfini";
 
 const PackCard = ({ pack, onDetails }) => {
-  const image = packImageUrl(pack);
   const count = packItems(pack).length;
   const hasConfiguredPrice = Number(pack.finalPrice) > 0 || Number(pack.basePrice) > 0;
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#111111] shadow-lg shadow-black/20 transition hover:-translate-y-1 hover:border-white/25">
       <button type="button" onClick={() => onDetails(pack.id)} className="relative flex aspect-square w-full items-center justify-center bg-[#f0f0f0] p-6" aria-label={`Voir le pack ${pack.name}`}>
-        {image ? <img src={image} alt={pack.name} loading="lazy" decoding="async" className="h-full w-full object-contain" /> : <Package className="h-16 w-16 text-gray-400" aria-hidden="true" />}
+        <PackImage pack={pack} alt={pack.name} className="h-full w-full object-contain" />
       </button>
       <div className="flex flex-1 flex-col gap-4 p-4 text-white sm:p-5">
         <div className="flex items-center justify-between gap-3">
-          <span className="rounded border border-[#d90429]/40 bg-[#d90429]/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-[#ff7186]">{typeLabel(pack)}</span>
+          <div className="flex gap-2"><span className="rounded border border-[#d90429]/40 bg-[#d90429]/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-[#ff7186]">{typeLabel(pack)}</span><span className="rounded border border-white/15 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-gray-300">{genderLabel(packGender(pack))}</span></div>
           <span className="text-[10px] text-gray-400">{count ? `${count} ${count === 1 ? "produit" : "produits"}` : "Composition à compléter"}</span>
         </div>
         <div className="flex-1">
@@ -77,17 +80,18 @@ const PackCard = ({ pack, onDetails }) => {
 };
 
 export const PacksPage = () => {
-  const { viewPackDetails } = useCart();
+  const { viewPackDetails, packRouteFilters } = useCart();
   const [packs, setPacks] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPacks, setTotalPacks] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const selectedSexe = packRouteFilters?.sexe || "";
 
   useEffect(() => {
     let current = true;
     setLoading(true);
-    packService.getAll({ page: currentPage, itemsPerPage: PAGE_SIZE, isActive: true, "order[position]": "asc" }, true)
+    packService.getAll({ page: currentPage, itemsPerPage: PAGE_SIZE, isActive: true, sexe: selectedSexe || undefined, "order[position]": "asc" }, true)
       .then((data) => {
         if (current) {
           const visiblePacks = (data["hydra:member"] || []).filter((pack) => isAvailable(pack) && !isHiddenPack(pack));
@@ -99,7 +103,11 @@ export const PacksPage = () => {
       .catch((err) => { if (current) setError(packReadError(err)); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [currentPage]);
+  }, [currentPage, selectedSexe]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSexe]);
 
   const pageCount = Math.max(1, Math.ceil(totalPacks / PAGE_SIZE));
   useEffect(() => {
@@ -110,7 +118,7 @@ export const PacksPage = () => {
     <div className="min-h-screen bg-[#131313] px-4 py-10 pb-20 text-[#e5e2e1] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
-          <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff526d]">Sélection Protein Store</p><h1 className="mt-2 text-3xl font-black uppercase text-white sm:text-5xl">Nos packs</h1><p className="mt-3 max-w-2xl text-sm text-gray-400">Retrouvez la composition et le tarif enregistré de chaque pack.</p></div>
+          <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff526d]">Sélection Protein Store</p><h1 className="mt-2 text-3xl font-black uppercase text-white sm:text-5xl">{selectedSexe ? `Packs ${genderLabel(selectedSexe)}` : 'Nos packs'}</h1><p className="mt-3 max-w-2xl text-sm text-gray-400">{selectedSexe ? `Découvrez notre sélection de packs ${genderLabel(selectedSexe).toLowerCase()}.` : 'Retrouvez la composition et le tarif enregistré de chaque pack.'}</p></div>
           <span className="hidden rounded-lg border border-white/10 bg-[#1b1b1b] px-4 py-3 text-xs font-bold text-gray-300 sm:block">{totalPacks} pack{totalPacks === 1 ? "" : "s"}</span>
         </div>
 
@@ -148,25 +156,34 @@ export const PackDetailPage = () => {
         const data = await packProductService.getAll({ pack: selectedPackId, itemsPerPage: 100, "order[position]": "asc" }, true);
         relations = data["hydra:member"] || [];
       }
-      const details = await Promise.all(relations.map(async (relation) => {
+      const relationDetails = await Promise.all(relations.map(async (relation) => {
         const relationId = entityId(relation);
         const relationData = typeof relation === "object" && relation.product !== undefined
           ? relation
           : relationId != null ? await packProductService.getOne(relationId, true) : null;
-        if (!relationData) return null;
-        const productReference = relationData.product;
-        const productId = entityId(productReference);
-        const product = typeof productReference === "object" && productReference?.name
-          ? productReference
-          : productId != null ? await productService.getOne(productId, true) : null;
-        if (!product) return null;
-        const normalizedProduct = {
-          ...product,
-          mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url,
-        };
-        const [productWithImages] = await hydrateProductsWithImages([normalizedProduct], true);
-        return { id: relationData.id ?? relationId, quantity: Number(relationData.quantity || 1), required: relationData.required !== false, product: productWithImages };
+        return relationData ? { relationId, relationData } : null;
       }));
+      const usableRelations = relationDetails.filter(Boolean);
+      const productIds = [...new Set(usableRelations.map(({ relationData }) => entityId(relationData.product)).filter((id) => id != null).map(String))];
+      // Detail pages load all referenced products and their image records in
+      // two batched queries. This avoids one product/image request per line.
+      const productData = productIds.length
+        ? await productService.getAll({ "id[]": productIds, itemsPerPage: productIds.length }, true, true)
+        : { "hydra:member": [] };
+      const productsById = new Map((productData["hydra:member"] || []).map((product) => [String(entityId(product)), product]));
+      const products = usableRelations.map(({ relationData }) => {
+        const reference = relationData.product;
+        const id = entityId(reference);
+        const fetched = productsById.get(String(id));
+        const product = fetched || (typeof reference === "object" ? reference : null);
+        return product ? { ...product, mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url } : null;
+      });
+      const hydratedProducts = await hydrateProductsWithImages(products.filter(Boolean), true);
+      const hydratedById = new Map(hydratedProducts.map((product) => [String(entityId(product)), product]));
+      const details = usableRelations.map(({ relationId, relationData }) => {
+        const product = hydratedById.get(String(entityId(relationData.product)));
+        return product ? { id: relationData.id ?? relationId, quantity: Number(relationData.quantity || 1), required: relationData.required !== false, product } : null;
+      });
       if (current) { setPack(packData); setContents(details.filter(Boolean)); }
     };
     load().catch((err) => { if (current) setError(packReadError(err)); }).finally(() => { if (current) setLoading(false); });
@@ -176,7 +193,6 @@ export const PackDetailPage = () => {
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center bg-[#131313]" role="status"><Loader2 className="h-8 w-8 animate-spin text-[#d90429]" /><span className="sr-only">Chargement du pack</span></div>;
   if (error || !pack) return <div className="min-h-[50vh] bg-[#131313] px-4 py-10 text-white"><div className="mx-auto max-w-4xl rounded-xl border border-[#d90429]/40 bg-[#181818] p-6"><p role="alert" className="text-sm text-red-100">{error || "Pack introuvable."}</p><button onClick={() => navigateTo("packs")} className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase text-white hover:text-[#ff526d]"><ArrowLeft className="h-4 w-4" /> Retour aux packs</button></div></div>;
 
-  const image = packImageUrl(pack);
   const customizable = pack.type === "CUSTOM" && (pack.isCustomizable === true || pack.customizable === true);
   const hasConfiguredPrice = Number(pack.finalPrice) > 0 || Number(pack.basePrice) > 0;
   const isReadyToOrder = contents.length > 0 && hasConfiguredPrice;
@@ -189,9 +205,9 @@ export const PackDetailPage = () => {
       <div className="mx-auto max-w-7xl">
         <button onClick={() => navigateTo("packs")} className="mb-6 inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-white"><ArrowLeft className="h-4 w-4" /> Tous les packs</button>
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div className="flex min-h-[300px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#f0f0f0] p-5 sm:min-h-[440px] sm:p-10">{image ? <img src={image} alt={pack.name} className="max-h-[70vh] w-full object-contain" /> : <Package className="h-20 w-20 text-gray-400" />}</div>
+          <div className="flex min-h-[300px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#f0f0f0] p-5 sm:min-h-[440px] sm:p-10"><PackImage pack={pack} detail alt={pack.name} className="max-h-[70vh] w-full object-contain" /></div>
           <div>
-            <span className="inline-flex rounded border border-[#d90429]/40 bg-[#d90429]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#ff7186]">{typeLabel(pack)}</span>
+            <div className="flex flex-wrap gap-2"><span className="inline-flex rounded border border-[#d90429]/40 bg-[#d90429]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#ff7186]">{typeLabel(pack)}</span><span className="inline-flex rounded border border-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-300">{genderLabel(packGender(pack))}</span></div>
             <h1 className="mt-4 text-3xl font-black uppercase leading-tight text-white sm:text-5xl">{pack.name}</h1>
             <div className="mt-5 flex flex-wrap items-baseline gap-x-4 gap-y-2">
               {hasConfiguredPrice && pack.basePrice != null && <span className={Number(pack.basePrice) > Number(pack.finalPrice) ? "text-sm text-gray-500 line-through" : "text-2xl font-black text-white"}>{money(pack.basePrice)}</span>}

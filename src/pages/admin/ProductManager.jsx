@@ -9,7 +9,7 @@ const EMPTY_FORM = {
   price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', dateProduit: '',
   isActive: true, isFeatured: false, isNew: false, isBestSeller: false, isOnSale: false,
   packing: false, montantRemise: '',
-  category: '', brand: '', goals: [], flavors: [],
+  category: '', brand: '', goals: [], flavors: [], hasFlavors: false,
   productOptions: { type: '', sizes: [], colors: [], styles: [], capacityLiters: '' },
   metaTitle: '', metaDescription: '',
 };
@@ -118,6 +118,12 @@ const getProductImageId = (img) => {
 };
 
 const fileKey = (file) => `${file.name}-${file.size}-${file.lastModified}`;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const validateImageFiles = (files) => {
+  const invalid = files.find((file) => !ALLOWED_IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_SIZE);
+  return invalid ? 'Choisissez des images JPG, PNG ou WEBP de 5 Mo maximum.' : '';
+};
 
 const getProductImageSource = (img) => {
   if (!img) return null;
@@ -151,6 +157,13 @@ const getProductImageProductId = (img) => {
     return product.id ?? iriToId(product['@id']) ?? iriToId(product.iri);
   }
   return img.productId ?? iriToId(img.productIri) ?? null;
+};
+const getProductImageFlavorId = (img) => {
+  if (!img || typeof img === 'string') return null;
+  const flavor = img.flavor ?? img.flavour ?? img.flavorId ?? img.flavor_id;
+  if (typeof flavor === 'number') return flavor;
+  if (typeof flavor === 'string') return iriToId(flavor) ?? flavor;
+  return flavor?.id ?? iriToId(flavor?.['@id'] || flavor?.iri) ?? null;
 };
 
 const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
@@ -193,6 +206,18 @@ const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
   }).filter(Boolean));
 };
 
+const FlavorImageUploader = ({ flavor, files, existingImages, onAdd }) => {
+  const [previews, setPreviews] = useState([]);
+
+  useEffect(() => {
+    const nextPreviews = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+    setPreviews(nextPreviews);
+    return () => nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
+  }, [files]);
+
+  return <section className="rounded-lg border border-[#333] bg-[#111] p-3"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-white">{displayName(flavor)}</p><span className="text-[10px] font-bold uppercase text-gray-500">{existingImages.length + files.length} image{existingImages.length + files.length === 1 ? '' : 's'}</span></div><label className="mt-3 block cursor-pointer rounded border border-dashed border-[#555] px-3 py-2 text-center text-xs text-gray-300 hover:bg-[#222]">Ajouter une image pour cette saveur<input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => { const nextFiles = Array.from(event.target.files || []); if (nextFiles.length > 0) onAdd(nextFiles); event.target.value = ''; }} /></label>{(existingImages.length > 0 || previews.length > 0) && <div className="mt-3 grid grid-cols-4 gap-2">{existingImages.map((image, index) => <div key={getProductImageId(image) ?? index} className="aspect-square overflow-hidden rounded border border-[#333] bg-black/20">{productImageUrl(image) ? <img src={productImageUrl(image)} alt={`Image ${displayName(flavor)}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-gray-500">Image</div>}</div>)}{previews.map((preview) => <div key={fileKey(preview.file)} className="aspect-square overflow-hidden rounded border border-[#d90429]/60 bg-black/20"><img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" /></div>)}</div>}</section>;
+};
+
 export const ProductManager = () => {
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -207,6 +232,7 @@ export const ProductManager = () => {
   const [selectedFormParentCategoryId, setSelectedFormParentCategoryId] = useState('');
   const [imageFiles, setImageFiles] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
+  const [flavorImageFiles, setFlavorImageFiles] = useState({});
   const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
   const [productImages, setProductImages] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -440,7 +466,7 @@ export const ProductManager = () => {
     setPage(1);
   }, [searchTerm, selectedParentCategoryId, selectedSubCategoryId]);
 
-  const openAdd = () => { setError(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setError(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setFlavorImageFiles({}); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
     setFlavorError('');
@@ -448,6 +474,7 @@ export const ProductManager = () => {
     setFlavorSearch('');
     setImageFiles([]);
     setImagePreviews([]);
+    setFlavorImageFiles({});
     setPrimaryImageIndex(0);
     setBrandSearch(displayBrandName(p.brand));
     setModal({ mode: 'edit', id: p.id });
@@ -465,6 +492,7 @@ export const ProductManager = () => {
       brand: relationToIri(p.brand, 'brands'),
       goals: (p.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
       flavors: (p.flavors || []).map((f) => relationToIri(f, 'flavors')).filter(Boolean),
+      hasFlavors: isTruthyFlag(p.hasFlavors, p.has_flavors) || (!Object.prototype.hasOwnProperty.call(p, 'hasFlavors') && !Object.prototype.hasOwnProperty.call(p, 'has_flavors') && (p.flavors || []).length > 0),
       productOptions: normalizeProductOptions(p.productOptions || p.options),
       metaTitle: p.metaTitle || '', metaDescription: p.metaDescription || '',
     });
@@ -484,6 +512,7 @@ export const ProductManager = () => {
         brand: relationToIri(fullProduct.brand, 'brands'),
         goals: (fullProduct.goals || []).map((g) => relationToIri(g, 'goals')).filter(Boolean),
         flavors: (fullProduct.flavors || []).map((f) => relationToIri(f, 'flavors')).filter(Boolean),
+        hasFlavors: isTruthyFlag(fullProduct.hasFlavors, fullProduct.has_flavors) || (!Object.prototype.hasOwnProperty.call(fullProduct, 'hasFlavors') && !Object.prototype.hasOwnProperty.call(fullProduct, 'has_flavors') && (fullProduct.flavors || []).length > 0),
         productOptions: normalizeProductOptions(fullProduct.productOptions || fullProduct.options),
         metaTitle: fullProduct.metaTitle || '', metaDescription: fullProduct.metaDescription || '',
       });
@@ -497,11 +526,48 @@ export const ProductManager = () => {
     }
   };
 
+  const productOnlyImages = productImages.filter((image) => getProductImageFlavorId(image) == null);
+  const imagesForFlavor = (flavorIri) => {
+    const flavorId = iriToId(flavorIri) ?? flavorIri;
+    return productImages.filter((image) => String(getProductImageFlavorId(image)) === String(flavorId));
+  };
+  const setHasFlavors = (nextValue) => {
+    if (!nextValue && form.hasFlavors) {
+      const hasFlavorData = form.flavors.length > 0 || Object.values(flavorImageFiles).some((files) => files.length > 0) || productImages.some((image) => getProductImageFlavorId(image) != null);
+      if (hasFlavorData && !window.confirm('Passer à « Non » retirera les saveurs associées à ce produit lors de l’enregistrement. Les fichiers déjà téléversés ne seront pas supprimés. Continuer ?')) return;
+    }
+    setForm((current) => ({ ...current, hasFlavors: nextValue, ...(nextValue ? {} : { flavors: [] }) }));
+  };
+  const addProductImages = (nextFiles) => {
+    const validationError = validateImageFiles(nextFiles);
+    if (validationError) return setError(validationError);
+    setImageFiles((currentFiles) => {
+      const knownFiles = new Set(currentFiles.map(fileKey));
+      const filesToAdd = nextFiles.filter((file) => !knownFiles.has(fileKey(file)));
+      if (currentFiles.length === 0 && filesToAdd.length > 0) setPrimaryImageIndex(0);
+      return [...currentFiles, ...filesToAdd];
+    });
+  };
+  const addFlavorImages = (flavorIri, nextFiles) => {
+    const validationError = validateImageFiles(nextFiles);
+    if (validationError) return setError(validationError);
+    setFlavorImageFiles((current) => {
+      const existing = current[flavorIri] || [];
+      const knownFiles = new Set(existing.map(fileKey));
+      return { ...current, [flavorIri]: [...existing, ...nextFiles.filter((file) => !knownFiles.has(fileKey(file)))] };
+    });
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError('');
     try {
+      if (form.hasFlavors && form.flavors.length === 0) throw new Error('Sélectionnez au moins une saveur ou choisissez « Non ».');
+      if (form.hasFlavors) {
+        const flavorWithoutImage = form.flavors.find((flavorIri) => imagesForFlavor(flavorIri).length === 0 && (flavorImageFiles[flavorIri] || []).length === 0);
+        if (flavorWithoutImage) throw new Error('Chaque saveur doit avoir au moins une image.');
+      }
       const payload = {
         ...form,
         // The API serializes these fields as `new` and `bestSeller`, while
@@ -523,6 +589,8 @@ export const ProductManager = () => {
         ),
         category: form.category || undefined,
         brand: form.brand || undefined,
+        hasFlavors: form.hasFlavors,
+        flavors: form.hasFlavors ? form.flavors : [],
         productOptions: form.productOptions,
       };
 
@@ -533,7 +601,7 @@ export const ProductManager = () => {
       // API Platform may return the identifier only through the resource IRI.
       // Never upload images without the id of the product just saved.
       const savedId = saved?.id ?? iriToId(saved?.['@id']) ?? modal.id;
-      if (savedId && imageFiles.length > 0) {
+      if (savedId && !form.hasFlavors && imageFiles.length > 0) {
         const selectedPrimaryIndex = Math.max(0, Math.min(primaryImageIndex, imageFiles.length - 1));
         let selectedPrimaryImage = null;
         for (let i = 0; i < imageFiles.length; i += 1) {
@@ -554,10 +622,20 @@ export const ProductManager = () => {
           await productService.setImagePrimary(selectedPrimaryId);
         }
       }
+      if (savedId && form.hasFlavors) {
+        for (const flavorIri of form.flavors) {
+          const flavorId = iriToId(flavorIri);
+          const files = flavorImageFiles[flavorIri] || [];
+          for (let index = 0; index < files.length; index += 1) {
+            await productService.uploadImage(savedId, files[index], index, false, flavorId);
+          }
+        }
+      }
 
       setModal(null);
       setImageFiles([]);
       setImagePreviews([]);
+      setFlavorImageFiles({});
       setPrimaryImageIndex(0);
       setProductImages([]);
       const savedProduct = {
@@ -883,31 +961,24 @@ export const ProductManager = () => {
               </div>
               <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
               <div><label className={labelCls}>Date du produit</label><input type="date" value={form.dateProduit} onChange={e => setForm(p => ({ ...p, dateProduit: e.target.value }))} className={inputCls} /></div>
-              <div>
+              <fieldset className="rounded-lg border border-[#333] bg-[#111] p-4">
+                <legend className={labelCls}>Ce produit a-t-il des saveurs ?</legend>
+                <div className="flex gap-5 text-sm text-gray-200"><label className="cursor-pointer"><input type="radio" name="has-flavors" checked={form.hasFlavors} onChange={() => setHasFlavors(true)} className="mr-2 accent-[#d90429]" />Oui</label><label className="cursor-pointer"><input type="radio" name="has-flavors" checked={!form.hasFlavors} onChange={() => setHasFlavors(false)} className="mr-2 accent-[#d90429]" />Non</label></div>
+                <p className="mt-2 text-xs text-gray-500">Oui : une ou plusieurs images par saveur. Non : une galerie d’images du produit.</p>
+              </fieldset>
+              {!form.hasFlavors && <div>
                 <label className={labelCls}>Image produit</label>
                 <label className="border-2 border-dashed border-[#333] rounded-lg p-4 text-center hover:bg-[#222] transition-colors cursor-pointer block">
                   <Upload size={18} className="mx-auto text-gray-500 mb-1" />
                   <span className="text-xs text-gray-500">{imageFiles.length > 0 ? `${imageFiles.length} image(s) sélectionnée(s). Cliquez une vignette pour choisir la principale.` : 'Choisir une ou plusieurs images'}</span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     multiple
                     className="hidden"
                     onChange={e => {
                       const nextFiles = Array.from(e.target.files || []);
-                      if (nextFiles.length === 0) return;
-
-                      // Keep images chosen in earlier picker openings. This
-                      // lets an admin add several batches without silently
-                      // losing the first batch or its primary-image choice.
-                      setImageFiles((currentFiles) => {
-                        const knownFiles = new Set(currentFiles.map(fileKey));
-                        const filesToAdd = nextFiles.filter((file) => !knownFiles.has(fileKey(file)));
-                        if (currentFiles.length === 0 && filesToAdd.length > 0) setPrimaryImageIndex(0);
-                        return [...currentFiles, ...filesToAdd];
-                      });
-                      // Allow selecting the same file again after removing it
-                      // or reopening the file picker.
+                      if (nextFiles.length > 0) addProductImages(nextFiles);
                       e.target.value = '';
                     }}
                   />
@@ -942,15 +1013,15 @@ export const ProductManager = () => {
                     })}
                   </div>
                 )}
-              </div>
-              {modal.mode === 'edit' && productImages.length > 0 && (
+              </div>}
+              {!form.hasFlavors && modal.mode === 'edit' && productOnlyImages.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <label className={labelCls}>Images existantes</label>
                     <span className="text-[11px] text-gray-500">Use the button on any card to switch the main image</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {productImages.map((img, index) => {
+                    {productOnlyImages.map((img, index) => {
                       const imageId = getProductImageId(img);
                       const imageSrc = productImageUrl(img);
                       const isPrimary = isPrimaryProductImage(img);
@@ -1190,7 +1261,7 @@ export const ProductManager = () => {
               </div>}
 
               {/* Flavors */}
-              <div>
+              {form.hasFlavors && <div>
                 <label className={labelCls}>Saveurs</label>
                 <div className="flex gap-2 mb-3">
                   <input
@@ -1224,9 +1295,13 @@ export const ProductManager = () => {
                     >{f.name}</button>;
                   })}
                 </div>
+                {form.flavors.length > 0 && <div className="mt-4 space-y-3 border-t border-[#333] pt-4"><p className="text-xs font-bold uppercase text-gray-400">Images par saveur</p>{form.flavors.map((flavorIri) => {
+                  const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
+                  return <FlavorImageUploader key={flavorIri} flavor={flavor || { name: flavorIri.split('/').pop() }} files={flavorImageFiles[flavorIri] || []} existingImages={imagesForFlavor(flavorIri)} onAdd={(files) => addFlavorImages(flavorIri, files)} />;
+                })}</div>}
                 {flavors.length > 0 && visibleFlavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur trouvée.</p>}
                 {flavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur. Ajoutez la première ci-dessus.</p>}
-              </div>
+              </div>}
 
               {/* Booleans */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1273,6 +1348,7 @@ export const ProductManager = () => {
           [BadgeCheck, 'Marque', brand],
           [Weight, 'Poids', product.weight ? `${product.weight} kg` : '?'],
           [Target, 'Objectifs', displayRelationNames(product.goals)],
+          [Sparkles, 'A des saveurs', product.hasFlavors ?? product.has_flavors ? 'Oui' : 'Non'],
           [Sparkles, 'Saveurs', displayRelationNames(product.flavors)],
           [CalendarDays, 'Date du produit', dateInputValue(product.dateProduit) || '?'],
           [CalendarDays, 'Cr?? le', formatAdminDate(product.createdAt ?? product.created_at)],

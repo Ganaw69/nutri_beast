@@ -334,15 +334,23 @@ export const HomePage = () => {
               description: "Performance, prise de masse et récupération réunies dans une sélection prête à l'emploi.",
               image: packHommeImage,
               action: "Découvrir le pack homme",
+              sexe: "homme",
             },
             {
               title: "Pack Femme",
               description: "Beauté, vitalité et performance dans une sélection adaptée à vos objectifs.",
               image: packFemmeImage,
               action: "Découvrir le pack femme",
+              sexe: "femme",
             },
-          ].map(({ title, description, image, action }) => (
-            <article key={title} className="group overflow-hidden rounded-2xl border border-white/15 bg-[#0e0e0e] shadow-xl shadow-black/35">
+          ].map(({ title, description, image, action, sexe }) => (
+            <article key={title} className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/15 bg-[#0e0e0e] shadow-xl shadow-black/35">
+              <button
+                type="button"
+                onClick={() => navigateTo("packs", { packFilters: { sexe } })}
+                aria-label={`${action} — ${title}`}
+                className="absolute inset-0 z-10 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ff526d]"
+              />
               <div className="aspect-[1.65/1] overflow-hidden bg-[#191919]">
                 <img
                   src={image}
@@ -355,13 +363,6 @@ export const HomePage = () => {
                 <span className="mb-3 rounded-full border border-[#ff526d]/45 bg-[#d90429]/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#ff9aaa]">Sélection Protein Store</span>
                 <h2 className="text-3xl font-black uppercase tracking-tight text-white sm:text-4xl">{title}</h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-gray-300">{description}</p>
-                <button
-                  type="button"
-                  onClick={() => navigateTo("packs")}
-                  className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_18px_rgba(217,4,41,0.45)] transition hover:bg-[#b0021f] group-hover:translate-x-1"
-                >
-                  {action} <ArrowRight className="h-4 w-4" />
-                </button>
               </div>
             </article>
           ))}

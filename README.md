@@ -39,3 +39,7 @@ Copy [`.env.example`](./.env.example) to `.env.production`, replace every
 Only public URLs may use the `VITE_` prefix. Keep model keys and all other
 backend credentials in the Symfony server environment, never in this storefront
 repository or browser bundle.
+
+See [`docs/backend-pack-product-media.md`](./docs/backend-pack-product-media.md)
+for the required API Platform migration, validation, thumbnail, cache, and CORS
+changes for pack/product media.
