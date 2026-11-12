@@ -3,12 +3,20 @@ import { Shield, Dumbbell, Eye, EyeOff, Lock, User, AlertCircle, ArrowRight } fr
 import { authService } from '../../services/api';
 import { useAdmin } from '../../context/AdminContext';
 
+const readLoginPreference = (key, fallback = '') => {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const AdminLoginPage = ({ onLoginSuccess }) => {
   const { login } = useAdmin();
-  const [email, setEmail] = useState(() => localStorage.getItem('admin_email') || '');
+  const [email, setEmail] = useState(() => readLoginPreference('admin_email'));
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('admin_remember_me') === 'true');
+  const [rememberMe, setRememberMe] = useState(() => readLoginPreference('admin_remember_me') === 'true');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);

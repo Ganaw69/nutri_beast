@@ -30,6 +30,11 @@ const normaliseShopRouteFilters = (filters = {}) => ({
   category: String(filters.category ?? "").trim(),
 });
 
+const normalisePackRouteFilters = (filters = {}) => {
+  const sexe = String(filters.sexe ?? filters.gender ?? "").trim().toLowerCase();
+  return { sexe: ["homme", "femme", "unisex"].includes(sexe) ? sexe : "" };
+};
+
 const readClientRoute = () => {
   const hashRoute = decodeURIComponent(window.location.hash.replace(/^#/, ""));
   const [rawRoute, rawQuery = ""] = hashRoute.split("?");
@@ -45,6 +50,10 @@ const readClientRoute = () => {
           category: params.get("category"),
         }),
       };
+    }
+    if (pathTab === "packs") {
+      const params = new URLSearchParams(window.location.search);
+      return { tab: "packs", packRouteFilters: normalisePackRouteFilters({ sexe: params.get("sexe") }) };
     }
     if (CLIENT_TABS.has(pathTab)) return { tab: pathTab };
     return { tab: "home" };
@@ -76,10 +85,14 @@ const readClientRoute = () => {
       }),
     };
   }
+  if (tab === "packs") {
+    const params = new URLSearchParams(rawQuery);
+    return { tab, packRouteFilters: normalisePackRouteFilters({ sexe: params.get("sexe") }) };
+  }
   return CLIENT_TABS.has(tab) ? { tab } : { tab: "home" };
 };
 
-const routeHash = (tab, id, shopRouteFilters) => {
+const routeHash = (tab, id, routeFilters) => {
   if (tab === "home") return "";
   if (tab === "product-detail" && validId(id)) return `#product/${id}`;
   if (tab === "pack-detail" && validId(id)) return `#pack/${id}`;
@@ -87,12 +100,16 @@ const routeHash = (tab, id, shopRouteFilters) => {
   if (tab === "blog-article" && validId(id)) return `#article/${id}`;
   if (tab === "recipes" && validId(id)) return `#recipes/${id}`;
   if (tab === "shop") {
-    const filters = normaliseShopRouteFilters(shopRouteFilters);
+    const filters = normaliseShopRouteFilters(routeFilters);
     const params = new URLSearchParams();
     if (filters.filter) params.set("filter", filters.filter);
     if (filters.category) params.set("category", filters.category);
     const query = params.toString();
     return `#shop${query ? `?${query}` : ""}`;
+  }
+  if (tab === "packs") {
+    const filters = normalisePackRouteFilters(routeFilters);
+    return `#packs${filters.sexe ? `?sexe=${encodeURIComponent(filters.sexe)}` : ""}`;
   }
   return `#${tab}`;
 };
@@ -113,6 +130,7 @@ export const CartProvider = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedShopCategoryIds, setSelectedShopCategoryIds] = useState([]);
   const [shopRouteFilters, setShopRouteFilters] = useState(() => initialRoute.shopRouteFilters || {});
+  const [packRouteFilters, setPackRouteFilters] = useState(() => initialRoute.packRouteFilters || {});
   const [promoCode, setPromoCode] = useState("");
   const [discount, setDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState(null); // full coupon object from API
@@ -155,6 +173,7 @@ export const CartProvider = ({ children }) => {
       setSelectedArticleId(route.articleId || null);
       setSelectedRecipeId(route.recipeId || null);
       setShopRouteFilters(route.shopRouteFilters || {});
+      setPackRouteFilters(route.packRouteFilters || {});
     };
 
     window.addEventListener("hashchange", syncRouteFromUrl);
@@ -410,11 +429,13 @@ export const CartProvider = ({ children }) => {
     scrollToTop();
   };
 
-  const navigateTo = (tab, { preserveScroll = false, shopFilters = {} } = {}) => {
+  const navigateTo = (tab, { preserveScroll = false, shopFilters = {}, packFilters = {} } = {}) => {
     const nextShopFilters = tab === "shop" ? normaliseShopRouteFilters(shopFilters) : {};
+    const nextPackFilters = tab === "packs" ? normalisePackRouteFilters(packFilters) : {};
     setActiveTab(tab);
     setShopRouteFilters(nextShopFilters);
-    updateRoute(tab, undefined, nextShopFilters);
+    setPackRouteFilters(nextPackFilters);
+    updateRoute(tab, undefined, tab === "shop" ? nextShopFilters : nextPackFilters);
     if (!preserveScroll) {
       scrollToTop();
     }
@@ -480,6 +501,7 @@ export const CartProvider = ({ children }) => {
       selectedShopCategoryIds,
       setSelectedShopCategoryIds,
       shopRouteFilters,
+      packRouteFilters,
       subtotal,
       discountAmount,
       shippingFee,

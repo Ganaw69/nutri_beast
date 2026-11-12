@@ -151,7 +151,7 @@ Politique de confidentialité                </button>
               >
                 <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {CONTACT_EMAIL}
-              </a>
+              </a><br></br>
               <a
                 href={`tel:${CONTACT_PHONE_LINK}`}
                 className="inline-flex items-center gap-2 text-sm font-black text-[#ff526d] underline decoration-[#d90429]/50 underline-offset-4 transition-colors hover:text-white"

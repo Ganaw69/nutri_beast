@@ -24,9 +24,10 @@ const API_ORIGIN = (() => {
 // In live-API development, uploads belong to the API host, not the Vite host.
 // Keep relative media URLs only when the app is deliberately using demo data.
 const configuredMediaBase = import.meta.env.VITE_MEDIA_BASE_URL || API_ORIGIN;
-const MEDIA_BASE = import.meta.env.DEV
+const MEDIA_BASE = (import.meta.env.DEV
   ? ''
-  : (isLocalhostUrl(configuredMediaBase) ? API_ORIGIN : configuredMediaBase);
+  : (isLocalhostUrl(configuredMediaBase) ? API_ORIGIN : configuredMediaBase)
+).replace(/\/+$/, '');
 const DEMO_JWT = 'eyJhbGciOiJub25lIn0.eyJleHAiOjQ3OTk5OTk5OTl9.';
 
 const clone = (value) => {
@@ -799,17 +800,34 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   return clone({ success: true });
 }
 
-/** Resolve a media path to a full URL */
+const isSecurePage = () => typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+const makeSecureWhenNeeded = (value) => {
+  if (!isSecurePage() || !/^http:\/\//i.test(value)) return value;
+  return value.replace(/^http:/i, 'https:');
+};
+
+/**
+ * Resolve an uploaded-media path to the configured media origin.
+ *
+ * API responses historically alternate between a filename, an /uploads path,
+ * and an absolute local-API URL.  Uploaded paths must always be rebased to
+ * VITE_MEDIA_BASE_URL in production: otherwise an SPA on another origin asks
+ * its own host for /uploads and the image either 404s or is blocked as mixed
+ * content.  Non-upload absolute URLs (for example a signed CDN URL) remain
+ * untouched, except that HTTP is upgraded on an HTTPS page.
+ */
 export const mediaUrl = (path) => {
   if (!path) return null;
   const value = String(path).trim();
-  if (/^(https?:)?\/\//i.test(value) && !isLocalhostUrl(value)) {
-    return value;
-  }
-  const urlPath = /^(https?:)?\/\//i.test(value) ? new URL(value).pathname : value;
+  if (!value) return null;
+  const urlPath = /^(https?:)?\/\//i.test(value)
+    ? new URL(value, typeof window === 'undefined' ? 'https://local.invalid' : window.location.origin).pathname
+    : value;
   const uploadsPath = urlPath.match(/(?:^|\/)uploads\/(.+)$/i);
+  if (!uploadsPath && /^(https?:)?\/\//i.test(value)) return makeSecureWhenNeeded(value);
   const normalizedPath = uploadsPath ? `/uploads/${uploadsPath[1]}` : `/uploads/${urlPath.replace(/^\/+/, '')}`;
-  return MEDIA_BASE ? `${MEDIA_BASE}${normalizedPath}` : normalizedPath;
+  return makeSecureWhenNeeded(MEDIA_BASE ? `${MEDIA_BASE}${normalizedPath}` : normalizedPath);
 };
 
 export const resolveBrandLogo = (brand) => {
@@ -843,11 +861,19 @@ export const resolveBrandLogo = (brand) => {
 
 /** Resolve a pack image value to a URL that is safe to render in storefront views. */
 export const resolvePackImage = (pack, fallback = null) => {
-  const image = pack?.imageUrl
-    ?? pack?.image
-    ?? pack?.imagePath
+  const image = pack?.thumbnailUrl
     ?? pack?.thumbnail
-    ?? pack?.thumbnailUrl;
+    ?? pack?.thumbnailPath
+    ?? pack?.imageUrl
+    ?? pack?.image
+    ?? pack?.imagePath;
+  const resolved = resolveUploadUrl('pack', image);
+  return resolved || fallback;
+};
+
+/** Resolve the original-size pack asset for a detail view. */
+export const resolvePackDetailImage = (pack, fallback = null) => {
+  const image = pack?.imageUrl ?? pack?.image ?? pack?.imagePath ?? pack?.thumbnailUrl ?? pack?.thumbnail;
   const resolved = resolveUploadUrl('pack', image);
   return resolved || fallback;
 };
@@ -870,7 +896,8 @@ const resolveUploadUrl = (folder, input) => {
 
   const value = String(input).trim();
   if (!value) return null;
-  if (value.startsWith('http') && !isLocalhostUrl(value)) return value;
+  if (/^https?:\/\//i.test(value) && /\/uploads\//i.test(value)) return mediaUrl(value);
+  if (value.startsWith('http') && !/\/uploads\//i.test(value) && !isLocalhostUrl(value)) return makeSecureWhenNeeded(value);
   if (value.startsWith('http')) return mediaUrl(value);
   if (value.startsWith('/api/') || value.startsWith('api/')) return null;
 
@@ -940,7 +967,8 @@ const normalizeProductImagePath = (input) => {
 
   const value = String(input).trim();
   if (!value) return null;
-  if (value.startsWith('http') && !isLocalhostUrl(value)) return value;
+  if (/^https?:\/\//i.test(value) && /\/uploads\//i.test(value)) return mediaUrl(value);
+  if (value.startsWith('http') && !isLocalhostUrl(value)) return makeSecureWhenNeeded(value);
   if (value.startsWith('http')) return mediaUrl(value);
   if (value.startsWith('/api/') || value.startsWith('api/')) return null;
   if (value.startsWith('/uploads/products/') || value.startsWith('uploads/products/')) {
@@ -982,9 +1010,17 @@ export const hydrateProductsWithImages = async (products = [], skipAuth = true) 
   const productsWithoutImages = products.filter((product) => !hasEmbeddedProductImage(product));
   if (productsWithoutImages.length === 0) return products;
 
-  // Load visible product images in one request instead of one request per card.
+  // Load images for all visible products in one request instead of one request
+  // per card. The API Platform filter is intentionally relation-based so it
+  // remains valid when products use UUIDs rather than numeric ids.
+  const productIds = productsWithoutImages
+    .map((product) => product?.id ?? iriToId(product?.['@id'] || product?.iri))
+    .filter((id) => id !== null && id !== undefined);
   const data = await productService
-    .getImages({ itemsPerPage: 100 }, skipAuth)
+    .getImages({
+      itemsPerPage: Math.max(1, productIds.length * 2),
+      ...(productIds.length ? { 'product.id[]': productIds } : {}),
+    }, skipAuth)
     .catch(() => ({ 'hydra:member': [] }));
   const imagesByProduct = new Map();
   (data?.['hydra:member'] || data?.member || data?.items || []).forEach((image) => {
@@ -1048,8 +1084,22 @@ export const resolveProductImage = (product, fallback = null) => {
   return resolved && !resolved.includes('/api/') ? resolved : fallback;
 };
 
-/** Get the stored JWT token */
-const getToken = () => sessionStorage.getItem('admin_jwt') || localStorage.getItem('admin_jwt');
+// A successful login must not depend on browser storage being writable. This
+// runtime value keeps the current tab authenticated if storage is full or
+// disabled; AdminContext still persists it when the browser permits that.
+let runtimeAdminToken = null;
+export const setRuntimeAdminToken = (token) => {
+  runtimeAdminToken = token || null;
+};
+
+/** Get the stored JWT token, with a memory-only fallback. */
+const getToken = () => {
+  try {
+    return runtimeAdminToken || sessionStorage.getItem('admin_jwt') || localStorage.getItem('admin_jwt');
+  } catch {
+    return runtimeAdminToken;
+  }
+};
 
 const API_READ_CACHE_TTL = 15 * 60 * 1000;
 const API_READ_CACHE_PREFIX = 'nutri_beast_api_read_v1:';
@@ -1106,10 +1156,15 @@ async function requestApi(path, opts = {}, isMultipart = false, skipAuth = false
     if (res.status === 401 && !skipAuth) {
       // A rejected JWT must end the admin session. Falling back to demo data
       // here keeps a stale dashboard mounted and causes repeated 401 requests.
-      sessionStorage.removeItem('admin_jwt');
-      sessionStorage.removeItem('admin_authenticated');
-      localStorage.removeItem('admin_jwt');
-      localStorage.removeItem('admin_authenticated');
+      runtimeAdminToken = null;
+      try {
+        sessionStorage.removeItem('admin_jwt');
+        sessionStorage.removeItem('admin_authenticated');
+        localStorage.removeItem('admin_jwt');
+        localStorage.removeItem('admin_authenticated');
+      } catch {
+        // Storage can be unavailable; the in-memory token was still cleared.
+      }
       window.dispatchEvent(new CustomEvent('admin-auth-expired', { detail: errMsg }));
     }
     throw new Error(errMsg);
@@ -1219,6 +1274,7 @@ const normalizeProduct = (product) => {
     isNew: [product.isNew, product.is_new, product.new].some((value) => normalizeBoolean(value)),
     isBestSeller: [product.isBestSeller, product.is_best_seller, product.bestSeller, product.best_seller].some((value) => normalizeBoolean(value)),
     isOnSale: [product.isOnSale, product.is_on_sale].some((value) => normalizeBoolean(value)),
+    hasFlavors: normalizeBoolean(product.hasFlavors ?? product.has_flavors, Array.isArray(product.flavors) && product.flavors.length > 0),
     packing: normalizeBoolean(product.packing, false),
     montantRemise: product.montantRemise ?? product.montant_remise ?? null,
   };
@@ -1476,13 +1532,18 @@ export const productService = {
     clearProductReadCache();
     return product;
   },
-  async uploadImage(productId, file, position = 0, isPrimary = false) {
+  async uploadImage(productId, file, position = 0, isPrimary = false, flavorId = null) {
     const fd = new FormData();
     // The ProductImageInput DTO receives the product identifier, not an IRI.
     fd.append('productId', String(productId));
     fd.append('position', String(position));
     fd.append('isPrimary', isPrimary ? 'true' : 'false');
     fd.append('is_primary', isPrimary ? 'true' : 'false');
+    if (flavorId !== null && flavorId !== undefined && flavorId !== '') {
+      // Support both the DTO's scalar input and API Platform relation input.
+      fd.append('flavorId', String(flavorId));
+      fd.append('flavor', `/api/flavors/${flavorId}`);
+    }
     fd.append('imageFile', file);
     const image = await apiFetch('/product_images', { method: 'POST', body: fd }, true);
 
