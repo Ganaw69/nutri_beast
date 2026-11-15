@@ -129,6 +129,8 @@ const getProductImageSource = (img) => {
   if (!img) return null;
   if (typeof img === 'string') return img;
   return (
+    img.imageUrl ??
+    img.image_url ??
     img.image ??
     img.path ??
     img.url ??
@@ -395,9 +397,7 @@ export const ProductManager = () => {
 
   const hydrateProductImages = useCallback(async (productId, embeddedImages = []) => {
     try {
-      // The backoffice API filters images with the product id directly:
-      // GET /api/product_images?product=<productId>
-      const imageData = await productService.getImages({ product: productId, itemsPerPage: 100 });
+      const imageData = await productService.getImages({ product: `/api/products/${productId}`, itemsPerPage: 100 });
       return mergeProductImages(embeddedImages, collectionItems(imageData));
     } catch (_) {
       return mergeProductImages(embeddedImages, []);

@@ -5,6 +5,7 @@ import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { Toast } from "./components/Toast";
 import { HomePage } from "./pages/HomePage";
+import { productService } from "./services/api";
 import { ArrowUp } from "lucide-react";
 
 const lazyPage = (loader, exportName) => lazy(async () => {
@@ -70,8 +71,8 @@ const BackToTopButton = () => {
 };
 
 const SEO = () => {
-  const { activeTab } = useCart();
-  const metadata = {
+  const { activeTab, selectedProductId } = useCart();
+  const metadata = React.useMemo(() => ({
     home: ["Protein Store Tunisia | Nutrition sportive en Tunisie", "Compléments alimentaires et nutrition sportive livrés en Tunisie : whey, créatine, pré-workout, mass gainers et packs exclusifs."],
     shop: ["Boutique de compléments alimentaires en Tunisie | Protein Store", "Découvrez nos compléments alimentaires et produits de nutrition sportive : whey, créatine, pré-workout et plus."],
     new: ["Nouveautés nutrition sportive | Protein Store Tunisia", "Découvrez les nouveaux produits de nutrition sportive disponibles en Tunisie."],
@@ -82,7 +83,8 @@ const SEO = () => {
     "order-tracking": ["Suivre ma commande | Protein Store Tunisia", "Consultez l’avancement de votre commande Protein Store Tunisia."],
     "privacy-policy": ["Politique de confidentialité | Protein Store Tunisia", "Politique de confidentialité de Protein Store Tunisia."],
     "terms-of-service": ["Conditions générales | Protein Store Tunisia", "Conditions générales de vente et d’utilisation de Protein Store Tunisia."],
-  }[activeTab] || ["Protein Store Tunisia | Nutrition sportive en Tunisie", "Compléments alimentaires et nutrition sportive livrés en Tunisie."];
+    "product-detail": ["Complément alimentaire | Protein Store Tunisia", "Découvrez ce complément alimentaire et sa disponibilité chez Protein Store Tunisia."],
+  }[activeTab] || ["Protein Store Tunisia | Nutrition sportive en Tunisie", "Compléments alimentaires et nutrition sportive livrés en Tunisie."]), [activeTab]);
   const canonicalPath = {
     home: "/",
     shop: "/shop",
@@ -90,6 +92,7 @@ const SEO = () => {
     packs: "/packs",
     recipes: "/recipes",
     blog: "/blog",
+    "product-detail": selectedProductId ? `/#product/${selectedProductId}` : "/",
     faq: "/faq",
     "order-tracking": "/order-tracking",
     "privacy-policy": "/privacy-policy",
@@ -99,11 +102,44 @@ const SEO = () => {
 
   React.useEffect(() => {
     document.title = metadata[0];
-    const description = document.querySelector('meta[name="description"]');
-    const canonicalLink = document.querySelector('link[rel="canonical"]');
-    if (description) description.setAttribute("content", metadata[1]);
-    if (canonicalLink) canonicalLink.setAttribute("href", canonical);
+    const metaContent = {
+      'meta[name="description"]': metadata[1],
+      'meta[property="og:title"]': metadata[0],
+      'meta[property="og:description"]': metadata[1],
+      'meta[property="og:url"]': canonical,
+      'meta[name="twitter:title"]': metadata[0],
+      'meta[name="twitter:description"]': metadata[1],
+    };
+    Object.entries(metaContent).forEach(([selector, content]) => {
+      document.querySelector(selector)?.setAttribute("content", content);
+    });
+    document.querySelector('link[rel="canonical"]')?.setAttribute("href", canonical);
   }, [canonical, metadata]);
+
+  React.useEffect(() => {
+    if (activeTab !== "product-detail" || !selectedProductId) return undefined;
+    let isCurrentProduct = true;
+    productService.getOne(selectedProductId).then((product) => {
+      if (!isCurrentProduct) return;
+      const brandName = product.brand?.name || product.brand?.brandName || "";
+      const title = `${product.name}${brandName ? ` | ${brandName}` : ""} | Protein Store Tunisia`;
+      const description = String(product.shortDescription || product.description || metadata[1])
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160);
+      document.title = title;
+      document.querySelector('meta[name="description"]')?.setAttribute("content", description);
+      document.querySelector('meta[property="og:title"]')?.setAttribute("content", title);
+      document.querySelector('meta[property="og:description"]')?.setAttribute("content", description);
+      document.querySelector('meta[name="twitter:title"]')?.setAttribute("content", title);
+      document.querySelector('meta[name="twitter:description"]')?.setAttribute("content", description);
+    }).catch((error) => {
+      console.error("Unable to load product SEO metadata.", error);
+    });
+    return () => {
+      isCurrentProduct = false;
+    };
+  }, [activeTab, metadata, selectedProductId]);
 
   return (
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({

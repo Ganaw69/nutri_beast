@@ -914,6 +914,8 @@ const getProductImageSource = (img) => {
   if (!img) return null;
   if (typeof img === 'string') return img;
   return (
+    img.imageUrl ??
+    img.image_url ??
     img.image ??
     img.path ??
     img.url ??
@@ -955,6 +957,8 @@ const normalizeProductImagePath = (input) => {
 
   if (typeof input === 'object') {
     return normalizeProductImagePath(
+      input.imageUrl ??
+      input.image_url ??
       input.image ??
       input.path ??
       input.url ??
@@ -1066,9 +1070,9 @@ export const resolveProductImage = (product, fallback = null) => {
   const sortedImages = [...images].sort((a, b) => {
     const primaryScore = Number(isPrimaryProductImage(b)) - Number(isPrimaryProductImage(a));
     if (primaryScore !== 0) return primaryScore;
-    const positionScore = Number(b?.position ?? 0) - Number(a?.position ?? 0);
+    const positionScore = Number(a?.position ?? 0) - Number(b?.position ?? 0);
     if (positionScore !== 0) return positionScore;
-    return Number(b?.id ?? 0) - Number(a?.id ?? 0);
+    return Number(a?.id ?? 0) - Number(b?.id ?? 0);
   });
 
   const primary = sortedImages.find((img) => isPrimaryProductImage(img)) || sortedImages[0];
@@ -1400,18 +1404,10 @@ const clearProductReadCache = () => {
 export const productService = {
   // Product reads are public: do not depend on an admin JWT being present.
   async getNew(params = {}) {
-    const response = normalizeCollectionResponse(await apiFetch(`/products/new${buildQuery(params)}`, {}, false, true));
-    return {
-      ...response,
-      'hydra:member': response['hydra:member'].map(normalizeProduct),
-    };
+    return this.getAll({ ...params, isNew: true }, true);
   },
   async getBestSellers(params = {}) {
-    const response = normalizeCollectionResponse(await apiFetch(`/products/best-sellers${buildQuery(params)}`, {}, false, true));
-    return {
-      ...response,
-      'hydra:member': response['hydra:member'].map(normalizeProduct),
-    };
+    return this.getAll({ ...params, isBestSeller: true }, true);
   },
   async getNewPages() {
     const response = await this.getNew({ isActive: true });
@@ -1520,13 +1516,10 @@ export const productService = {
     return product;
   },
   async adjustStock(id, operation, quantity, reason = '') {
-    // StockProcessor operations are POST actions; never treat them as product patches.
-    // `reason` is optional only for additions according to the stock input contract.
-    const payload = operation === 'add'
-      ? { quantity, ...(reason.trim() ? { reason: reason.trim() } : {}) }
-      : { quantity, reason: reason.trim() };
+    const payload = { quantity, reason: reason.trim() };
     const product = await apiFetch(`/products/${id}/stock/${operation}`, {
-      method: 'POST',
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
       body: JSON.stringify(payload),
     });
     clearProductReadCache();
@@ -1534,15 +1527,11 @@ export const productService = {
   },
   async uploadImage(productId, file, position = 0, isPrimary = false, flavorId = null) {
     const fd = new FormData();
-    // The ProductImageInput DTO receives the product identifier, not an IRI.
     fd.append('productId', String(productId));
     fd.append('position', String(position));
     fd.append('isPrimary', isPrimary ? 'true' : 'false');
-    fd.append('is_primary', isPrimary ? 'true' : 'false');
     if (flavorId !== null && flavorId !== undefined && flavorId !== '') {
-      // Support both the DTO's scalar input and API Platform relation input.
       fd.append('flavorId', String(flavorId));
-      fd.append('flavor', `/api/flavors/${flavorId}`);
     }
     fd.append('imageFile', file);
     const image = await apiFetch('/product_images', { method: 'POST', body: fd }, true);
@@ -1562,6 +1551,15 @@ export const productService = {
   },
   async setImagePrimary(imageId) {
     const result = await apiFetch(`/product_images/${imageId}/primary`, { method: 'PATCH' });
+    clearProductReadCache();
+    return result;
+  },
+  async updateImagePosition(imageId, position) {
+    const result = await apiFetch(`/product_images/${imageId}/position`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify({ position }),
+    });
     clearProductReadCache();
     return result;
   },
@@ -1762,6 +1760,9 @@ export const flavorService = {
     }
     const data = await apiFetch(`/flavors${buildQuery(params)}`, {}, false, skipAuth);
     return normalizeCollectionResponse(data);
+  },
+  async getOne(id, skipAuth = true) {
+    return apiFetch(`/flavors/${id}`, {}, false, skipAuth);
   },
   async create(data) {
     return apiFetch('/flavors', { method: 'POST', body: JSON.stringify(data) });
@@ -2330,30 +2331,38 @@ export const idToIri = (resource, id) => `/api/${resource}/${id}`;
 export const resolveFlavorName = (flavor, flavorCatalog = []) => {
   if (!flavor) return '';
 
+  const displayName = (item) => item?.name
+    || item?.flavorName
+    || item?.flavourName
+    || item?.flavor_name
+    || item?.flavour_name
+    || item?.nom
+    || item?.label
+    || item?.title
+    || item?.value
+    || '';
+
   if (typeof flavor === 'string') {
     const catalogMatch = flavorCatalog.find((item) => {
       const itemId = item?.id ?? iriToId(item?.['@id']) ?? iriToId(item?.iri);
       return String(itemId) === String(iriToId(flavor)) || item?.name === flavor;
     });
-    return catalogMatch?.name || flavor;
+    return displayName(catalogMatch) || (flavor.startsWith('/api/') ? '' : flavor);
   }
 
   if (typeof flavor === 'number') {
     const catalogMatch = flavorCatalog.find((item) => String(item?.id) === String(flavor));
-    return catalogMatch?.name || '';
+    return displayName(catalogMatch);
   }
 
   if (typeof flavor === 'object') {
     return (
-      flavor.name ||
-      flavor.label ||
-      flavor.title ||
-      flavor.value ||
-      flavorCatalog.find((item) => {
+      displayName(flavor) ||
+      displayName(flavorCatalog.find((item) => {
         const itemId = item?.id ?? iriToId(item?.['@id']) ?? iriToId(item?.iri);
         const flavorId = flavor?.id ?? iriToId(flavor?.['@id']) ?? iriToId(flavor?.iri);
         return String(itemId) === String(flavorId);
-      })?.name ||
+      })) ||
       ''
     );
   }
