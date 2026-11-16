@@ -415,7 +415,7 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* Right Column: Product Info & Cart Actions */}
-        <div className="space-y-8 lg:col-span-5 xl:col-span-4">
+        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
@@ -448,8 +448,8 @@ export const ProductDetailPage = () => {
           </div>
 
           {product.shortDescription && (
-            <div className="border-t border-b border-white/10 py-5">
-              <p className="text-sm text-gray-300 leading-7 sm:leading-8">{product.shortDescription}</p>
+            <div className="border-t border-b border-white/10 py-3">
+              <p className="text-sm text-gray-300 leading-6">{product.shortDescription}</p>
             </div>
           )}
 
