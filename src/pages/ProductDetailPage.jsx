@@ -351,7 +351,7 @@ export const ProductDetailPage = () => {
       {/* Main Product Hero Section (2-Column Layout) */}
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Column: Vertical Thumbnails + Main Image */}
-        <div className="relative flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 sm:p-8 lg:col-span-7 xl:col-span-6" style={{ flexDirection: 'row', flexWrap: 'nowrap' }}>
+        <div className="relative flex w-full flex-col-reverse items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-8 lg:col-span-7 xl:col-span-6 lg:flex-row">
           {(product.badge || product.isNew || product.isOnSale) && (
             <div className="absolute left-6 top-6 z-10 flex flex-wrap gap-2">
               {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
@@ -362,7 +362,7 @@ export const ProductDetailPage = () => {
 
           {/* Vertical Thumbnail Column on the Left of Main Image */}
           {visibleGalleryImages.length > 0 && (
-            <div className="flex flex-col gap-3 w-16 sm:w-20 flex-shrink-0 pt-10" style={{ flexDirection: 'column' }}>
+            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0 lg:w-20 lg:flex-col lg:overflow-visible lg:pt-10">
               {visibleGalleryImages.map((img, index) => {
                 const imageSrc = productImageUrl(img) || product.image;
                 return (
@@ -370,7 +370,7 @@ export const ProductDetailPage = () => {
                     key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
                     type="button"
                     onClick={() => setActiveImage(imageSrc)}
-                    className={`w-16 h-16 sm:w-20 sm:h-20 bg-[#111] border rounded-lg p-1.5 overflow-hidden transition-colors ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
+                    className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-20 sm:w-20 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
                   >
                     {imageSrc ? (
                       <img src={imageSrc} alt="" className="w-full h-full object-contain" />
@@ -384,7 +384,7 @@ export const ProductDetailPage = () => {
           )}
 
           {/* Main Product Image Container */}
-          <div className="relative min-w-0 flex-1 self-start">
+          <div className="relative min-w-0 w-full flex-1 self-start lg:w-auto">
             {activeImage || product.image ? (
               <div className="relative w-full overflow-hidden" style={{ aspectRatio: activeImageAspectRatio || (5 / 6) }}>
                 <img

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
 import { useAdmin } from "../context/AdminContext";
 import { categoryService, productService } from "../services/api";
@@ -103,7 +104,7 @@ export const Navbar = () => {
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchSurface, setSearchSurface] = useState(null);
-  const [navbarHeight, setNavbarHeight] = useState(0);
+  const [navbarBottom, setNavbarBottom] = useState(0);
   const navbarRef = useRef(null);
   const mobileSearchInputRef = useRef(null);
 
@@ -135,7 +136,7 @@ export const Navbar = () => {
   useEffect(() => {
     const updateNavbarHeight = () => {
       if (navbarRef.current) {
-        setNavbarHeight(navbarRef.current.getBoundingClientRect().height);
+        setNavbarBottom(navbarRef.current.getBoundingClientRect().bottom);
       }
     };
 
@@ -916,9 +917,9 @@ export const Navbar = () => {
       )}
 
       {mobileMenuOpen && (
-        <div
-          className="mobile-menu-drawer absolute left-0 right-0 z-[60] flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white shadow-2xl shadow-black/60 xl:hidden sm:p-6"
-          style={{ top: `${navbarHeight}px`, height: `calc(100vh - ${navbarHeight}px)` }}
+        createPortal(<div
+          className="mobile-menu-drawer fixed inset-x-0 bottom-0 z-[60] flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white shadow-2xl shadow-black/60 xl:hidden sm:p-6"
+          style={{ top: `${navbarBottom}px` }}
         >
           <section className="shrink-0" aria-labelledby="mobile-tools-title">
             <h2 id="mobile-tools-title" className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Services et outils</h2>
@@ -952,7 +953,7 @@ export const Navbar = () => {
             </div>
           </section>
 
-          <div className="mt-5 border-t border-neutral-800 pt-4">
+          <div className="mt-5 shrink-0 border-t border-neutral-800 pt-4">
             <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Catégories</p>
             <div className="space-y-2">
               {mobileCategories.map((item) => (
@@ -982,12 +983,12 @@ export const Navbar = () => {
             </div>
             <div className="mt-5 border-t border-neutral-800 pt-4">
               <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Liens rapides</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
                 {mobileQuickLinks.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => quickAccessStrip.some((quickLink) => quickLink.id === item.id) ? handleCategoryClick(item.id) : handleSectionClick(item.id)}
-                    className="rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-white transition-colors hover:border-[#d90429]/70"
+                    className="min-w-0 break-words rounded-xl border border-neutral-800 bg-neutral-900/80 p-3 text-left font-medium text-white transition-colors hover:border-[#d90429]/70"
                   >
                     {item.label}
                   </button>
@@ -995,7 +996,7 @@ export const Navbar = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>, document.body)
       )}
     </header>
   );
