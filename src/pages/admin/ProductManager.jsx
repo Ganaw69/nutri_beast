@@ -208,7 +208,7 @@ const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
   }).filter(Boolean));
 };
 
-const FlavorImageUploader = ({ flavor, files, existingImages, onAdd }) => {
+const FlavorImageUploader = ({ flavor, files, existingImages, onAdd, onRemoveFile, onRemoveExisting }) => {
   const [previews, setPreviews] = useState([]);
 
   useEffect(() => {
@@ -217,7 +217,33 @@ const FlavorImageUploader = ({ flavor, files, existingImages, onAdd }) => {
     return () => nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
   }, [files]);
 
-  return <section className="rounded-lg border border-[#333] bg-[#111] p-3"><div className="flex items-center justify-between gap-3"><p className="text-sm font-bold text-white">{displayName(flavor)}</p><span className="text-[10px] font-bold uppercase text-gray-500">{existingImages.length + files.length} image{existingImages.length + files.length === 1 ? '' : 's'}</span></div><label className="mt-3 block cursor-pointer rounded border border-dashed border-[#555] px-3 py-2 text-center text-xs text-gray-300 hover:bg-[#222]">Ajouter une image pour cette saveur<input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => { const nextFiles = Array.from(event.target.files || []); if (nextFiles.length > 0) onAdd(nextFiles); event.target.value = ''; }} /></label>{(existingImages.length > 0 || previews.length > 0) && <div className="mt-3 grid grid-cols-4 gap-2">{existingImages.map((image, index) => <div key={getProductImageId(image) ?? index} className="aspect-square overflow-hidden rounded border border-[#333] bg-black/20">{productImageUrl(image) ? <img src={productImageUrl(image)} alt={`Image ${displayName(flavor)}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-gray-500">Image</div>}</div>)}{previews.map((preview) => <div key={fileKey(preview.file)} className="aspect-square overflow-hidden rounded border border-[#d90429]/60 bg-black/20"><img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" /></div>)}</div>}</section>;
+  return <section className="rounded-lg border border-[#333] bg-[#111] p-3">
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-sm font-bold text-white">{displayName(flavor)}</p>
+      <span className="text-[10px] font-bold uppercase text-gray-500">{existingImages.length + files.length} image{existingImages.length + files.length === 1 ? '' : 's'}</span>
+    </div>
+    <label className="mt-3 block cursor-pointer rounded border border-dashed border-[#555] px-3 py-2 text-center text-xs text-gray-300 hover:bg-[#222]">
+      Ajouter une image pour cette saveur
+      <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => { const nextFiles = Array.from(event.target.files || []); if (nextFiles.length > 0) onAdd(nextFiles); event.target.value = ''; }} />
+    </label>
+    {(existingImages.length > 0 || previews.length > 0) && <div className="mt-3 grid grid-cols-4 gap-2">
+      {existingImages.map((image, index) => {
+        const imageId = getProductImageId(image);
+        return <div key={imageId ?? index} className="relative aspect-square overflow-hidden rounded border border-[#333] bg-black/20">
+          {productImageUrl(image) ? <img src={productImageUrl(image)} alt={`Image ${displayName(flavor)}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-gray-500">Image</div>}
+          <button type="button" disabled={!imageId} onClick={() => onRemoveExisting(imageId)} aria-label={`Supprimer une image de ${displayName(flavor)}`} title="Supprimer cette image" className="absolute right-1 top-1 rounded bg-black/80 p-1 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40">
+            <X size={14} />
+          </button>
+        </div>;
+      })}
+      {previews.map((preview) => <div key={fileKey(preview.file)} className="relative aspect-square overflow-hidden rounded border border-[#d90429]/60 bg-black/20">
+        <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
+        <button type="button" onClick={() => onRemoveFile(preview.file)} aria-label={`Retirer ${preview.file.name}`} title="Retirer cette image" className="absolute right-1 top-1 rounded bg-black/80 p-1 text-white hover:bg-red-700">
+          <X size={14} />
+        </button>
+      </div>)}
+    </div>}
+  </section>;
 };
 
 export const ProductManager = () => {
@@ -239,6 +265,7 @@ export const ProductManager = () => {
   const [productImages, setProductImages] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [detailsModal, setDetailsModal] = useState(null);
   const [selectedDetailImage, setSelectedDetailImage] = useState(0);
 
@@ -466,9 +493,10 @@ export const ProductManager = () => {
     setPage(1);
   }, [searchTerm, selectedParentCategoryId, selectedSubCategoryId]);
 
-  const openAdd = () => { setError(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setFlavorImageFiles({}); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setFlavorImageFiles({}); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
+    setNotice('');
     setFlavorError('');
     setNewFlavorName('');
     setFlavorSearch('');
@@ -557,11 +585,29 @@ export const ProductManager = () => {
       return { ...current, [flavorIri]: [...existing, ...nextFiles.filter((file) => !knownFiles.has(fileKey(file)))] };
     });
   };
+  const removeProductImageFile = (indexToRemove) => {
+    const nextFiles = imageFiles.filter((_, index) => index !== indexToRemove);
+    setImageFiles(nextFiles);
+    setPrimaryImageIndex((currentPrimaryIndex) => {
+      if (nextFiles.length === 0) return 0;
+      if (currentPrimaryIndex === indexToRemove) return Math.min(indexToRemove, nextFiles.length - 1);
+      return currentPrimaryIndex > indexToRemove ? currentPrimaryIndex - 1 : currentPrimaryIndex;
+    });
+  };
+  const removeFlavorImageFile = (flavorIri, fileToRemove) => {
+    const keyToRemove = fileKey(fileToRemove);
+    setFlavorImageFiles((current) => ({
+      ...current,
+      [flavorIri]: (current[flavorIri] || []).filter((file) => fileKey(file) !== keyToRemove),
+    }));
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
     setError('');
+    setNotice('');
     try {
       if (form.hasFlavors && form.flavors.length === 0) throw new Error('Sélectionnez au moins une saveur ou choisissez « Non ».');
       if (form.hasFlavors) {
@@ -601,6 +647,10 @@ export const ProductManager = () => {
       // API Platform may return the identifier only through the resource IRI.
       // Never upload images without the id of the product just saved.
       const savedId = saved?.id ?? iriToId(saved?.['@id']) ?? modal.id;
+      if (!savedId) {
+        throw new Error("Le serveur n’a pas renvoyé l’identifiant du produit. Vérifiez la liste des produits avant de réessayer.");
+      }
+      if (modal.mode === 'add') setModal({ mode: 'edit', id: savedId });
       if (savedId && !form.hasFlavors && imageFiles.length > 0) {
         const selectedPrimaryIndex = Math.max(0, Math.min(primaryImageIndex, imageFiles.length - 1));
         let selectedPrimaryImage = null;
@@ -655,9 +705,13 @@ export const ProductManager = () => {
         return page === 1 ? [savedProduct, ...current].slice(0, 20) : current;
       });
       setTotal((current) => products.some((product) => String(product.id) === String(savedId)) ? current : current + 1);
+      setNotice(modal.mode === 'add' ? 'Produit créé avec succès.' : 'Modifications enregistrées avec succès.');
       void fetchProducts({ silent: true });
-    } catch (e) { setError(e.message); }
-    setSaving(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Une erreur est survenue pendant l’enregistrement.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const refreshProductImages = async (productId) => {
@@ -682,10 +736,47 @@ export const ProductManager = () => {
     if (!confirm('Supprimer cette image ?')) return;
     try {
       await productService.deleteImage(imageId);
-      if (modal?.id) await refreshProductImages(modal.id);
-      fetchProducts();
+      const deletedImageKey = getProductImageKey(
+        productImages.find((image) => String(getProductImageId(image)) === String(imageId))
+      );
+      const isDeletedImage = (image) => (
+        String(getProductImageId(image)) === String(imageId)
+        || Boolean(deletedImageKey && getProductImageKey(image) === deletedImageKey)
+      );
+      setProductImages((current) => current.filter(
+        (image) => String(getProductImageId(image)) !== String(imageId)
+      ));
+      if (modal?.id) {
+        setProducts((current) => current.map((product) => {
+          if (String(product.id) !== String(modal.id)) return product;
+          const directImage = product.image ?? product.imagePath ?? product.mainImage
+            ?? product.mainImageUrl ?? product.main_image_url ?? product.mainImagePath
+            ?? product.thumbnail ?? product.thumbnailPath;
+          const directImageKey = getProductImageKey({ image: directImage });
+          const deletedDirectImage = deletedImageKey && directImageKey === deletedImageKey;
+          return {
+            ...product,
+            productImages: (product.productImages || []).filter(
+              (image) => !isDeletedImage(image)
+            ),
+            ...(Array.isArray(product.images) ? { images: product.images.filter((image) => !isDeletedImage(image)) } : {}),
+            ...(Array.isArray(product.media) ? { media: product.media.filter((image) => !isDeletedImage(image)) } : {}),
+            ...(deletedDirectImage ? {
+              image: null,
+              imagePath: null,
+              mainImage: null,
+              mainImageUrl: null,
+              main_image_url: null,
+              mainImagePath: null,
+              thumbnail: null,
+              thumbnailPath: null,
+            } : {}),
+          };
+        }));
+      }
+      setError('');
     } catch (e) {
-      setError(e.message);
+      setError(e instanceof Error ? e.message : "Impossible de supprimer cette image.");
     }
   };
 
@@ -801,6 +892,8 @@ export const ProductManager = () => {
           <Plus size={16} /> Nouveau Produit
         </button>
       </div>
+
+      {notice && <div role="status" aria-live="polite" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</div>}
 
       <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl overflow-hidden">
         <div className="p-4 border-b border-[#2a2a2a] flex gap-3 bg-[#1a1a1a]">
@@ -944,10 +1037,9 @@ export const ProductManager = () => {
           <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[92vh]">
             <div className="flex justify-between items-center p-6 border-b border-[#2a2a2a]">
               <h2 className="text-xl font-bold text-white">{modal.mode === 'add' ? 'Nouveau Produit' : 'Modifier le Produit'}</h2>
-              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-white p-1"><X size={20} /></button>
+              <button type="button" onClick={() => setModal(null)} className="text-gray-400 hover:text-white p-1"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-5">
-              {error && <div className="text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg p-3">{error}</div>}
+            <form id="product-edit-form" onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-5">
               
               <div>
                 <label className={labelCls}>Nom *</label>
@@ -988,27 +1080,37 @@ export const ProductManager = () => {
                     {imagePreviews.map((preview, index) => {
                       const isPrimary = index === primaryImageIndex;
                       return (
-                        <button
-                          key={`${preview.file.name}-${preview.file.size}-${index}`}
-                          type="button"
-                          onClick={() => setPrimaryImageIndex(index)}
-                          className={`relative rounded-lg overflow-hidden border text-left transition-all ${
-                            isPrimary ? 'border-[#d90429] ring-2 ring-[#d90429]/40' : 'border-[#333] hover:border-[#666]'
-                          }`}
-                          title={isPrimary ? 'Image principale' : 'Définir comme principale'}
-                        >
-                          <div className="aspect-square bg-black/20">
-                            <img src={preview.url} alt={preview.file.name} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="absolute left-2 top-2">
-                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${isPrimary ? 'bg-[#d90429] text-white' : 'bg-black/70 text-white'}`}>
-                              {isPrimary ? 'Principale' : 'Secondaire'}
-                            </span>
-                          </div>
-                          <div className="px-2 py-2 bg-[#111]">
-                            <div className="text-[11px] text-gray-300 truncate">{preview.file.name}</div>
-                          </div>
-                        </button>
+                        <div key={`${preview.file.name}-${preview.file.size}-${index}`} className={`relative overflow-hidden rounded-lg border transition-all ${
+                          isPrimary ? 'border-[#d90429] ring-2 ring-[#d90429]/40' : 'border-[#333]'
+                        }`}>
+                          <button
+                            type="button"
+                            onClick={() => setPrimaryImageIndex(index)}
+                            className="block w-full text-left"
+                            title={isPrimary ? 'Image principale' : 'Définir comme principale'}
+                          >
+                            <div className="aspect-square bg-black/20">
+                              <img src={preview.url} alt={preview.file.name} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="absolute left-2 top-2">
+                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${isPrimary ? 'bg-[#d90429] text-white' : 'bg-black/70 text-white'}`}>
+                                {isPrimary ? 'Principale' : 'Secondaire'}
+                              </span>
+                            </div>
+                            <div className="px-2 py-2 bg-[#111]">
+                              <div className="text-[11px] text-gray-300 truncate">{preview.file.name}</div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeProductImageFile(index)}
+                            aria-label={`Retirer ${preview.file.name}`}
+                            title="Retirer cette image"
+                            className="absolute right-2 top-2 rounded bg-black/80 p-1.5 text-white hover:bg-red-700"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -1297,7 +1399,15 @@ export const ProductManager = () => {
                 </div>
                 {form.flavors.length > 0 && <div className="mt-4 space-y-3 border-t border-[#333] pt-4"><p className="text-xs font-bold uppercase text-gray-400">Images par saveur</p>{form.flavors.map((flavorIri) => {
                   const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
-                  return <FlavorImageUploader key={flavorIri} flavor={flavor || { name: flavorIri.split('/').pop() }} files={flavorImageFiles[flavorIri] || []} existingImages={imagesForFlavor(flavorIri)} onAdd={(files) => addFlavorImages(flavorIri, files)} />;
+                  return <FlavorImageUploader
+                    key={flavorIri}
+                    flavor={flavor || { name: flavorIri.split('/').pop() }}
+                    files={flavorImageFiles[flavorIri] || []}
+                    existingImages={imagesForFlavor(flavorIri)}
+                    onAdd={(files) => addFlavorImages(flavorIri, files)}
+                    onRemoveFile={(file) => removeFlavorImageFile(flavorIri, file)}
+                    onRemoveExisting={handleDeleteImage}
+                  />;
                 })}</div>}
                 {flavors.length > 0 && visibleFlavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur trouvée.</p>}
                 {flavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur. Ajoutez la première ci-dessus.</p>}
@@ -1314,10 +1424,11 @@ export const ProductManager = () => {
               </div>
               {form.packing && <div className="mt-4 max-w-xs"><label className={labelCls}>Montant de remise pack (DT)</label><input type="number" min="0" step="0.01" value={form.montantRemise} onChange={e => setForm(p => ({ ...p, montantRemise: e.target.value }))} className={inputCls} placeholder="0.00" /><p className="mt-1 text-[11px] text-gray-500">Remise fixe appliquée par le backend lors de la composition d’un pack.</p></div>}
             </form>
-            <div className="p-5 border-t border-[#2a2a2a] flex gap-3 justify-end bg-[#1a1a1a] rounded-b-xl">
-              <button onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
-              <button onClick={handleSave} disabled={saving} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Enregistrer
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2a2a2a] bg-[#1a1a1a] p-5">
+              {error && <p role="alert" className="mr-auto w-full text-sm text-red-300 sm:w-auto">{error}</p>}
+              <button type="button" onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
+              <button type="submit" form="product-edit-form" disabled={saving} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
+                {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
               </button>
             </div>
           </div>

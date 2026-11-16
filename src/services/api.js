@@ -1155,6 +1155,12 @@ async function requestApi(path, opts = {}, isMultipart = false, skipAuth = false
     try {
       const json = await res.json();
       errMsg = json['hydra:description'] || json.detail || json.message || errMsg;
+      if (Array.isArray(json.violations) && json.violations.length > 0) {
+        const violations = json.violations
+          .map((violation) => [violation.propertyPath, violation.message].filter(Boolean).join(': '))
+          .filter(Boolean);
+        if (violations.length > 0) errMsg = `${errMsg}: ${violations.join('; ')}`;
+      }
     } catch (_) {}
 
     if (res.status === 401 && !skipAuth) {
@@ -1532,6 +1538,10 @@ export const productService = {
     fd.append('isPrimary', isPrimary ? 'true' : 'false');
     if (flavorId !== null && flavorId !== undefined && flavorId !== '') {
       fd.append('flavorId', String(flavorId));
+      const flavorReference = String(flavorId);
+      fd.append('flavor', flavorReference.startsWith('/api/')
+        ? flavorReference
+        : `/api/flavors/${flavorReference}`);
     }
     fd.append('imageFile', file);
     const image = await apiFetch('/product_images', { method: 'POST', body: fd }, true);
