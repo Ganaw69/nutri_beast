@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import { useAdmin } from "../context/AdminContext";
 import { categoryService, productService } from "../services/api";
 import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
+import { getProductSearchTerms, productMatchesSearch } from "../utils/productSearch";
 import logo from "../assets/logo.png";
 import { FREE_SHIPPING_LABEL } from "../config/store";
 import {
@@ -251,17 +252,25 @@ export const Navbar = () => {
     const timer = window.setTimeout(async () => {
       setSearchLoading(true);
       try {
-        // Suggestions need only a handful of matching records.  Fetching every
-        // catalogue page here made the first keystroke wait for the complete
-        // product catalogue to download.
-        const data = await productService.getAll({
+        const searchTerms = getProductSearchTerms(enteredQuery);
+        const nameTerms = searchTerms.filter((term) => /[a-z]/.test(term));
+        const candidateTerms = (nameTerms.length > 0 ? nameTerms : searchTerms).slice(0, 3);
+        const pages = await Promise.allSettled(candidateTerms.map((term) => productService.getAllPages({
           isActive: true,
-          name: enteredQuery,
-          itemsPerPage: 7,
-        }, true);
-        const suggestions = (data["hydra:member"] || [])
-          .filter((product) => product?.isActive !== false && product?.active !== false && product?.brand?.isActive !== false && product?.brand?.active !== false)
-          .filter((product) => normaliseSearchText(product.name).includes(normalisedQuery))
+          name: term,
+          itemsPerPage: 100,
+        }, true)));
+        const candidates = new Map();
+        pages
+          .filter((result) => result.status === "fulfilled")
+          .flatMap((result) => result.value["hydra:member"] || [])
+          .forEach((product) => {
+            const key = product?.id ?? product?.["@id"] ?? `${product?.name}-${product?.brand?.name || product?.brandName || ""}`;
+            candidates.set(String(key), product);
+          });
+        const suggestions = [...candidates.values()]
+          .filter((product) => product?.isActive !== false && product?.active !== false)
+          .filter((product) => productMatchesSearch(product, enteredQuery))
           .slice(0, 7);
         if (current) setSearchSuggestions(suggestions);
       } catch {

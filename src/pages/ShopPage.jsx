@@ -5,6 +5,7 @@ import { productService, categoryService, goalService, resolveProductImage, hydr
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, Loader2 } from "lucide-react";
 import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems } from "../utils/categoryTree";
+import { productMatchesSearch } from "../utils/productSearch";
 
 const sameId = (first, second) => String(first) === String(second);
 
@@ -239,8 +240,7 @@ export const ShopPage = () => {
         const productGoalIds = Array.isArray(product.goals)
           ? product.goals.map((goal) => getRelatedId(goal)).filter(Boolean).map(String)
           : [];
-        const matchesSearch = !searchNeedle || [product.name, product.brand?.name, product.category?.name]
-          .some((value) => normaliseText(value).includes(searchNeedle));
+        const matchesSearch = !searchNeedle || productMatchesSearch(product, searchQuery);
 
         return matchesSearch
           && (allowedCategoryIds.size === 0
