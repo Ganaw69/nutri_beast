@@ -787,7 +787,15 @@ export const ProductManager = () => {
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce produit ?')) return;
-    try { await productService.delete(id); fetchProducts(); } catch (e) { alert(e.message); }
+    setError('');
+    setNotice('');
+    try {
+      await productService.delete(id);
+      setNotice('Produit supprimé avec succès.');
+      await fetchProducts({ silent: true });
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   const handleToggle = async (p) => {

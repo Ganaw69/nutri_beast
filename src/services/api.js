@@ -1504,7 +1504,23 @@ export const productService = {
     return product;
   },
   async delete(id) {
-    const result = await apiFetch(`/products/${id}`, { method: 'DELETE' });
+    const path = `/products/${id}`;
+    let result;
+    try {
+      result = await apiFetch(path, { method: 'DELETE' });
+    } catch (deleteError) {
+      if (!(deleteError?.status >= 500)) throw deleteError;
+      try {
+        await requestApi(path, {}, false, true);
+      } catch (verificationError) {
+        if (verificationError?.status === 404) {
+          clearProductReadCache();
+          clearApiReadCache();
+          return null;
+        }
+      }
+      throw deleteError;
+    }
     clearProductReadCache();
     return result;
   },
