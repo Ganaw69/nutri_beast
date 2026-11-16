@@ -560,7 +560,7 @@ export const ProductDetailPage = () => {
           <p
             ref={descriptionRef}
             style={descriptionExpanded ? undefined : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 10, overflow: 'hidden' }}
-            className="text-sm text-gray-300 leading-7 sm:leading-8 whitespace-pre-line"
+            className="text-sm text-gray-300 leading-7 sm:leading-8 whitespace-normal"
           >
             {product.longDescription}
           </p>
