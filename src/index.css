@@ -3,9 +3,12 @@
 @tailwind utilities;
 
 .mobile-menu-drawer {
+  height: calc(100vh - var(--mobile-menu-top));
+  height: calc(100dvh - var(--mobile-menu-top));
+  overflow-y: scroll;
   isolation: isolate;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   touch-action: pan-y;
 }
 

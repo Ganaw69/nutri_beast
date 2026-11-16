@@ -918,8 +918,8 @@ export const Navbar = () => {
 
       {mobileMenuOpen && (
         createPortal(<div
-          className="mobile-menu-drawer fixed inset-x-0 bottom-0 z-[60] flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white shadow-2xl shadow-black/60 xl:hidden sm:p-6"
-          style={{ top: `${navbarBottom}px` }}
+          className="mobile-menu-drawer fixed inset-x-0 z-[60] flex min-h-0 w-full max-w-full flex-col overflow-x-hidden overscroll-contain border-t border-[#2b2b2b] bg-black p-4 text-xs font-medium tracking-normal text-white shadow-2xl shadow-black/60 xl:hidden sm:p-6"
+          style={{ top: `${navbarBottom}px`, "--mobile-menu-top": `${navbarBottom}px` }}
         >
           <section className="shrink-0" aria-labelledby="mobile-tools-title">
             <h2 id="mobile-tools-title" className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-gray-500">Services et outils</h2>
