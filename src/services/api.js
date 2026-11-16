@@ -1554,8 +1554,22 @@ export const productService = {
     clearProductReadCache();
     return image;
   },
-  async deleteImage(imageId) {
-    const result = await apiFetch(`/product_images/${imageId}`, { method: 'DELETE' });
+  async deleteImage(imageReference) {
+    const reference = typeof imageReference === 'object'
+      ? imageReference?.['@id'] ?? imageReference?.iri ?? imageReference?.id
+      : imageReference;
+    if (reference === null || reference === undefined || reference === '') {
+      throw new Error("L'identifiant de l'image est manquant.");
+    }
+
+    let path = String(reference);
+    if (/^https?:\/\//i.test(path)) path = new URL(path).pathname;
+    path = path.split(/[?#]/, 1)[0].replace(/^\/api(?=\/)/, '');
+    if (!path.startsWith('/product_images/')) {
+      path = `/product_images/${encodeURIComponent(path)}`;
+    }
+
+    const result = await apiFetch(path, { method: 'DELETE' });
     clearProductReadCache();
     return result;
   },

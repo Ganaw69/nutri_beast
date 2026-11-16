@@ -107,10 +107,11 @@ const normalizeProductImages = (images = []) =>
 const getProductImageId = (img) => {
   if (!img) return null;
   if (typeof img === 'string') return iriToId(img);
+  const resourceIri = img['@id'] || img.iri;
   return (
     img.id ??
-    iriToId(img['@id']) ??
-    iriToId(img.iri) ??
+    iriToId(resourceIri) ??
+    resourceIri ??
     img.imageId ??
     img.productImageId ??
     null
@@ -231,7 +232,7 @@ const FlavorImageUploader = ({ flavor, files, existingImages, onAdd, onRemoveFil
         const imageId = getProductImageId(image);
         return <div key={imageId ?? index} className="relative aspect-square overflow-hidden rounded border border-[#333] bg-black/20">
           {productImageUrl(image) ? <img src={productImageUrl(image)} alt={`Image ${displayName(flavor)}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-gray-500">Image</div>}
-          <button type="button" disabled={!imageId} onClick={() => onRemoveExisting(imageId)} aria-label={`Supprimer une image de ${displayName(flavor)}`} title="Supprimer cette image" className="absolute right-1 top-1 rounded bg-black/80 p-1 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" disabled={!imageId} onClick={() => onRemoveExisting(image)} aria-label={`Supprimer une image de ${displayName(flavor)}`} title="Supprimer cette image" className="absolute right-1 top-1 rounded bg-black/80 p-1 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40">
             <X size={14} />
           </button>
         </div>;
@@ -731,11 +732,15 @@ export const ProductManager = () => {
     }
   };
 
-  const handleDeleteImage = async (imageId) => {
+  const handleDeleteImage = async (image) => {
+    const imageRecord = image && typeof image === 'object'
+      ? image
+      : productImages.find((item) => String(getProductImageId(item)) === String(image));
+    const imageId = imageRecord ? getProductImageId(imageRecord) : image;
     if (!imageId) return;
     if (!confirm('Supprimer cette image ?')) return;
     try {
-      await productService.deleteImage(imageId);
+      await productService.deleteImage(imageRecord?.['@id'] || imageRecord?.iri || imageId);
       const deletedImageKey = getProductImageKey(
         productImages.find((image) => String(getProductImageId(image)) === String(imageId))
       );
@@ -1159,7 +1164,7 @@ export const ProductManager = () => {
                             <button
                               type="button"
                               disabled={!imageId}
-                              onClick={() => handleDeleteImage(imageId)}
+                              onClick={() => handleDeleteImage(img)}
                               className="px-3 py-2 text-[10px] font-bold rounded-lg bg-[#3a1111] text-red-300 hover:text-red-100 border border-red-900/40 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               Supprimer
