@@ -1177,7 +1177,9 @@ async function requestApi(path, opts = {}, isMultipart = false, skipAuth = false
       }
       window.dispatchEvent(new CustomEvent('admin-auth-expired', { detail: errMsg }));
     }
-    throw new Error(errMsg);
+    const error = new Error(errMsg);
+    error.status = res.status;
+    throw error;
   }
 
   if (res.status === 204) return null; // No Content
@@ -1569,7 +1571,22 @@ export const productService = {
       path = `/product_images/${encodeURIComponent(path)}`;
     }
 
-    const result = await apiFetch(path, { method: 'DELETE' });
+    let result;
+    try {
+      result = await apiFetch(path, { method: 'DELETE' });
+    } catch (deleteError) {
+      if (!(deleteError?.status >= 500)) throw deleteError;
+      try {
+        await requestApi(path, {}, false, true);
+      } catch (verificationError) {
+        if (verificationError?.status === 404) {
+          clearProductReadCache();
+          clearApiReadCache();
+          return null;
+        }
+      }
+      throw deleteError;
+    }
     clearProductReadCache();
     return result;
   },
