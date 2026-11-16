@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
 import { productService, reviewService, flavorService, brandService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
-  ChevronLeft, Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen, Search, X
+  ChevronLeft, Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen
 } from "lucide-react";
 
 const formatMonthYear = (value) => {
@@ -36,60 +35,7 @@ const isAvailableProduct = (product) => product?.isActive !== false
   && product?.brand?.isActive !== false
   && product?.brand?.active !== false;
 
-const getProductImageFlavorId = (image) => getRelationId(
-  image?.flavor ?? image?.flavour ?? image?.flavorId ?? image?.flavor_id
-);
-
-const getProductImageProductId = (image) => getRelationId(
-  image?.product ?? image?.productId ?? image?.product_id
-);
-
-const compareGalleryImages = (first, second) => (
-  Number(first?.position ?? 0) - Number(second?.position ?? 0)
-  || Number(first?.id ?? 0) - Number(second?.id ?? 0)
-);
-
-const resolveFlavorImage = (images, flavorId) => {
-  if (flavorId == null) return null;
-  const image = [...(images || [])]
-    .filter((item) => String(getProductImageFlavorId(item)) === String(flavorId))
-    .sort(compareGalleryImages)[0];
-  return image ? productImageUrl(image) : null;
-};
-
-const mergeGalleryImages = (currentImages = [], nextImages = []) => {
-  const seen = new Set();
-  return [...currentImages, ...nextImages].filter((image, index) => {
-    const key = image?.id
-      ?? image?.['@id']
-      ?? image?.imageUrl
-      ?? image?.image
-      ?? image?.path
-      ?? index;
-    if (seen.has(String(key))) return false;
-    seen.add(String(key));
-    return true;
-  });
-};
-
-const resolveFlavorOptions = (product, flavorCatalog = []) => {
-  const seen = new Set();
-  return (product?.flavors || []).map((flavor) => {
-    const id = getRelationId(flavor);
-    const catalogFlavor = flavorCatalog.find((item) => String(getRelationId(item)) === String(id));
-    const name = resolveProductFlavors({ flavors: [flavor] }, flavorCatalog)[0]
-      || catalogFlavor?.name
-      || '';
-    const key = String(id ?? name);
-    if (!name || seen.has(key)) return null;
-    seen.add(key);
-    return { id, name };
-  }).filter(Boolean);
-};
-
-const normalizeProduct = (p, flavorCatalog = []) => {
-  const flavorOptions = resolveFlavorOptions(p, flavorCatalog);
-  return {
+const normalizeProduct = (p, flavorCatalog = []) => ({
   id: p.id,
   name: p.name,
   category: p.category?.name || '',
@@ -103,8 +49,7 @@ const normalizeProduct = (p, flavorCatalog = []) => {
   salePrice: p.salePrice,
   badge: isEnabledFlag(p.isFeatured) ? 'TOP SELLER' : null,
   inStock: (p.stock || 0) > 0,
-  flavors: flavorOptions.map((flavor) => flavor.name),
-  flavorOptions,
+  flavors: resolveProductFlavors(p, flavorCatalog),
   sizes: [],
   sku: p.sku,
   shortDescription: p.shortDescription || '',
@@ -114,8 +59,7 @@ const normalizeProduct = (p, flavorCatalog = []) => {
   productOptions: p.productOptions || p.options || null,
   productImages: p.productImages || [],
   '@id': p['@id'],
-};
-};
+});
 
 export const ProductDetailPage = () => {
   const { selectedProductId, addToCart, navigateTo, viewBrandDetails, showToast } = useCart();
@@ -125,12 +69,9 @@ export const ProductDetailPage = () => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState('');
-  const [activeImageAspectRatio, setActiveImageAspectRatio] = useState(null);
-  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [descriptionHasMore, setDescriptionHasMore] = useState(false);
   const descriptionRef = useRef(null);
-  const flavorImageRequestRef = useRef(0);
 
   const [selectedFlavor, setSelectedFlavor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
@@ -143,14 +84,15 @@ export const ProductDetailPage = () => {
   useEffect(() => {
     if (!selectedProductId) return;
     let active = true;
-    flavorImageRequestRef.current += 1;
     setLoading(true);
     setProduct(null);
-    setActiveImageAspectRatio(null);
     setDescriptionExpanded(false);
 
     const loadProduct = async () => {
       try {
+        // Show the product as soon as its fast, single-resource request
+        // finishes. Reviews, flavour labels and related cards can arrive after
+        // the above-the-fold product information is already visible.
         const prod = await productService.getOne(selectedProductId, true);
         if (!active) return;
         if (!isAvailableProduct(prod)) {
@@ -160,68 +102,68 @@ export const ProductDetailPage = () => {
         }
 
         const immediateProduct = normalizeProduct(prod);
+        setProduct(immediateProduct);
+        setActiveImage(resolveProductImage(prod, immediateProduct.image));
+        setSelectedFlavor(immediateProduct.flavors[0] || '');
+        setLoading(false);
 
         const productCategoryId = getRelationId(prod.category);
         const relatedParams = { isActive: true, itemsPerPage: 8 };
         if (productCategoryId) relatedParams['category.id'] = productCategoryId;
 
-        const productFlavorIds = (prod.flavors || []).map(getRelationId).filter((id) => id != null);
-        const [imageData, relData, revData, flavorData, flavorDetails, brandData] = await Promise.all([
-          productService.getImages({ product: `/api/products/${selectedProductId}`, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+        const [imageData, relData, revData, flavorData, brandData] = await Promise.all([
+          // The image API filters by `product` (the same query used in back office).
+          productService.getImages({ product: selectedProductId, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
           productService.getAllPages(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
           reviewService.getAll({ 'product.id': selectedProductId, approved: true }, true).catch(() => ({ 'hydra:member': [] })),
           flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-          Promise.all(productFlavorIds.map((id) => flavorService.getOne(id, true).catch(() => null))),
           immediateProduct.brand || immediateProduct.brandId == null
             ? Promise.resolve(null)
             : brandService.getAllPages({}, true).catch(() => null),
         ]);
         if (!active) return;
 
-        const fetchedImages = imageData['hydra:member'] || imageData.member || imageData.items || [];
-        const imagesById = new Map(fetchedImages.map((image) => [String(image.id), image]));
-        const embeddedImages = (prod.productImages || [])
-          .map((image) => {
-            if (typeof image !== 'string') return image;
-            const imageId = image.split('/').pop();
-            return imagesById.get(String(imageId)) || image;
-          })
-          .filter((image) => typeof image !== 'string');
-
-        const seenImageKeys = new Set();
-        const productImages = [...embeddedImages, ...fetchedImages].filter((image, index) => {
-          const key = image?.id ?? image?.['@id'] ?? image?.image ?? image?.path ?? image?.url ?? index;
-          if (seenImageKeys.has(String(key))) return false;
-          seenImageKeys.add(String(key));
-          return true;
-        });
-        const productWithImages = { ...prod, productImages };
-        const flavorCatalog = [
-          ...(flavorData['hydra:member'] || flavorData.member || flavorData.items || []),
-          ...flavorDetails.filter(Boolean),
-        ];
-        const brandItems = brandData?.['hydra:member'] || brandData?.member || brandData?.items || [];
-        const brandRecord = brandItems.find((item) => String(getRelationId(item)) === String(immediateProduct.brandId));
-        const norm = normalizeProduct(productWithImages, flavorCatalog);
-        if (!norm.brand && brandRecord) norm.brand = displayBrandName(brandRecord);
-        setProduct(norm);
-        const hydratedInitialFlavor = norm.flavorOptions[0];
-        setActiveImage(
-          resolveFlavorImage(productImages, hydratedInitialFlavor?.id)
-          || resolveProductImage(productWithImages, norm.image)
-          || productImageUrl(productImages[0])
-        );
-        setSelectedFlavor(hydratedInitialFlavor?.name || '');
-
-        const relatedWithImages = await hydrateProductsWithImages(
-          (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
-          true
-        );
-        if (!active) return;
-        const relProds = relatedWithImages.map((item) => normalizeProduct(item, flavorCatalog));
-        setRelated(relProds);
-        setReviews(revData['hydra:member'] || []);
-        setLoading(false);
+      const fetchedImages = imageData['hydra:member'] || imageData.member || imageData.items || [];
+      const imagesById = new Map(fetchedImages.map((image) => [String(image.id), image]));
+      const embeddedImages = (prod.productImages || [])
+        .map((image) => {
+          if (typeof image !== 'string') return image;
+          const imageId = image.split('/').pop();
+          return imagesById.get(String(imageId)) || image;
+        })
+        .filter((image) => typeof image !== 'string');
+      // Some product responses only contain image IRIs (or none at all), while
+      // /product_images returns the full records. Keep both sources so the
+      // storefront resolves exactly the same images as the back office.
+      const seenImageKeys = new Set();
+      const productImages = [...embeddedImages, ...fetchedImages].filter((image, index) => {
+        const key = image?.id ?? image?.['@id'] ?? image?.image ?? image?.path ?? image?.url ?? index;
+        if (seenImageKeys.has(String(key))) return false;
+        seenImageKeys.add(String(key));
+        return true;
+      });
+      const productWithImages = { ...prod, productImages };
+      const flavorCatalog = flavorData['hydra:member'] || [];
+      const brandItems = brandData?.['hydra:member'] || brandData?.member || brandData?.items || [];
+      const brandRecord = brandItems.find((item) => String(getRelationId(item)) === String(immediateProduct.brandId));
+      const norm = normalizeProduct(productWithImages, flavorCatalog);
+      if (!norm.brand && brandRecord) norm.brand = displayBrandName(brandRecord);
+      setProduct(norm);
+      setActiveImage(
+        resolveProductImage(productWithImages, norm.image) ||
+        productImageUrl(productImages[0]?.image || productImages[0]?.path || productImages[0]?.url)
+      );
+      setSelectedFlavor(norm.flavors[0] || '');
+      // Related products are returned as lightweight records. Hydrate their
+      // images exactly like product cards elsewhere in the storefront.
+      const relatedWithImages = await hydrateProductsWithImages(
+        (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
+        true
+      );
+      if (!active) return;
+      const relProds = relatedWithImages.map((item) => normalizeProduct(item, flavorCatalog));
+      setRelated(relProds);
+      setReviews(revData['hydra:member'] || []);
       } catch {
         if (active) setLoading(false);
       }
@@ -230,34 +172,6 @@ export const ProductDetailPage = () => {
     void loadProduct();
     return () => { active = false; };
   }, [selectedProductId]);
-
-  const handleFlavorSelect = async (flavor) => {
-    setSelectedFlavor(flavor.name);
-    const requestId = flavorImageRequestRef.current + 1;
-    flavorImageRequestRef.current = requestId;
-
-    const alreadyLoadedImage = resolveFlavorImage(product?.productImages, flavor.id);
-    if (alreadyLoadedImage) setActiveImage(alreadyLoadedImage);
-    if (flavor.id == null || !product?.id) return;
-
-    try {
-      const imageData = await productService.getImages({ 'flavor.id': flavor.id, itemsPerPage: 100 }, true);
-      if (flavorImageRequestRef.current !== requestId) return;
-
-      const flavorImages = (imageData['hydra:member'] || imageData.member || imageData.items || [])
-        .filter((image) => String(getProductImageProductId(image)) === String(product.id));
-      const flavorImage = resolveFlavorImage(flavorImages, flavor.id) || productImageUrl(flavorImages[0]);
-      if (flavorImage) setActiveImage(flavorImage);
-      if (flavorImages.length > 0) {
-        setProduct((current) => current ? {
-          ...current,
-          productImages: mergeGalleryImages(current.productImages, flavorImages),
-        } : current);
-      }
-    } catch {
-      // Keep the already-visible product image if this flavor gallery cannot load.
-    }
-  };
 
   useLayoutEffect(() => {
     const description = descriptionRef.current;
@@ -271,30 +185,6 @@ export const ProductDetailPage = () => {
     observer.observe(description);
     return () => observer.disconnect();
   }, [product?.longDescription, descriptionExpanded]);
-
-  useEffect(() => {
-    if (!imagePreviewOpen) return undefined;
-
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setImagePreviewOpen(false);
-    };
-    const previousOverflow = document.body.style.overflow;
-    const appRoot = document.getElementById('root');
-    const rootWasInert = appRoot?.hasAttribute('inert');
-    const previousAriaHidden = appRoot?.getAttribute('aria-hidden');
-
-    document.body.style.overflow = 'hidden';
-    appRoot?.setAttribute('inert', '');
-    appRoot?.setAttribute('aria-hidden', 'true');
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      window.removeEventListener('keydown', closeOnEscape);
-      document.body.style.overflow = previousOverflow;
-      if (!rootWasInert) appRoot?.removeAttribute('inert');
-      if (previousAriaHidden === null) appRoot?.removeAttribute('aria-hidden');
-      else appRoot?.setAttribute('aria-hidden', previousAriaHidden);
-    };
-  }, [imagePreviewOpen]);
 
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
@@ -329,17 +219,6 @@ export const ProductDetailPage = () => {
     return <div className="text-center py-20 text-gray-400">Produit introuvable.</div>;
   }
 
-  const selectedFlavorOption = product.flavorOptions.find((flavor) => flavor.name === selectedFlavor);
-  const flavorGalleryImages = selectedFlavorOption?.id != null
-    ? product.productImages.filter((image) => String(getProductImageFlavorId(image)) === String(selectedFlavorOption.id))
-    : [];
-  // Most products use one shared gallery and do not set `flavor` on image
-  // records. Only narrow the gallery when the API actually supplied images for
-  // the selected flavor; otherwise the valid product images would disappear.
-  const visibleGalleryImages = flavorGalleryImages.length > 0
-    ? flavorGalleryImages
-    : product.productImages;
-
   return (
     <div className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-10 2xl:px-14 space-y-16">
       <button onClick={() => navigateTo("shop")}
@@ -348,74 +227,56 @@ export const ProductDetailPage = () => {
         <ChevronLeft className="w-4 h-4" /> RETOUR À LA BOUTIQUE
       </button>
 
-      {/* Main Product Hero Section (2-Column Layout) */}
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
-        {/* Left Column: Vertical Thumbnails + Main Image */}
-        <div className="relative flex w-full flex-col-reverse items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-8 lg:col-span-7 xl:col-span-6 lg:flex-row">
+        {/* Left Image */}
+        <div className="relative flex items-center justify-center rounded-2xl border border-white/10 bg-[#1a1a1a] p-6 sm:p-8 lg:col-span-7 xl:col-span-6">
           {(product.badge || product.isNew || product.isOnSale) && (
-            <div className="absolute left-6 top-6 z-10 flex flex-wrap gap-2">
+            <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
               {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
               {product.isNew && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">NOUVEAU</span>}
               {product.isOnSale && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">REMISE</span>}
             </div>
           )}
-
-          {/* Vertical Thumbnail Column on the Left of Main Image */}
-          {visibleGalleryImages.length > 0 && (
-            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0 lg:w-20 lg:flex-col lg:overflow-visible lg:pt-10">
-              {visibleGalleryImages.map((img, index) => {
-                const imageSrc = productImageUrl(img) || product.image;
-                return (
-                  <button
-                    key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
-                    type="button"
-                    onClick={() => setActiveImage(imageSrc)}
-                    className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-20 sm:w-20 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
-                  >
-                    {imageSrc ? (
-                      <img src={imageSrc} alt="" className="w-full h-full object-contain" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">Image</div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Main Product Image Container */}
-          <div className="relative min-w-0 w-full flex-1 self-start lg:w-auto">
-            {activeImage || product.image ? (
-              <div className="relative w-full overflow-hidden" style={{ aspectRatio: activeImageAspectRatio || (5 / 6) }}>
+          <div className="w-full space-y-4">
+            <div className="w-full h-[30rem] sm:h-[34rem] flex items-center justify-center">
+              {activeImage || product.image ? (
                 <img
                   src={activeImage || product.image}
                   alt={product.name}
-                  className="absolute inset-0 h-full w-full transform object-contain transition-transform duration-500 hover:scale-105"
-                  onLoad={(event) => {
-                    const { naturalWidth, naturalHeight } = event.currentTarget;
-                    if (naturalWidth && naturalHeight) setActiveImageAspectRatio(naturalWidth / naturalHeight);
-                  }}
+                  className="w-full h-full object-contain p-2 sm:p-4 transform hover:scale-105 transition-transform duration-500"
                 />
-                <button
-                  type="button"
-                  onClick={() => setImagePreviewOpen(true)}
-                  className="absolute bottom-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-[#d90429] focus:outline-none focus:ring-2 focus:ring-white/80"
-                  aria-label="Agrandir l'image du produit"
-                  title="Agrandir l'image"
-                >
-                  <Search className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </div>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center rounded-xl border border-white/10 bg-[#111] text-gray-500 text-sm font-bold uppercase tracking-widest">
-                No picture
+              ) : (
+                <div className="w-full h-full flex items-center justify-center rounded-xl border border-white/10 bg-[#111] text-gray-500 text-sm font-bold uppercase tracking-widest">
+                  No picture
+                </div>
+              )}
+            </div>
+            {product.productImages.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                {product.productImages.map((img, index) => {
+                  const imageSrc = productImageUrl(img) || product.image;
+                  return (
+                    <button
+                      key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
+                      type="button"
+                      onClick={() => setActiveImage(imageSrc)}
+                      className={`w-16 h-16 sm:w-20 sm:h-20 bg-[#111] border rounded-lg p-1.5 overflow-hidden transition-colors ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
+                    >
+                      {imageSrc ? (
+                        <img src={imageSrc} alt="" className="w-full h-full object-contain" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">Image</div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Product Info & Cart Actions */}
-        <div className="space-y-8 lg:col-span-5 xl:col-span-4">
+        {/* Right Info */}
+        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
@@ -448,8 +309,8 @@ export const ProductDetailPage = () => {
           </div>
 
           {product.shortDescription && (
-            <div className="border-t border-b border-white/10 py-5">
-              <p className="text-sm text-gray-300 leading-7 sm:leading-8">{product.shortDescription}</p>
+            <div className="border-t border-b border-white/10 py-4">
+              <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{product.shortDescription}</p>
             </div>
           )}
 
@@ -460,16 +321,14 @@ export const ProductDetailPage = () => {
                   <span className="text-sm font-bold text-white">{formatMonthYear(product.dateProduit)}</span>
                 </div>
               )}
-              {product.flavorOptions.length > 0 && (
+              {product.flavors.length > 0 && (
                 <>
                   <label className="text-xs font-heading font-bold text-gray-300 block uppercase">Saveur:</label>
                   <div className="flex flex-wrap gap-2">
-                    {product.flavorOptions.map((flavor, index) => (
-                      <button
-                        key={`${flavor.id ?? flavor.name}-${index}`}
-                        onClick={() => { void handleFlavorSelect(flavor); }}
-                        className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all ${selectedFlavor === flavor.name ? 'bg-[#d90429] text-white border-[#d90429]' : 'bg-[#1a1a1a] border-white/10 text-gray-300 hover:border-white/30'}`}
-                      >{flavor.name}</button>
+                    {product.flavors.map((f, index) => (
+                      <button key={`${f}-${index}`} onClick={() => setSelectedFlavor(f)}
+                        className={`px-4 py-2 rounded-lg border text-xs font-bold transition-all ${selectedFlavor === f ? 'bg-[#d90429] text-white border-[#d90429]' : 'bg-[#1a1a1a] border-white/10 text-gray-300 hover:border-white/30'}`}
+                      >{f}</button>
                     ))}
                   </div>
                 </>
@@ -477,9 +336,8 @@ export const ProductDetailPage = () => {
             </div>
           )}
 
-          {/* Quantity Selector & Add to Cart on the SAME ROW */}
-          <div className="flex flex-nowrap items-center gap-4 pt-4">
-            <div className="flex shrink-0 items-center border border-white/10 rounded-xl bg-[#1a1a1a] px-3 h-[52px]">
+          <div className="flex items-center gap-4 pt-4">
+            <div className="flex items-center border border-white/10 rounded-xl bg-[#1a1a1a] px-3 py-3">
               <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="text-gray-400 hover:text-white px-2 font-bold">-</button>
               <span className="w-8 text-center font-bold text-white text-sm">{quantity}</span>
               <button onClick={() => setQuantity(quantity + 1)} className="text-gray-400 hover:text-white px-2 font-bold">+</button>
@@ -487,7 +345,7 @@ export const ProductDetailPage = () => {
             <button
               onClick={() => addToCart(product, selectedFlavor, selectedSize, quantity)}
               disabled={!product.inStock}
-              className="min-w-0 flex-1 bg-[#d90429] hover:bg-[#b0021f] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-heading font-black text-xs uppercase tracking-wider h-[52px] px-6 rounded-xl shadow-xl shadow-[#d90429]/30 flex items-center justify-center gap-3 transition-all"
+              className="flex-1 bg-[#d90429] hover:bg-[#b0021f] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-heading font-black text-xs uppercase tracking-wider py-4 px-6 rounded-xl shadow-xl shadow-[#d90429]/30 flex items-center justify-center gap-3 transition-all"
             >
               <ShoppingCart className="w-5 h-5" /> {product.inStock ? 'AJOUTER AU PANIER' : 'INDISPONIBLE'}
             </button>
@@ -496,34 +354,33 @@ export const ProductDetailPage = () => {
         </div>
 
         <aside className="space-y-4 lg:col-span-12 xl:col-span-2" aria-label="Services et offres Protein Store Tunisia">
-        <div className="overflow-hidden rounded-2xl border border-white/15 bg-[#0d1013] shadow-xl shadow-black/30">
-          {[
-            { Icon: Truck, title: "Livraison offerte", detail: `dès ${FREE_SHIPPING_THRESHOLD} TND` },
-            { Icon: ShieldCheck, title: "Paiement", detail: "à la livraison" },
-            { Icon: Headphones, title: "Service client", detail: "à votre écoute" },
-            { Icon: BadgeCheck, title: "Produits", detail: "100% originaux" },
-          ].map(({ Icon, title, detail }, index) => (
-            <div key={title} className={`flex min-h-[82px] items-center gap-4 px-5 py-4 ${index > 0 ? 'border-t border-white/10' : ''}`}>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/30 bg-[#d90429]/10"><Icon className="h-6 w-6 text-[#ff3457]" strokeWidth={1.9} /></span>
-              <p className="text-sm leading-snug text-gray-200"><span className="font-extrabold">{title}</span><br /><span className="text-gray-400">{detail}</span></p>
-            </div>
-          ))}
-        </div>
+          <div className="overflow-hidden rounded-2xl border border-white/15 bg-[#0d1013] shadow-xl shadow-black/30">
+            {[
+              { Icon: Truck, title: "Livraison offerte", detail: `dès ${FREE_SHIPPING_THRESHOLD} TND` },
+              { Icon: ShieldCheck, title: "Paiement", detail: "à la livraison" },
+              { Icon: Headphones, title: "Service client", detail: "à votre écoute" },
+              { Icon: BadgeCheck, title: "Produits", detail: "100% originaux" },
+            ].map(({ Icon, title, detail }, index) => (
+              <div key={title} className={`flex min-h-[82px] items-center gap-4 px-5 py-4 ${index > 0 ? "border-t border-white/10" : ""}`}>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#f0143c]/30 bg-[#d90429]/10"><Icon className="h-6 w-6 text-[#ff3457]" strokeWidth={1.9} /></span>
+                <p className="text-sm leading-snug text-gray-200"><span className="font-extrabold">{title}</span><br /><span className="text-gray-400">{detail}</span></p>
+              </div>
+            ))}
+          </div>
 
-          {/* Pack Builder Promo Banner */}
           <button
-        type="button"
-        onClick={() => navigateTo("pack-builder")}
-        className="group relative flex min-h-[205px] w-full items-center overflow-hidden rounded-2xl border border-[#ff2349]/80 bg-gradient-to-br from-[#4b0715] via-[#1c080e] to-[#080808] p-5 text-left shadow-xl shadow-[#d90429]/10 transition-all hover:-translate-y-1 hover:border-[#ff526d] hover:shadow-[#d90429]/20"
-        aria-label="Découvrir les packs exclusifs"
-      >
-        <div className="relative z-10 max-w-[78%]">
-          <p className="text-sm font-black uppercase leading-tight text-white">Composez<br />votre pack</p>
-          <p className="mt-2 text-xs font-bold uppercase leading-tight text-gray-200">Découvrez nos packs exclusifs</p>
-          <span className="mt-2 block text-3xl font-black leading-none text-[#ff3457]">JUSQU’À 20%</span>
-        </div>
-        <div className="absolute -right-3 top-4 text-[#ff2349]/25 transition-transform group-hover:scale-110"><PackageOpen size={132} strokeWidth={1.1} /></div>
-        <span className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#f0143c] text-white shadow-lg shadow-[#f0143c]/30"><ArrowRight size={20} /></span>
+            type="button"
+            onClick={() => navigateTo("pack-builder")}
+            className="group relative flex min-h-[205px] w-full items-center overflow-hidden rounded-2xl border border-[#ff2349]/80 bg-gradient-to-br from-[#4b0715] via-[#1c080e] to-[#080808] p-5 text-left shadow-xl shadow-[#d90429]/10 transition-all hover:-translate-y-1 hover:border-[#ff526d] hover:shadow-[#d90429]/20"
+            aria-label="Découvrir les packs exclusifs"
+          >
+            <div className="relative z-10 max-w-[78%]">
+              <p className="text-sm font-black uppercase leading-tight text-white">Composez<br />votre pack</p>
+              <p className="mt-3 text-[11px] font-bold uppercase leading-tight text-gray-200">Découvrez nos packs exclusifs</p>
+              <span className="mt-3 block text-3xl font-black leading-none text-[#ff3457]">JUSQU’À 20%</span>
+            </div>
+            <div className="absolute -right-3 top-4 text-[#ff2349]/25 transition-transform group-hover:scale-110"><PackageOpen size={132} strokeWidth={1.1} /></div>
+            <span className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-[#f0143c] text-white shadow-lg shadow-[#f0143c]/30"><ArrowRight size={20} /></span>
           </button>
         </aside>
       </div>
@@ -560,7 +417,7 @@ export const ProductDetailPage = () => {
           <p
             ref={descriptionRef}
             style={descriptionExpanded ? undefined : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 10, overflow: 'hidden' }}
-            className="text-sm text-gray-300 leading-7 sm:leading-8 whitespace-pre-line"
+            className="text-sm text-gray-300 leading-relaxed whitespace-pre-line"
           >
             {product.longDescription}
           </p>
@@ -571,7 +428,7 @@ export const ProductDetailPage = () => {
           )}
 
           {product.productOptions && (
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2">
               {[
                 ['Pointures / tailles', product.productOptions.sizes],
                 ['Couleurs', product.productOptions.colors],
@@ -650,38 +507,6 @@ export const ProductDetailPage = () => {
             {related.map(p => <ProductCard key={p.id} product={p} />)}
           </div>
         </div>
-      )}
-
-      {imagePreviewOpen && (activeImage || product.image) && createPortal(
-        <div
-          role="presentation"
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
-          onClick={() => setImagePreviewOpen(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Aperçu de ${product.name}`}
-            className="relative flex max-h-full w-full max-w-5xl items-center justify-center rounded-2xl border border-white/15 bg-[#111] p-4 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setImagePreviewOpen(false)}
-              className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-[#d90429] focus:outline-none focus:ring-2 focus:ring-white/80"
-              aria-label="Fermer l'aperçu"
-              autoFocus
-            >
-              <X className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <img
-              src={activeImage || product.image}
-              alt={product.name}
-              className="max-h-[85vh] max-w-full object-contain"
-            />
-          </section>
-        </div>,
-        document.body
       )}
     </div>
   );

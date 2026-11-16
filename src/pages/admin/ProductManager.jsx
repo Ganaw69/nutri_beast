@@ -239,6 +239,7 @@ export const ProductManager = () => {
   const [productImages, setProductImages] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [detailsModal, setDetailsModal] = useState(null);
   const [selectedDetailImage, setSelectedDetailImage] = useState(0);
 
@@ -466,9 +467,10 @@ export const ProductManager = () => {
     setPage(1);
   }, [searchTerm, selectedParentCategoryId, selectedSubCategoryId]);
 
-  const openAdd = () => { setError(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setFlavorImageFiles({}); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setFlavorImageFiles({}); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
+    setNotice('');
     setFlavorError('');
     setNewFlavorName('');
     setFlavorSearch('');
@@ -560,8 +562,10 @@ export const ProductManager = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
     setError('');
+    setNotice('');
     try {
       if (form.hasFlavors && form.flavors.length === 0) throw new Error('Sélectionnez au moins une saveur ou choisissez « Non ».');
       if (form.hasFlavors) {
@@ -601,6 +605,10 @@ export const ProductManager = () => {
       // API Platform may return the identifier only through the resource IRI.
       // Never upload images without the id of the product just saved.
       const savedId = saved?.id ?? iriToId(saved?.['@id']) ?? modal.id;
+      if (!savedId) {
+        throw new Error("Le serveur n’a pas renvoyé l’identifiant du produit. Vérifiez la liste des produits avant de réessayer.");
+      }
+      if (modal.mode === 'add') setModal({ mode: 'edit', id: savedId });
       if (savedId && !form.hasFlavors && imageFiles.length > 0) {
         const selectedPrimaryIndex = Math.max(0, Math.min(primaryImageIndex, imageFiles.length - 1));
         let selectedPrimaryImage = null;
@@ -655,9 +663,13 @@ export const ProductManager = () => {
         return page === 1 ? [savedProduct, ...current].slice(0, 20) : current;
       });
       setTotal((current) => products.some((product) => String(product.id) === String(savedId)) ? current : current + 1);
+      setNotice(modal.mode === 'add' ? 'Produit créé avec succès.' : 'Modifications enregistrées avec succès.');
       void fetchProducts({ silent: true });
-    } catch (e) { setError(e.message); }
-    setSaving(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Une erreur est survenue pendant l’enregistrement.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const refreshProductImages = async (productId) => {
@@ -802,6 +814,8 @@ export const ProductManager = () => {
         </button>
       </div>
 
+      {notice && <div role="status" aria-live="polite" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</div>}
+
       <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl overflow-hidden">
         <div className="p-4 border-b border-[#2a2a2a] flex gap-3 bg-[#1a1a1a]">
           <div className="relative flex-1 max-w-xs">
@@ -944,10 +958,9 @@ export const ProductManager = () => {
           <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[92vh]">
             <div className="flex justify-between items-center p-6 border-b border-[#2a2a2a]">
               <h2 className="text-xl font-bold text-white">{modal.mode === 'add' ? 'Nouveau Produit' : 'Modifier le Produit'}</h2>
-              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-white p-1"><X size={20} /></button>
+              <button type="button" onClick={() => setModal(null)} className="text-gray-400 hover:text-white p-1"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-5">
-              {error && <div className="text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg p-3">{error}</div>}
+            <form id="product-edit-form" onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-5">
               
               <div>
                 <label className={labelCls}>Nom *</label>
@@ -1314,10 +1327,11 @@ export const ProductManager = () => {
               </div>
               {form.packing && <div className="mt-4 max-w-xs"><label className={labelCls}>Montant de remise pack (DT)</label><input type="number" min="0" step="0.01" value={form.montantRemise} onChange={e => setForm(p => ({ ...p, montantRemise: e.target.value }))} className={inputCls} placeholder="0.00" /><p className="mt-1 text-[11px] text-gray-500">Remise fixe appliquée par le backend lors de la composition d’un pack.</p></div>}
             </form>
-            <div className="p-5 border-t border-[#2a2a2a] flex gap-3 justify-end bg-[#1a1a1a] rounded-b-xl">
-              <button onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
-              <button onClick={handleSave} disabled={saving} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Enregistrer
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2a2a2a] bg-[#1a1a1a] p-5">
+              {error && <p role="alert" className="mr-auto w-full text-sm text-red-300 sm:w-auto">{error}</p>}
+              <button type="button" onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
+              <button type="submit" form="product-edit-form" disabled={saving} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
+                {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
               </button>
             </div>
           </div>
