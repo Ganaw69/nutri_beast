@@ -125,7 +125,6 @@ export const ProductDetailPage = () => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState('');
-  const [activeImageAspectRatio, setActiveImageAspectRatio] = useState(null);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [descriptionHasMore, setDescriptionHasMore] = useState(false);
@@ -146,7 +145,6 @@ export const ProductDetailPage = () => {
     flavorImageRequestRef.current += 1;
     setLoading(true);
     setProduct(null);
-    setActiveImageAspectRatio(null);
     setDescriptionExpanded(false);
 
     const loadProduct = async () => {
@@ -362,7 +360,7 @@ export const ProductDetailPage = () => {
 
           {/* Vertical Thumbnail Column on the Left of Main Image */}
           {visibleGalleryImages.length > 0 && (
-            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0 lg:w-20 lg:flex-col lg:overflow-visible lg:pt-10">
+            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0 lg:w-24 lg:flex-col lg:overflow-visible lg:pt-10">
               {visibleGalleryImages.map((img, index) => {
                 const imageSrc = productImageUrl(img) || product.image;
                 return (
@@ -370,7 +368,7 @@ export const ProductDetailPage = () => {
                     key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
                     type="button"
                     onClick={() => setActiveImage(imageSrc)}
-                    className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-20 sm:w-20 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
+                    className={`h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-24 sm:w-24 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
                   >
                     {imageSrc ? (
                       <img src={imageSrc} alt="" className="w-full h-full object-contain" />
@@ -386,15 +384,11 @@ export const ProductDetailPage = () => {
           {/* Main Product Image Container */}
           <div className="relative min-w-0 w-full flex-1 self-start lg:w-auto">
             {activeImage || product.image ? (
-              <div className="relative w-full overflow-hidden" style={{ aspectRatio: activeImageAspectRatio || (5 / 6) }}>
+              <div className="relative aspect-square w-full overflow-hidden">
                 <img
                   src={activeImage || product.image}
                   alt={product.name}
                   className="absolute inset-0 h-full w-full transform object-contain transition-transform duration-500 hover:scale-105"
-                  onLoad={(event) => {
-                    const { naturalWidth, naturalHeight } = event.currentTarget;
-                    if (naturalWidth && naturalHeight) setActiveImageAspectRatio(naturalWidth / naturalHeight);
-                  }}
                 />
                 <button
                   type="button"
