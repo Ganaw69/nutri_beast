@@ -511,7 +511,7 @@ export const Navbar = () => {
     setSearchSuggestions([]);
     setSearchSurface(null);
     setShowSearchModal(false);
-    viewProductDetails(product.id);
+    void viewProductDetails(product);
   };
 
   return (

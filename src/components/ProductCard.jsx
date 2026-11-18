@@ -20,7 +20,7 @@ export const ProductCard = ({ product }) => {
     <article className="group flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#111111] font-heading shadow-lg shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-xl hover:shadow-black/35">
       {/* Uniform image canvas keeps the source image and its original background intact. */}
       <div
-        onClick={() => viewProductDetails(product.id)}
+        onClick={() => { void viewProductDetails(product); }}
         className="relative flex aspect-square w-full cursor-pointer items-center justify-center overflow-hidden bg-[#f0f0f0] p-5 sm:p-6"
       >
         {/* Badges on top right */}
@@ -48,6 +48,8 @@ export const ProductCard = ({ product }) => {
           <img
             src={product.image}
             alt={product.name}
+            width={1080}
+            height={1080}
             loading="lazy"
             decoding="async"
             className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.025]"
@@ -66,7 +68,7 @@ export const ProductCard = ({ product }) => {
             {product.category}
           </span>
           <h3
-            onClick={() => viewProductDetails(product.id)}
+            onClick={() => { void viewProductDetails(product); }}
             className="line-clamp-2 min-h-10 cursor-pointer text-sm font-black uppercase leading-5 text-white transition-colors hover:text-[#ff526d]"
           >
             {product.name}

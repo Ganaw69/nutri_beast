@@ -71,7 +71,7 @@ const BackToTopButton = () => {
 };
 
 const SEO = () => {
-  const { activeTab, selectedProductId } = useCart();
+  const { activeTab, selectedProductId, selectedProductSlug } = useCart();
   const metadata = React.useMemo(() => ({
     home: ["Protein Store Tunisia | Nutrition sportive en Tunisie", "Compléments alimentaires et nutrition sportive livrés en Tunisie : whey, créatine, pré-workout, mass gainers et packs exclusifs."],
     shop: ["Boutique de compléments alimentaires en Tunisie | Protein Store", "Découvrez nos compléments alimentaires et produits de nutrition sportive : whey, créatine, pré-workout et plus."],
@@ -92,7 +92,9 @@ const SEO = () => {
     packs: "/packs",
     recipes: "/recipes",
     blog: "/blog",
-    "product-detail": selectedProductId ? `/#product/${selectedProductId}` : "/",
+    "product-detail": selectedProductId
+      ? `/#product/${encodeURIComponent(selectedProductSlug || selectedProductId)}`
+      : "/",
     faq: "/faq",
     "order-tracking": "/order-tracking",
     "privacy-policy": "/privacy-policy",

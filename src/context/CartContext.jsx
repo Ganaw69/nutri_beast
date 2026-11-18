@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { couponService, productVariantService, resolvePackImage, resolveProductImage } from "../services/api";
+import { couponService, productService, productVariantService, resolvePackImage, resolveProductImage } from "../services/api";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 
 const CartContext = createContext();
@@ -24,6 +24,13 @@ const CLIENT_TABS = new Set([
 ]);
 
 const validId = (value) => value !== undefined && value !== null && value !== "";
+const productSlug = (product) =>
+  String(product?.slug || product?.name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 const normaliseShopRouteFilters = (filters = {}) => ({
   filter: String(filters.filter ?? filters.is_new ?? "").trim(),
@@ -61,7 +68,9 @@ const readClientRoute = () => {
 
   const [tab, id] = route.split("/");
   if ((tab === "product" || tab === "product-detail") && validId(id)) {
-    return { tab: "product-detail", productId: id };
+    return /^\d+$/.test(id)
+      ? { tab: "product-detail", productId: id }
+      : { tab: "product-detail", productSlug: id };
   }
   if (tab === "pack" && validId(id)) {
     return { tab: "pack-detail", packId: id };
@@ -92,9 +101,9 @@ const readClientRoute = () => {
   return CLIENT_TABS.has(tab) ? { tab } : { tab: "home" };
 };
 
-const routeHash = (tab, id, routeFilters) => {
+const routeHash = (tab, id, routeFilters, slug) => {
   if (tab === "home") return "";
-  if (tab === "product-detail" && validId(id)) return `#product/${id}`;
+  if (tab === "product-detail" && validId(id)) return `#product/${encodeURIComponent(slug || id)}`;
   if (tab === "pack-detail" && validId(id)) return `#pack/${id}`;
   if (tab === "brand-detail" && validId(id)) return `#brand/${id}`;
   if (tab === "blog-article" && validId(id)) return `#article/${id}`;
@@ -119,6 +128,7 @@ export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [activeTab, setActiveTab] = useState(initialRoute.tab);
   const [selectedProductId, setSelectedProductId] = useState(initialRoute.productId || null);
+  const [selectedProductSlug, setSelectedProductSlug] = useState(initialRoute.productSlug || null);
   const [selectedPackId, setSelectedPackId] = useState(initialRoute.packId || null);
   const [selectedBrandId, setSelectedBrandId] = useState(initialRoute.brandId || null);
   const [customPackDraft, setCustomPackDraft] = useState([]);
@@ -156,18 +166,43 @@ export const CartProvider = ({ children }) => {
     scrollToTop();
   }, [activeTab]);
 
-  const updateRoute = (tab, id, filters) => {
-    const nextHash = routeHash(tab, id, filters);
+  const updateRoute = (tab, id, filters, slug) => {
+    const nextHash = routeHash(tab, id, filters, slug);
     if (window.location.hash !== nextHash) {
       window.history.pushState(null, "", nextHash || window.location.pathname + window.location.search);
     }
   };
 
   useEffect(() => {
+    let active = true;
+    let routeRequest = 0;
+
     const syncRouteFromUrl = () => {
+      const request = ++routeRequest;
       const route = readClientRoute();
       setActiveTab(route.tab);
       setSelectedProductId(route.productId || null);
+      setSelectedProductSlug(route.productSlug || null);
+      if (route.productSlug) {
+        setSelectedProductId(null);
+        const resolveSlug = async () => {
+          let product = null;
+          try {
+            product = await productService.getOne(route.productSlug, true);
+          } catch {
+            const collection = await productService.getAllPages({}, true);
+            const products = collection["hydra:member"] || collection.member || collection.items || [];
+            product = products.find((item) => productSlug(item) === route.productSlug) || null;
+          }
+          if (!active || request !== routeRequest) return;
+          setSelectedProductId(product?.id ?? route.productSlug);
+          if (product) setSelectedProductSlug(productSlug(product));
+        };
+        void resolveSlug().catch((error) => {
+          console.error("Unable to resolve product URL.", error);
+          if (active && request === routeRequest) setSelectedProductId(route.productSlug);
+        });
+      }
       setSelectedPackId(route.packId || null);
       setSelectedBrandId(route.brandId || null);
       setSelectedArticleId(route.articleId || null);
@@ -178,7 +213,9 @@ export const CartProvider = ({ children }) => {
 
     window.addEventListener("hashchange", syncRouteFromUrl);
     window.addEventListener("popstate", syncRouteFromUrl);
+    syncRouteFromUrl();
     return () => {
+      active = false;
       window.removeEventListener("hashchange", syncRouteFromUrl);
       window.removeEventListener("popstate", syncRouteFromUrl);
     };
@@ -199,7 +236,7 @@ export const CartProvider = ({ children }) => {
         );
         if (response["hydra:member"].length > 0) {
           showToast("Choisissez une variante sur la fiche du produit.");
-          viewProductDetails(product.id);
+          viewProductDetails(product);
           return false;
         }
       } catch {
@@ -435,11 +472,26 @@ export const CartProvider = ({ children }) => {
     return true;
   };
 
-  const viewProductDetails = (productId) => {
+  const viewProductDetails = async (productOrId) => {
+    let product = typeof productOrId === "object" && productOrId !== null ? productOrId : null;
+    const productId = product?.id ?? productOrId;
+    if (!product?.name || !productId) {
+      try {
+        product = await productService.getOne(productId, true);
+      } catch (error) {
+        console.error("Unable to open product details.", error);
+        showToast("Impossible d’ouvrir la fiche de ce produit.");
+        return false;
+      }
+    }
+
+    const slug = productSlug(product);
     setSelectedProductId(productId);
+    setSelectedProductSlug(slug || null);
     setActiveTab("product-detail");
-    updateRoute("product-detail", productId);
+    updateRoute("product-detail", productId, undefined, slug);
     scrollToTop();
+    return true;
   };
 
   const viewPackDetails = (packId) => {
@@ -519,6 +571,7 @@ export const CartProvider = ({ children }) => {
         activeTab,
         navigateTo,
         selectedProductId,
+        selectedProductSlug,
         viewProductDetails,
         selectedPackId,
         viewPackDetails,

@@ -323,12 +323,12 @@ export const CalculatorPage = () => {
                 <article key={id} className="flex items-center justify-between gap-6 rounded-lg bg-white p-6 text-black shadow-md">
                   <button
                     type="button"
-                    onClick={() => viewProductDetails(product.id)}
+                    onClick={() => { void viewProductDetails(product); }}
                     className="flex h-28 w-28 shrink-0 items-center justify-center rounded-md bg-[#f4f4f4] p-2"
                     aria-label={`Voir ${product.name}`}
                   >
                     {product.image ? (
-                      <img src={product.image} alt={product.name} className="h-full w-full object-contain mix-blend-multiply" />
+                      <img src={product.image} alt={product.name} width={1080} height={1080} className="h-full w-full object-contain mix-blend-multiply" />
                     ) : (
                       <span className="text-center text-[10px] font-black uppercase tracking-wider text-gray-500">Image indisponible</span>
                     )}
@@ -337,7 +337,7 @@ export const CalculatorPage = () => {
                     <span className="inline-block rounded-xs bg-[#d90429] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white">{label}</span>
                     <button
                       type="button"
-                      onClick={() => viewProductDetails(product.id)}
+                      onClick={() => { void viewProductDetails(product); }}
                       className="block text-left text-lg font-black uppercase leading-tight text-black transition-colors hover:text-[#d90429]"
                     >
                       {product.name}

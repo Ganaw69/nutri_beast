@@ -277,7 +277,7 @@ export const CoachIaPage = () => {
                     href={productHref || "#"}
                     onClick={(event) => {
                       event.preventDefault();
-                      if (productId) viewProductDetails(productId);
+                      if (productId) void viewProductDetails({ ...product, id: productId, name: productName });
                     }}
                     className="flex items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
                     aria-label={`Voir le produit ${productName}`}
