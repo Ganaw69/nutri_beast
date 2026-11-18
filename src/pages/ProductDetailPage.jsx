@@ -609,9 +609,9 @@ export const ProductDetailPage = () => {
       {/* Main Product Hero Section (2-Column Layout) */}
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Column: Vertical Thumbnails + Main Image */}
-        <div className="relative flex w-full flex-col items-start gap-3 overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] lg:col-span-6 xl:col-span-5">
+        <div className="relative flex w-full flex-col-reverse items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-8 lg:col-span-7 xl:col-span-6 lg:flex-row">
           {(product.badge || product.isNew || product.isOnSale) && (
-            <div className="absolute right-6 top-6 z-10 flex flex-wrap gap-2">
+            <div className="absolute left-6 top-6 z-10 flex flex-wrap gap-2">
               {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
               {product.isNew && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">NOUVEAU</span>}
               {product.isOnSale && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">REMISE</span>}
@@ -620,7 +620,7 @@ export const ProductDetailPage = () => {
 
           {/* Vertical Thumbnail Column on the Left of Main Image */}
           {visibleGalleryImages.length > 0 && (
-            <div className="flex w-full flex-row gap-3 overflow-x-auto px-3 pt-3 sm:px-5 sm:pt-5 lg:px-4 lg:pt-4">
+            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0 lg:w-24 lg:flex-col lg:overflow-visible lg:pt-10">
               {visibleGalleryImages.map((img, index) => {
                 const imageSrc = productImageUrl(img) || product.image;
                 return (
@@ -628,7 +628,7 @@ export const ProductDetailPage = () => {
                     key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
                     type="button"
                     onClick={() => setActiveImage(imageSrc)}
-                    className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-20 sm:w-20 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
+                    className={`h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-24 sm:w-24 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
                   >
                     {imageSrc ? (
                       <img src={imageSrc} alt="" className="w-full h-full object-contain" />
@@ -642,9 +642,9 @@ export const ProductDetailPage = () => {
           )}
 
           {/* Main Product Image Container */}
-          <div className="relative min-w-0 w-full self-start">
+          <div className="relative min-w-0 w-full flex-1 self-start lg:w-auto">
             {activeImage || product.image ? (
-              <div className="relative aspect-square w-full max-w-[1080px] overflow-hidden rounded-b-2xl">
+              <div className="relative aspect-square w-full max-w-[1080px] overflow-hidden">
                 <img
                   src={activeImage || product.image}
                   alt={product.name}
@@ -671,7 +671,7 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* Right Column: Product Info & Cart Actions */}
-        <div className="space-y-6 lg:col-span-6 xl:col-span-5">
+        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
