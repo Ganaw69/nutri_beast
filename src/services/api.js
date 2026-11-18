@@ -1826,8 +1826,12 @@ export const brandService = {
     }
     return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
   },
-  async getOne(id, skipAuth = false) {
-    return normalizeBrand(await apiFetch(`/brands/${id}`, {}, false, skipAuth));
+  async getOne(id, skipAuth = false, fresh = false) {
+    const path = `/brands/${id}${fresh ? `?_=${Date.now()}` : ''}`;
+    const data = fresh
+      ? await requestApi(path, { cache: 'no-store' }, false, skipAuth)
+      : await apiFetch(path, {}, false, skipAuth);
+    return normalizeBrand(data);
   },
   async create(data, logoFile = null) {
     const formData = new FormData();

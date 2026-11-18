@@ -82,7 +82,7 @@ export const BrandManager = () => {
         if (logoFile) {
           await brandService.uploadLogo(brandId, logoFile);
         }
-        savedBrand = await brandService.getOne(brandId);
+        savedBrand = await brandService.getOne(brandId, false, true);
         const unpersistedFields = ['name', 'slug', 'description', 'website'].filter((field) =>
           String(savedBrand?.[field] ?? '').trim() !== String(payload[field] ?? '').trim()
         );
