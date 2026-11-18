@@ -289,16 +289,32 @@ export const Navbar = () => {
   const navigationCategories = useMemo(() => {
     const hiddenIds = new Set((categoryNavigation?.hiddenTopLevelCategoryIds || []).map(String));
     const orderedIds = (categoryNavigation?.topLevelOrder || []).map(String);
-    const topLevel = categories.filter((category) => !hiddenIds.has(String(category.id)));
+    const categoryKey = (name) => normaliseSearchText(name).replace(/[^a-z0-9]/g, "");
+    const canonicalCategories = categoryStrip.map(({ id, label }) => {
+      const key = categoryKey(label);
+      const category = [...categories, ...shopCategories].find(
+        (item) => categoryKey(item.name) === key
+      );
+
+      if (category) {
+        return { ...category, label, canonicalId: id };
+      }
+
+      return id === "health"
+        ? { id: "health", name: label, label, children: [], navigationSearch: "vitamin", canonicalId: id }
+        : null;
+    }).filter(Boolean);
+    const topLevel = canonicalCategories.filter(
+      (category) => category.canonicalId === "health" || !hiddenIds.has(String(category.id))
+    );
     const byId = new Map(topLevel.map((category) => [String(category.id), category]));
     const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
     const remaining = topLevel.filter((category) => !orderedIds.includes(String(category.id)));
     return [...ordered, ...remaining].map((category) => ({
       ...category,
-      // The category entity exposes `name`; the original navbar expected `label`.
-      label: category.name,
+      label: category.label || category.name,
     }));
-  }, [categories, categoryNavigation]);
+  }, [categories, shopCategories, categoryNavigation, categoryStrip]);
 
   const mobileCategories = useMemo(
     () => navigationCategories.filter((category) => {
@@ -366,6 +382,11 @@ export const Navbar = () => {
   // Parent categories filter the complete branch; the submenu still lets
   // visitors narrow the results to a child category.
   const handleRootCategoryClick = (category) => {
+    if (category.navigationSearch) {
+      navigateShop(category.navigationSearch);
+      return;
+    }
+
     navigateToCategory(category.id);
     if (category.children?.length > 0) {
       setOpenCategoryId((current) => current === category.id ? null : category.id);
@@ -376,6 +397,12 @@ export const Navbar = () => {
     if (category.children?.length > 0) {
       event.preventDefault();
       setOpenCategoryId((current) => current === category.id ? null : category.id);
+      return;
+    }
+
+    if (category.navigationSearch) {
+      event.preventDefault();
+      navigateShop(category.navigationSearch);
       return;
     }
 
