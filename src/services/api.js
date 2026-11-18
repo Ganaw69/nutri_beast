@@ -477,6 +477,13 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
     demoStore.brands.unshift(item);
     return clone(item);
   }
+  if (/^\/brands\/[^/]+\/upload-logo$/.test(pathname) && method === 'POST') {
+    const id = pathname.split('/').at(-2);
+    const item = findDemoEntity('brands', id);
+    if (!item) return null;
+    item.logo = body.logoFile?.name || item.logo;
+    return clone(item);
+  }
   if (pathname.startsWith('/brands/') && method === 'PATCH') {
     const item = findDemoEntity('brands', pathname.split('/').pop());
     if (!item) return null;
@@ -1574,7 +1581,7 @@ export const productService = {
     if (assignedProductId != null && String(assignedProductId) !== String(productId)) {
       throw new Error("L'image a été associée au mauvais produit.");
     }
-    const assignedVariantId = getRelationId(image?.variant ?? image?.variantId ?? image?.variant_id);
+    const assignedVariantId = iriToId(image?.variant ?? image?.variantId ?? image?.variant_id);
     if (variantId != null && assignedVariantId != null && String(assignedVariantId) !== String(variantId)) {
       throw new Error("L'image a été associée à la mauvaise variante.");
     }
@@ -1823,18 +1830,21 @@ export const brandService = {
     return normalizeBrand(await apiFetch(`/brands/${id}`, {}, false, skipAuth));
   },
   async create(data) {
-    const isMultipart = data instanceof FormData;
-    return apiFetch('/brands', { method: 'POST', body: isMultipart ? data : JSON.stringify(data) }, isMultipart);
+    return apiFetch('/brands', { method: 'POST', body: JSON.stringify(data) });
   },
   async update(id, data) {
-    const isMultipart = data instanceof FormData;
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
-      ...(isMultipart ? {} : { headers: { 'Content-Type': 'application/merge-patch+json' } }),
-      body: isMultipart ? data : JSON.stringify(data),
-    }, isMultipart);
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
     clearProductReadCache();
     return result;
+  },
+  async uploadLogo(id, file) {
+    const formData = new FormData();
+    formData.append('logoFile', file);
+    return apiFetch(`/brands/${id}/upload-logo`, { method: 'POST', body: formData }, true);
   },
   async delete(id) {
     return apiFetch(`/brands/${id}`, { method: 'DELETE' });

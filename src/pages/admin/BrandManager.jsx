@@ -61,15 +61,21 @@ export const BrandManager = () => {
   const handleSave = async (event) => {
     event.preventDefault(); setSaving(true); setError('');
     try {
-      const payload = new FormData();
-      payload.append('name', form.name.trim());
-      payload.append('slug', form.slug.trim() || slugify(form.name));
-      payload.append('description', form.description.trim());
-      payload.append('website', form.website.trim());
-      payload.append('isActive', String(form.isActive));
-      if (logoFile) payload.append('logoFile', logoFile);
-      if (modal.mode === 'add') await brandService.create(payload);
-      else await brandService.update(modal.id, payload);
+      const payload = {
+        name: form.name.trim(),
+        slug: form.slug.trim() || slugify(form.name),
+        description: form.description.trim(),
+        website: form.website.trim(),
+        isActive: form.isActive,
+      };
+      const brand = modal.mode === 'add'
+        ? await brandService.create(payload)
+        : await brandService.update(modal.id, payload);
+      if (logoFile) {
+        const brandId = modal.mode === 'add' ? getBrandId(brand) : modal.id;
+        if (!brandId) throw new Error('La marque a été enregistrée, mais son identifiant est introuvable pour téléverser le logo.');
+        await brandService.uploadLogo(brandId, logoFile);
+      }
       setModal(null); fetchBrands();
     } catch (requestError) {
       setError(requestError.message);
