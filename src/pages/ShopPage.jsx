@@ -4,7 +4,7 @@ import { useAdmin } from "../context/AdminContext";
 import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, Loader2 } from "lucide-react";
-import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems } from "../utils/categoryTree";
+import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems, mergeCategorySources } from "../utils/categoryTree";
 import { productMatchesSearch } from "../utils/productSearch";
 
 const sameId = (first, second) => String(first) === String(second);
@@ -136,16 +136,35 @@ export const ShopPage = () => {
 
   // Load filter options once
   useEffect(() => {
-    Promise.all([
-      categoryService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-      goalService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-      categoryService.getMain(true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([catData, goalData, mainCategoryData]) => {
-      setCategories(extractCategoryItems(catData));
+    let active = true;
+    const loadFilters = async () => {
+      const [categoryData, goalData, mainCategoryData] = await Promise.all([
+        categoryService.getAllPages({ isActive: true }, true).catch(() => ({ 'hydra:member': [] })),
+        goalService.getAll({ isActive: true, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
+        categoryService.getMain(true).catch(() => ({ 'hydra:member': [] })),
+      ]);
+      const rootCategories = extractCategoryItems(mainCategoryData);
+      const childResponses = await Promise.all(
+        rootCategories.map((category) => categoryService.getChildren(category.id).catch(() => ({ 'hydra:member': [] })))
+      );
+      const nestedCategories = [
+        ...rootCategories,
+        ...childResponses.flatMap(extractCategoryItems),
+      ];
+      const allCategories = mergeCategorySources(extractCategoryItems(categoryData), nestedCategories);
+      if (!active) return;
+
+      setCategories(allCategories);
       setGoals(goalData['hydra:member'] || []);
-      setMainCategoryIds(extractCategoryItems(mainCategoryData).map((category) => category.id));
+      const categoryRoots = rootCategories.length > 0
+        ? rootCategories
+        : buildCategoryTree(allCategories);
+      setMainCategoryIds(categoryRoots.map((category) => category.id));
       setMainCategoriesLoaded(true);
-    });
+    };
+
+    void loadFilters();
+    return () => { active = false; };
   }, []);
 
   const fetchProducts = useCallback(async () => {
