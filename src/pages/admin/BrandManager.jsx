@@ -69,18 +69,44 @@ export const BrandManager = () => {
         isActive: form.isActive,
       };
       let brandId = modal.mode === 'edit' ? modal.id : null;
+      let savedBrand;
       if (modal.mode === 'add') {
-        const createdBrand = await brandService.create(payload, logoFile);
-        brandId = getBrandId(createdBrand);
+        savedBrand = await brandService.create(payload, logoFile);
+        brandId = getBrandId(savedBrand);
         if (!brandId) {
           throw new Error('La marque a été créée, mais son identifiant est introuvable pour continuer.');
         }
-        setModal({ mode: 'edit', id: brandId, brand: createdBrand });
+        setModal({ mode: 'edit', id: brandId, brand: savedBrand });
       } else {
         await brandService.update(brandId, payload);
-        if (logoFile) await brandService.uploadLogo(brandId, logoFile);
+        if (logoFile) {
+          await brandService.uploadLogo(brandId, logoFile);
+        }
+        savedBrand = await brandService.getOne(brandId);
+        const unpersistedFields = ['name', 'slug', 'description', 'website'].filter((field) =>
+          String(savedBrand?.[field] ?? '').trim() !== String(payload[field] ?? '').trim()
+        );
+        if (unpersistedFields.length > 0) {
+          throw new Error(
+            `La modification a été acceptée, mais ces champs ne sont pas enregistrés : ${unpersistedFields.join(', ')}.`
+          );
+        }
       }
-      setModal(null); fetchBrands();
+      if (modal.mode === 'edit' && savedBrand && typeof savedBrand === 'object') {
+        setBrands((current) => current.map((brand) => (
+          String(getBrandId(brand)) === String(brandId)
+            ? {
+              ...brand,
+              ...savedBrand,
+              id: savedBrand.id ?? getBrandId(brand),
+              isActive: savedBrand.isActive ?? savedBrand.active ?? payload.isActive,
+            }
+            : brand
+        )));
+      } else {
+        await fetchBrands();
+      }
+      setModal(null);
     } catch (requestError) {
       setError(requestError.message);
     } finally { setSaving(false); }
