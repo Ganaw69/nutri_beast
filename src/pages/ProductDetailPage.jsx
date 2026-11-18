@@ -164,6 +164,7 @@ const normalizeProduct = (p, flavorCatalog = []) => {
   categoryId: getRelationId(p.category),
   brand: displayBrandName(p.brand),
   brandId: getRelationId(p.brand),
+  brandSlug: p.brand?.slug || p.brandSlug || '',
   price: parseFloat(p.price || 0),
   originalPrice: (isEnabledFlag(p.isOnSale) || (Number(p.salePrice) > 0 && Number(p.salePrice) < Number(p.price))) && p.salePrice ? parseFloat(p.price) : null,
   image: resolveProductImage(p, null),
@@ -703,7 +704,7 @@ export const ProductDetailPage = () => {
               <span className="h-5 w-1 shrink-0 rounded-sm bg-[#d90429]" aria-hidden="true" />
               <span className="font-medium text-gray-400">Brand:</span>
               {product.brandId ? (
-                <button type="button" onClick={() => viewBrandDetails(product.brandId)} className="ml-2 font-bold text-white transition-colors hover:text-[#ff7186]">
+                <button type="button" onClick={() => viewBrandDetails({ id: product.brandId, slug: product.brandSlug, name: product.brand })} className="ml-2 font-bold text-white transition-colors hover:text-[#ff7186]">
                   {product.brand}
                 </button>
               ) : (

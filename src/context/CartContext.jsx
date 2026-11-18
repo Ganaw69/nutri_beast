@@ -31,6 +31,13 @@ const productSlug = (product) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+const brandSlug = (brand) =>
+  String(brand?.slug || brand?.name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 const normaliseShopRouteFilters = (filters = {}) => ({
   filter: String(filters.filter ?? filters.is_new ?? "").trim(),
@@ -105,7 +112,7 @@ const routeHash = (tab, id, routeFilters, slug) => {
   if (tab === "home") return "";
   if (tab === "product-detail" && validId(id)) return `#product/${encodeURIComponent(slug || id)}`;
   if (tab === "pack-detail" && validId(id)) return `#pack/${id}`;
-  if (tab === "brand-detail" && validId(id)) return `#brand/${id}`;
+  if (tab === "brand-detail" && validId(id)) return `#brand/${encodeURIComponent(slug || id)}`;
   if (tab === "blog-article" && validId(id)) return `#article/${id}`;
   if (tab === "recipes" && validId(id)) return `#recipes/${id}`;
   if (tab === "shop") {
@@ -501,10 +508,15 @@ export const CartProvider = ({ children }) => {
     scrollToTop();
   };
 
-  const viewBrandDetails = (brandId) => {
+  const viewBrandDetails = (brandOrId, slug) => {
+    const brand = typeof brandOrId === "object" && brandOrId !== null ? brandOrId : null;
+    const reference = brand ? brand.id ?? brand["@id"] ?? brand.iri : brandOrId;
+    const match = String(reference ?? "").match(/\/(?:api\/)?brands\/([^/?#]+)\/?$/);
+    const brandId = match ? match[1] : reference;
+    const resolvedSlug = slug || brandSlug(brand);
     setSelectedBrandId(brandId);
     setActiveTab("brand-detail");
-    updateRoute("brand-detail", brandId);
+    updateRoute("brand-detail", brandId, undefined, resolvedSlug);
     scrollToTop();
   };
 

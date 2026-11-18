@@ -722,6 +722,7 @@ export const ProductManager = () => {
       }
       const payload = {
         ...form,
+        barcode: String(form.barcode || '').trim() || (creatingProduct ? undefined : null),
         // The API serializes these fields as `new` and `bestSeller`, while
         // writes use the entity property names mapped to the database columns.
         new: undefined,

@@ -24,6 +24,13 @@ const displayBrandName = (brand) => {
     .join(" ");
 };
 
+const brandSlug = (brand) => String(brand?.slug || brand?.name || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "");
+
 const isActive = (record) => record?.isActive !== false && record?.active !== false;
 const isAvailable = (product) => {
   if (!isActive(product)) return false;
@@ -104,21 +111,38 @@ export const BrandDetailPage = () => {
     setLoading(true);
     setError("");
 
-    Promise.all([
-      // Individual brand routes require an admin token on the current API,
-      // whereas the public collection exposes the logo used by customers.
-      brandService.getAllPages({}, true)
-        .then((data) => collectionItems(data).find((item) =>
-          String(idFromReference(item.id ?? item["@id"] ?? item.iri)) === String(selectedBrandId)
-          && isActive(item)
-        ) || null)
-        .catch(() => null),
-      productService.getAllPages({ isActive: true, "brand.id": selectedBrandId }, true),
-    ]).then(([brandData, productData]) => {
+    const loadBrand = async () => {
+      const isNumericId = /^\d+$/.test(String(selectedBrandId));
+      let brandData = null;
+      try {
+        // The public collection exposes brand details without requiring an admin token.
+        const data = await brandService.getAllPages({}, true);
+        brandData = collectionItems(data).find((item) =>
+          isActive(item) && (
+            String(idFromReference(item.id ?? item["@id"] ?? item.iri)) === String(selectedBrandId)
+            || brandSlug(item) === String(selectedBrandId)
+          )
+        ) || null;
+      } catch (requestError) {
+        if (!isNumericId) throw requestError;
+      }
+
+      if (!brandData && !isNumericId) throw new Error("Cette marque est introuvable.");
+      const resolvedBrandId = brandData
+        ? idFromReference(brandData.id ?? brandData["@id"] ?? brandData.iri)
+        : selectedBrandId;
+      const productData = await productService.getAllPages(
+        { isActive: true, "brand.id": resolvedBrandId },
+        true
+      );
+      return { brandData, productData, resolvedBrandId };
+    };
+
+    loadBrand().then(({ brandData, productData, resolvedBrandId }) => {
       if (!current) return;
 
       const availableProducts = brandData && !isActive(brandData) ? [] : collectionItems(productData).filter((product) =>
-        String(idFromReference(product.brand ?? product.brandId)) === String(selectedBrandId)
+        String(idFromReference(product.brand ?? product.brandId)) === String(resolvedBrandId)
         && isAvailable(product)
       );
 

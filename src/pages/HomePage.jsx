@@ -230,7 +230,8 @@ export const HomePage = () => {
       setSelectedShopCategoryIds([destination.value]);
       navigateTo('shop');
     } else if (destination.type === 'brand') {
-      viewBrandDetails(destination.value);
+      const brand = brands.find((item) => String(brandId(item)) === String(destination.value));
+      viewBrandDetails(brand || destination.value);
     } else if (destination.type === 'url') {
       window.location.assign(destination.value);
     } else if (destination.type === 'page') {
@@ -438,7 +439,7 @@ export const HomePage = () => {
                 {logoBrands.map((brand) => {
                   const logoPath = resolveBrandLogo(brand);
                   return (
-                    <button key={`${group}-${brand.id ?? brand.slug}`} type="button" onClick={() => viewBrandDetails(brandId(brand))} tabIndex={group === 1 ? -1 : 0} className="brand-logo-card" aria-label={`Découvrir ${brand.name}`}>
+                    <button key={`${group}-${brand.id ?? brand.slug}`} type="button" onClick={() => viewBrandDetails(brand)} tabIndex={group === 1 ? -1 : 0} className="brand-logo-card" aria-label={`Découvrir ${brand.name}`}>
                       <img src={logoPath} alt={group === 0 ? brand.name : ''} className="brand-logo-image" />
                     </button>
                   );
