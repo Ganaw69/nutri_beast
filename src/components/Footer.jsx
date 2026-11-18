@@ -167,7 +167,14 @@ Politique de confidentialité                </button>
         {/* Bottom Bar */}
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-4 font-bold tracking-wider">
           <p>© 2026 PROTEIN STORE TUNISIA. CONÇU POUR DÉPASSER.</p>
-          <p>CREATED BY HAIZ SOLUTIONS</p>
+          <a
+            href="https://www.instagram.com/haizsolutions/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-white"
+          >
+            CREATED BY HAIZ SOLUTIONS
+          </a>
           <div className="uppercase text-gray-400">
             PAIEMENTS 100% SÉCURISÉS EN TUNISIE
           </div>

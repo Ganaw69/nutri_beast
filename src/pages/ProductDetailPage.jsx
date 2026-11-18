@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
-import { productService, productVariantService, reviewService, flavorService, brandService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
+import { productService, productVariantService, reviewService, flavorService, brandService, categoryService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 import {
@@ -128,6 +128,7 @@ const normalizeProduct = (p, flavorCatalog = []) => {
   id: p.id,
   name: p.name,
   category: p.category?.name || '',
+  categoryId: getRelationId(p.category),
   brand: displayBrandName(p.brand),
   brandId: getRelationId(p.brand),
   price: parseFloat(p.price || 0),
@@ -153,9 +154,20 @@ const normalizeProduct = (p, flavorCatalog = []) => {
 };
 
 export const ProductDetailPage = () => {
-  const { selectedProductId, addToCart, navigateTo, viewBrandDetails, showToast } = useCart();
+  const {
+    selectedProductId,
+    addToCart,
+    navigateTo,
+    viewBrandDetails,
+    showToast,
+    selectedShopCategoryIds,
+    setSelectedShopCategoryIds,
+    setSearchQuery,
+    shopRouteFilters,
+  } = useCart();
 
   const [product, setProduct] = useState(null);
+  const [selectedBreadcrumbCategories, setSelectedBreadcrumbCategories] = useState([]);
   const [related, setRelated] = useState([]);
   const [variants, setVariants] = useState([]);
   const [selectedVariantKey, setSelectedVariantKey] = useState("");
@@ -176,6 +188,21 @@ export const ProductDetailPage = () => {
   // Review form
   const [reviewForm, setReviewForm] = useState({ customerName: '', email: '', rating: 5, comment: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (selectedShopCategoryIds.length === 0) {
+      setSelectedBreadcrumbCategories([]);
+      return () => { active = false; };
+    }
+
+    Promise.all(selectedShopCategoryIds.map((id) => categoryService.getOne(id, true).catch(() => null)))
+      .then((categories) => {
+        if (active) setSelectedBreadcrumbCategories(categories.map((category) => category?.name).filter(Boolean));
+      });
+
+    return () => { active = false; };
+  }, [selectedShopCategoryIds]);
 
   useEffect(() => {
     if (!selectedProductId) return;
@@ -201,11 +228,14 @@ export const ProductDetailPage = () => {
         const immediateProduct = normalizeProduct(prod);
 
         const productCategoryId = getRelationId(prod.category);
+        const categoryPromise = prod.category?.name || productCategoryId == null
+          ? Promise.resolve(null)
+          : categoryService.getOne(productCategoryId, true).catch(() => null);
         const relatedParams = { isActive: true, itemsPerPage: 8 };
         if (productCategoryId) relatedParams['category.id'] = productCategoryId;
 
         const productFlavorIds = (prod.flavors || []).map(getRelationId).filter((id) => id != null);
-        const [imageData, relData, revData, flavorData, flavorDetails, brandData, variantData] = await Promise.all([
+        const [imageData, relData, revData, flavorData, flavorDetails, brandData, variantData, categoryData] = await Promise.all([
           productService.getImages({ product: `/api/products/${selectedProductId}`, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
           productService.getAllPages(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
           reviewService.getAll({ 'product.id': selectedProductId, approved: true }, true).catch(() => ({ 'hydra:member': [] })),
@@ -215,6 +245,7 @@ export const ProductDetailPage = () => {
             ? Promise.resolve(null)
             : brandService.getAllPages({}, true).catch(() => null),
           productVariantService.getAll({ "product.id": selectedProductId, isActive: true }, true, true),
+          categoryPromise,
         ]);
         if (!active) return;
 
@@ -235,7 +266,11 @@ export const ProductDetailPage = () => {
           seenImageKeys.add(String(key));
           return true;
         });
-        const productWithImages = { ...prod, productImages };
+        const productWithImages = {
+          ...prod,
+          category: prod.category?.name ? prod.category : categoryData || prod.category,
+          productImages,
+        };
         const flavorCatalog = [
           ...(flavorData['hydra:member'] || flavorData.member || flavorData.items || []),
           ...flavorDetails.filter(Boolean),
@@ -422,6 +457,14 @@ export const ProductDetailPage = () => {
     : null;
   const selectedVariantLabel = selectedVariant ? variantLabel(selectedVariant, product.flavorOptions) : '';
   const selectedVariantInStock = Boolean(selectedVariant && variantSku(selectedVariant) && Number(selectedVariant.stock ?? 0) > 0);
+  const newShopFilter = ["new", "nouveaute", "nouveautes"].includes(
+    String(shopRouteFilters?.filter || "").trim().toLocaleLowerCase("fr")
+  );
+  const categoryIsSelected = selectedShopCategoryIds.length > 0 || Boolean(shopRouteFilters?.category);
+  const breadcrumbCategory = selectedBreadcrumbCategories.join(" · ")
+    || (categoryIsSelected ? product.category : "")
+    || "Toutes les offres";
+  const showNewBreadcrumb = product.isNew || newShopFilter;
 
   const selectedFlavorOption = product.flavorOptions.find((flavor) => flavor.name === selectedFlavor);
   const flavorGalleryImages = selectedFlavorOption?.id != null
@@ -445,10 +488,39 @@ export const ProductDetailPage = () => {
           </li>
           <li aria-hidden="true" className="text-gray-600">›</li>
           <li>
-            <button type="button" onClick={() => navigateTo("shop")} className="transition-colors hover:text-white">
-              Toutes les offres
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                navigateTo("shop", {
+                  shopFilters: selectedShopCategoryIds.length === 0 && shopRouteFilters?.category
+                    ? { category: shopRouteFilters.category }
+                    : {},
+                });
+              }}
+              className="transition-colors hover:text-white"
+            >
+              {breadcrumbCategory}
             </button>
           </li>
+          {showNewBreadcrumb && (
+            <>
+              <li aria-hidden="true" className="text-gray-600">›</li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedShopCategoryIds([]);
+                    navigateTo("shop", { shopFilters: { filter: "new" } });
+                  }}
+                  className="transition-colors hover:text-white"
+                >
+                  Nouveautés
+                </button>
+              </li>
+            </>
+          )}
           <li aria-hidden="true" className="text-gray-600">›</li>
           <li aria-current="page" className="font-semibold text-white">{product.name}</li>
         </ol>
