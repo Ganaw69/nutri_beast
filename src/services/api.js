@@ -292,6 +292,9 @@ const readBody = async (body) => {
   if (body instanceof FormData) {
     return Object.fromEntries(body.entries());
   }
+  if (body instanceof URLSearchParams) {
+    return Object.fromEntries(body.entries());
+  }
   if (typeof body === 'string') {
     try {
       return JSON.parse(body);
@@ -481,7 +484,7 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
     const id = pathname.split('/').at(-2);
     const item = findDemoEntity('brands', id);
     if (!item) return null;
-    item.logo = body.logoFile?.name || item.logo;
+    item.logo = body.logo?.name || item.logo;
     return clone(item);
   }
   if (pathname.startsWith('/brands/') && method === 'PATCH') {
@@ -1829,24 +1832,26 @@ export const brandService = {
   async getOne(id, skipAuth = false) {
     return normalizeBrand(await apiFetch(`/brands/${id}`, {}, false, skipAuth));
   },
-  async create(data) {
+  async create(data, logoFile = null) {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
+    if (logoFile) formData.append('logoFile', logoFile);
     return apiFetch('/brands', { method: 'POST', body: formData }, true);
   },
   async update(id, data) {
-    const formData = new FormData();
+    const formData = new URLSearchParams();
     Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData,
-    }, true);
+    });
     clearProductReadCache();
     return result;
   },
   async uploadLogo(id, file) {
     const formData = new FormData();
-    formData.append('logoFile', file);
+    formData.append('logo', file);
     return apiFetch(`/brands/${id}/upload-logo`, { method: 'POST', body: formData }, true);
   },
   async delete(id) {

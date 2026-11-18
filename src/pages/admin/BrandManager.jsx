@@ -68,13 +68,11 @@ export const BrandManager = () => {
         website: form.website.trim(),
         isActive: form.isActive,
       };
-      const brand = modal.mode === 'add'
-        ? await brandService.create(payload)
-        : await brandService.update(modal.id, payload);
-      if (logoFile) {
-        const brandId = modal.mode === 'add' ? getBrandId(brand) : modal.id;
-        if (!brandId) throw new Error('La marque a été enregistrée, mais son identifiant est introuvable pour téléverser le logo.');
-        await brandService.uploadLogo(brandId, logoFile);
+      if (modal.mode === 'add') {
+        await brandService.create(payload, logoFile);
+      } else {
+        await brandService.update(modal.id, payload);
+        if (logoFile) await brandService.uploadLogo(modal.id, logoFile);
       }
       setModal(null); fetchBrands();
     } catch (requestError) {

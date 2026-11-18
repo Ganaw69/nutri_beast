@@ -774,7 +774,6 @@ export const ProductManager = () => {
           await productService.setImagePrimary(selectedPrimaryId);
         }
       }
-      if (!creatingProduct) setModal(null);
       setImageFiles([]);
       setImagePreviews([]);
       setPrimaryImageIndex(0);
@@ -798,9 +797,11 @@ export const ProductManager = () => {
       });
       setTotal((current) => products.some((product) => String(product.id) === String(savedId)) ? current : current + 1);
       setNotice(creatingProduct ? 'Produit créé avec succès.' : 'Modifications enregistrées avec succès.');
-      if (creatingProduct) {
-        setVariantNotice('Produit créé. Vous pouvez maintenant ajouter ses variantes ci-dessous.');
-      }
+      setVariantNotice(
+        creatingProduct
+          ? 'Produit créé. Vous pouvez maintenant ajouter ses variantes ci-dessous.'
+          : 'Modifications enregistrées. Vous pouvez continuer à gérer les variantes, leurs images et leur stock ici.'
+      );
       void fetchProducts({ silent: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue pendant l’enregistrement.');
@@ -1914,7 +1915,7 @@ export const ProductManager = () => {
             </form>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2a2a2a] bg-[#1a1a1a] p-5">
               {error && <p role="alert" className="mr-auto w-full text-sm text-red-300 sm:w-auto">{error}</p>}
-              <button type="button" onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
+              <button type="button" onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">{modal.mode === 'edit' ? 'Fermer' : 'Annuler'}</button>
               <button type="submit" form="product-edit-form" disabled={saving || variantsLoading || variantsLoadFailed} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
                 {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
               </button>
