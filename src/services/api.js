@@ -1840,14 +1840,11 @@ export const brandService = {
     return apiFetch('/brands', { method: 'POST', body: formData }, true);
   },
   async update(id, data) {
-    const formData = new FormData();
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) formData.append(key, String(value));
-    });
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
-      body: formData,
-    }, true);
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
     clearProductReadCache();
     return result;
   },
