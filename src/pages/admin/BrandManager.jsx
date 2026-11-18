@@ -68,12 +68,18 @@ export const BrandManager = () => {
         website: form.website.trim(),
         isActive: form.isActive,
       };
+      let brandId = modal.mode === 'edit' ? modal.id : null;
       if (modal.mode === 'add') {
-        await brandService.create(payload, logoFile);
+        const createdBrand = await brandService.create(payload);
+        brandId = getBrandId(createdBrand);
+        if (!brandId) {
+          throw new Error('La marque a été créée, mais son identifiant est introuvable pour continuer.');
+        }
+        setModal({ mode: 'edit', id: brandId, brand: createdBrand });
       } else {
-        await brandService.update(modal.id, payload);
-        if (logoFile) await brandService.uploadLogo(modal.id, logoFile);
+        await brandService.update(brandId, payload);
       }
+      if (logoFile) await brandService.uploadLogo(brandId, logoFile);
       setModal(null); fetchBrands();
     } catch (requestError) {
       setError(requestError.message);

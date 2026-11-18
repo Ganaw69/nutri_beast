@@ -1832,19 +1832,19 @@ export const brandService = {
   async getOne(id, skipAuth = false) {
     return normalizeBrand(await apiFetch(`/brands/${id}`, {}, false, skipAuth));
   },
-  async create(data, logoFile = null) {
+  async create(data) {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
-    if (logoFile) formData.append('logoFile', logoFile);
     return apiFetch('/brands', { method: 'POST', body: formData }, true);
   },
   async update(id, data) {
-    const formData = new FormData();
+    const formData = new URLSearchParams();
     Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData,
-    }, true);
+    });
     clearProductReadCache();
     return result;
   },
