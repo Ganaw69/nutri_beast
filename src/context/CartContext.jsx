@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { couponService, resolvePackImage, resolveProductImage } from "../services/api";
+import { couponService, productVariantService, resolvePackImage, resolveProductImage } from "../services/api";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 
 const CartContext = createContext();
@@ -189,27 +189,68 @@ export const CartProvider = ({ children }) => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const addToCart = (product, flavor = null, size = null, qty = 1) => {
+  const addToCart = async (product, flavor = null, size = null, qty = 1) => {
+    if (!product?.variantSku && product?.id != null) {
+      try {
+        const response = await productVariantService.getAll(
+          { "product.id": product.id, isActive: true },
+          true,
+          true
+        );
+        if (response["hydra:member"].length > 0) {
+          showToast("Choisissez une variante sur la fiche du produit.");
+          viewProductDetails(product.id);
+          return false;
+        }
+      } catch {
+        showToast("Impossible de vérifier les variantes et le stock du produit.");
+        return false;
+      }
+    }
+
+    if (product?.variantSku && !String(product.variantSku).trim()) {
+      showToast("La variante sélectionnée n’a pas de SKU valide.");
+      return false;
+    }
     if (product?.inStock === false || Number(product?.stock ?? 1) <= 0) {
       showToast("Ce produit est en rupture de stock.");
       return false;
     }
+    if (!Number.isInteger(Number(qty)) || Number(qty) < 1) {
+      showToast("Saisissez une quantité entière supérieure à zéro.");
+      return false;
+    }
+    if (product?.variantSku && Number(qty) > Number(product.stock)) {
+      showToast("La quantité demandée dépasse le stock disponible pour cette variante.");
+      return false;
+    }
     const targetFlavor = flavor || (product.flavors ? product.flavors[0] : "");
     const targetSize = size || (product.sizes ? product.sizes[0] : "");
+    const cartKey = product.variantSku || product.id;
+    const existingCartItem = cart.find((item) => (item.variantSku || item.id) === cartKey);
+    if (product.variantSku && existingCartItem
+      && existingCartItem.quantity + Number(qty) > Number(product.stock)) {
+      showToast("La quantité demandée dépasse le stock disponible pour cette variante.");
+      return false;
+    }
 
     setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((item) => item.id === product.id);
+      const existingIndex = prevCart.findIndex((item) => (
+        (item.variantSku || item.id) === cartKey
+      ));
       if (existingIndex > -1) {
         const updated = [...prevCart];
-        updated[existingIndex].quantity += qty;
+        updated[existingIndex].quantity += Number(qty);
         return updated;
       } else {
         return [
           ...prevCart,
           {
             ...product,
+            id: product.variantSku ? `${product.id}-${product.variantSku}` : product.id,
+            ...(product.variantSku ? { productId: product.id } : {}),
             flavor: `${targetFlavor}${targetSize ? ' • ' + targetSize : ''}`,
-            quantity: qty,
+            quantity: Number(qty),
           },
         ];
       }

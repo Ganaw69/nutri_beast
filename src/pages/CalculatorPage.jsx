@@ -347,10 +347,9 @@ export const CalculatorPage = () => {
                       <span className="font-black text-lg text-black">{product.price.toFixed(2)} TND</span>
                       <button
                         type="button"
-                        onClick={() => addToCart(product)}
-                        disabled={!product.inStock}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xs bg-black text-white shadow-md transition-colors hover:bg-[#d90429] disabled:cursor-not-allowed disabled:bg-gray-400"
-                        title={product.inStock ? "Ajouter au panier" : "Rupture de stock"}
+                        onClick={() => { void addToCart(product); }}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xs bg-black text-white shadow-md transition-colors hover:bg-[#d90429]"
+                        title={product.inStock ? "Ajouter au panier" : "Vérifier la disponibilité"}
                         aria-label={product.inStock ? `Ajouter ${product.name} au panier` : `${product.name} est en rupture de stock`}
                       >
                         <ShoppingBag className="h-4 w-4" />

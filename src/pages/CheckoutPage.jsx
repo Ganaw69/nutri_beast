@@ -164,9 +164,15 @@ export const CheckoutPage = () => {
               quantity: Number(quantity) * Number(item.quantity || 1),
             }));
           }
-          const productId = item.id ?? item.productId;
+          const productId = item.productId ?? item.id;
           if (productId === undefined || productId === null || productId === "") {
             throw new Error(`Le produit "${item.name || "sélectionné"}" est invalide.`);
+          }
+          if (item.variantSku) {
+            return [{
+              variantSku: item.variantSku,
+              quantity: item.quantity || 1,
+            }];
           }
           return [{
             product: `/api/products/${productId}`,

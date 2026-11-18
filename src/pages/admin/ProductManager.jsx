@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { productService, categoryService, brandService, goalService, flavorService, productImageUrl, resolveProductImage, iriToId, isPrimaryProductImage } from '../../services/api';
+import { productService, productVariantService, categoryService, brandService, goalService, flavorService, productImageUrl, resolveProductImage, iriToId, isPrimaryProductImage } from '../../services/api';
 import { buildCategoryTree, extractCategoryItems, getCategoryParentId } from '../../utils/categoryTree';
 import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, ToggleLeft, Copy, Upload, Eye, Pencil, Barcode, Tag, Weight, Layers, Target, CalendarDays, Star, Sparkles, Warehouse, BadgeCheck, Image as ImageIcon } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
@@ -54,6 +54,48 @@ const displayRelationNames = (items = []) => (Array.isArray(items) ? items : [])
   .filter(Boolean)
   .join(', ') || '—';
 const entityId = (item) => item?.id ?? iriToId(item?.['@id'] || item?.iri);
+const relationId = (value) => typeof value === 'object' && value !== null ? entityId(value) : iriToId(value);
+const variantProductId = (variant) => relationId(variant?.product ?? variant?.productId ?? variant?.productIri);
+const variantSku = (variant) => variant?.sku ?? variant?.SKU ?? '';
+const variantLabel = (variant) => {
+  const flavor = typeof variant?.flavor === 'object' ? displayName(variant.flavor) : variant?.flavorName ?? variant?.flavor_name;
+  return [variant?.name ?? variant?.label ?? variant?.title, flavor, variant?.options?.size, variant?.size, variant?.weight]
+    .filter(Boolean)
+    .map((value) => typeof value === 'number' ? `${value} kg` : value)
+    .join(' · ') || variantSku(variant) || 'Variante';
+};
+const variantPrice = (variant) => {
+  const price = Number(variant?.price ?? 0);
+  const salePrice = Number(variant?.salePrice ?? variant?.sale_price ?? 0);
+  const effectivePrice = Number(variant?.effectivePrice);
+  return Number.isFinite(effectivePrice) && effectivePrice > 0
+    ? effectivePrice
+    : salePrice > 0 && salePrice < price ? salePrice : price;
+};
+const skuToken = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, '-')
+  .replace(/^-|-$/g, '');
+const generateVariantSku = (productId, productName, flavorName, size, existingSkus = []) => {
+  const parts = [
+    `P${productId}`,
+    skuToken(productName).slice(0, 24),
+    skuToken(flavorName || 'STANDARD').slice(0, 16),
+    skuToken(size).slice(0, 12),
+  ].filter(Boolean);
+  const baseSku = parts.join('-').slice(0, 60);
+  const knownSkus = new Set(existingSkus.map((sku) => String(sku).toLowerCase()));
+  let sku = baseSku;
+  let suffix = 2;
+  while (knownSkus.has(sku.toLowerCase())) {
+    const tail = `-${suffix}`;
+    sku = `${baseSku.slice(0, 64 - tail.length)}${tail}`;
+    suffix += 1;
+  }
+  return sku;
+};
 const dateInputValue = (value) => (value ? String(value).slice(0, 10) : '');
 const safeDescriptionHtml = (html) => {
   if (typeof DOMParser === 'undefined') return '';
@@ -168,6 +210,13 @@ const getProductImageFlavorId = (img) => {
   if (typeof flavor === 'string') return iriToId(flavor) ?? flavor;
   return flavor?.id ?? iriToId(flavor?.['@id'] || flavor?.iri) ?? null;
 };
+const getProductImageVariantId = (img) => {
+  if (!img || typeof img === 'string') return null;
+  const variant = img.variant ?? img.variantId ?? img.variant_id;
+  if (typeof variant === 'number') return variant;
+  if (typeof variant === 'string') return iriToId(variant) ?? variant;
+  return variant?.id ?? iriToId(variant?.['@id'] || variant?.iri) ?? null;
+};
 
 const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
   const byId = new Map();
@@ -209,44 +258,6 @@ const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
   }).filter(Boolean));
 };
 
-const FlavorImageUploader = ({ flavor, files, existingImages, onAdd, onRemoveFile, onRemoveExisting }) => {
-  const [previews, setPreviews] = useState([]);
-
-  useEffect(() => {
-    const nextPreviews = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
-    setPreviews(nextPreviews);
-    return () => nextPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
-  }, [files]);
-
-  return <section className="rounded-lg border border-[#333] bg-[#111] p-3">
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-sm font-bold text-white">{displayName(flavor)}</p>
-      <span className="text-[10px] font-bold uppercase text-gray-500">{existingImages.length + files.length} image{existingImages.length + files.length === 1 ? '' : 's'}</span>
-    </div>
-    <label className="mt-3 block cursor-pointer rounded border border-dashed border-[#555] px-3 py-2 text-center text-xs text-gray-300 hover:bg-[#222]">
-      Ajouter une image pour cette saveur
-      <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => { const nextFiles = Array.from(event.target.files || []); if (nextFiles.length > 0) onAdd(nextFiles); event.target.value = ''; }} />
-    </label>
-    {(existingImages.length > 0 || previews.length > 0) && <div className="mt-3 grid grid-cols-4 gap-2">
-      {existingImages.map((image, index) => {
-        const imageId = getProductImageId(image);
-        return <div key={imageId ?? index} className="relative aspect-square overflow-hidden rounded border border-[#333] bg-black/20">
-          {productImageUrl(image) ? <img src={productImageUrl(image)} alt={`Image ${displayName(flavor)}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-gray-500">Image</div>}
-          <button type="button" disabled={!imageId} onClick={() => onRemoveExisting(image)} aria-label={`Supprimer une image de ${displayName(flavor)}`} title="Supprimer cette image" className="absolute right-1 top-1 rounded bg-black/80 p-1 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40">
-            <X size={14} />
-          </button>
-        </div>;
-      })}
-      {previews.map((preview) => <div key={fileKey(preview.file)} className="relative aspect-square overflow-hidden rounded border border-[#d90429]/60 bg-black/20">
-        <img src={preview.url} alt={preview.file.name} className="h-full w-full object-cover" />
-        <button type="button" onClick={() => onRemoveFile(preview.file)} aria-label={`Retirer ${preview.file.name}`} title="Retirer cette image" className="absolute right-1 top-1 rounded bg-black/80 p-1 text-white hover:bg-red-700">
-          <X size={14} />
-        </button>
-      </div>)}
-    </div>}
-  </section>;
-};
-
 export const ProductManager = () => {
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -257,13 +268,21 @@ export const ProductManager = () => {
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('');
   const [stockFilter, setStockFilter] = useState('');
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit', data? }
+  const [editingProductHasVariants, setEditingProductHasVariants] = useState(false);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [variantsLoadFailed, setVariantsLoadFailed] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedFormParentCategoryId, setSelectedFormParentCategoryId] = useState('');
   const [imageFiles, setImageFiles] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
-  const [flavorImageFiles, setFlavorImageFiles] = useState({});
   const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
   const [productImages, setProductImages] = useState([]);
+  const [productVariants, setProductVariants] = useState([]);
+  const [variantDraft, setVariantDraft] = useState({ flavor: '', stock: '0' });
+  const [variantImageFiles, setVariantImageFiles] = useState({});
+  const [variantSaving, setVariantSaving] = useState(false);
+  const [variantError, setVariantError] = useState('');
+  const [variantNotice, setVariantNotice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -468,17 +487,34 @@ export const ProductManager = () => {
       if (searchTerm) params.name = searchTerm;
       // Apply the category relation locally before slicing pages. This keeps
       // parent-category filters reliable across API Platform query syntaxes.
-      const data = await productService.getAllPages(params);
+      const [data, variantsData] = await Promise.all([
+        productService.getAllPages(params),
+        productVariantService.getAllPages({}, true),
+      ]);
+      const variantsByProduct = new Map();
+      variantsData['hydra:member'].forEach((variant) => {
+        const productId = variantProductId(variant);
+        if (productId == null) return;
+        const key = String(productId);
+        variantsByProduct.set(key, [...(variantsByProduct.get(key) || []), variant]);
+      });
+      const productsWithVariants = (data['hydra:member'] || []).map((product) => ({
+        ...product,
+        variants: variantsByProduct.get(String(product.id)) || [],
+      }));
       const allowedCategoryIds = new Set(selectedFilterCategoryIds.map(String));
-      const matchingProducts = (data['hydra:member'] || []).filter((product) => {
+      const matchingProducts = productsWithVariants.filter((product) => {
         const category = product.category;
         const productCategoryId = typeof category === 'object'
           ? entityId(category)
           : iriToId(category);
         const matchesCategory = allowedCategoryIds.size === 0 || allowedCategoryIds.has(String(productCategoryId));
         const matchesSearch = !searchTerm || String(product.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const stocks = product.variants.length > 0
+          ? product.variants.map((variant) => Number(variant.stock || 0))
+          : [Number(product.stock || 0)];
         const matchesStock = !stockFilter
-          || (stockFilter === 'out' ? Number(product.stock || 0) <= 0 : Number(product.stock || 0) > 0);
+          || (stockFilter === 'out' ? stocks.every((stock) => stock <= 0) : stocks.some((stock) => stock > 0));
         return matchesCategory && matchesSearch && matchesStock;
       });
       const pageProducts = matchingProducts.slice((page - 1) * 20, page * 20);
@@ -494,7 +530,7 @@ export const ProductManager = () => {
     setPage(1);
   }, [searchTerm, selectedParentCategoryId, selectedSubCategoryId]);
 
-  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setFlavorImageFiles({}); setPrimaryImageIndex(0); setProductImages([]); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setEditingProductHasVariants(false); setVariantsLoading(false); setVariantsLoadFailed(false); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setProductVariants([]); setVariantImageFiles({}); setVariantDraft({ flavor: '', stock: '0' }); setVariantError(''); setVariantNotice(''); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
     setNotice('');
@@ -503,7 +539,14 @@ export const ProductManager = () => {
     setFlavorSearch('');
     setImageFiles([]);
     setImagePreviews([]);
-    setFlavorImageFiles({});
+    setProductVariants([]);
+    setVariantImageFiles({});
+    setVariantDraft({ flavor: '', stock: '0' });
+    setVariantError('');
+    setVariantNotice('');
+    setEditingProductHasVariants((p.variants || []).length > 0);
+    setVariantsLoading(true);
+    setVariantsLoadFailed(false);
     setPrimaryImageIndex(0);
     setBrandSearch(displayBrandName(p.brand));
     setModal({ mode: 'edit', id: p.id });
@@ -546,23 +589,71 @@ export const ProductManager = () => {
         metaTitle: fullProduct.metaTitle || '', metaDescription: fullProduct.metaDescription || '',
       });
       setSelectedFormParentCategoryId(getFormParentCategoryId(fullProduct.category));
-      setProductImages(await hydrateProductImages(fullProduct.id || p.id, fullProduct.productImages || p.productImages || []));
+      const [hydratedImages, variantsResponse] = await Promise.all([
+        hydrateProductImages(fullProduct.id || p.id, fullProduct.productImages || p.productImages || []),
+        productVariantService.getAll({ 'product.id': fullProduct.id || p.id }, true, true),
+      ]);
+      const variants = variantsResponse['hydra:member'];
+      setProductImages(hydratedImages);
+      setProductVariants(variants);
+      setEditingProductHasVariants(variants.length > 0);
+      setVariantsLoading(false);
       const fullBrand = fullProduct.brand || p.brand;
       const matchedBrand = brands.find((brand) => relationToIri(brand, 'brands') === relationToIri(fullBrand, 'brands'));
       setBrandSearch(displayBrandName(matchedBrand || fullBrand));
     } catch (e) {
+      setVariantsLoading(false);
+      setVariantsLoadFailed(true);
       setError(e.message);
     }
   };
 
-  const productOnlyImages = productImages.filter((image) => getProductImageFlavorId(image) == null);
-  const imagesForFlavor = (flavorIri) => {
-    const flavorId = iriToId(flavorIri) ?? flavorIri;
-    return productImages.filter((image) => String(getProductImageFlavorId(image)) === String(flavorId));
+  const productOnlyImages = productImages.filter((image) => getProductImageFlavorId(image) == null && getProductImageVariantId(image) == null);
+  const imagesForVariant = (variant) => {
+    const variantId = variant?.id ?? iriToId(variant?.['@id']);
+    return productImages.filter((image) => String(getProductImageVariantId(image)) === String(variantId));
   };
+  const legacyImagesForFlavor = (flavorIri) => {
+    const flavorId = iriToId(flavorIri) ?? flavorIri;
+    return productImages.filter((image) => (
+      String(getProductImageFlavorId(image)) === String(flavorId)
+      && getProductImageVariantId(image) == null
+    ));
+  };
+  const productVariantLabel = (variant) => {
+    const flavorId = relationId(variant?.flavor);
+    const flavor = flavors.find((item) => String(entityId(item)) === String(flavorId));
+    return variantLabel(flavor ? { ...variant, flavor } : variant);
+  };
+  const syncVariantValues = async (variants, price, salePrice, weight) => {
+    const size = weight === '' || weight == null ? null : `${Number(weight)} kg`;
+    for (const variant of variants) {
+      const variantId = variant.id ?? iriToId(variant['@id']);
+      if (variantId == null) throw new Error(`Impossible de synchroniser la variante ${productVariantLabel(variant)} : identifiant manquant.`);
+      const options = { ...(variant.options || {}) };
+      if (size) options.size = size;
+      else delete options.size;
+      try {
+        await productVariantService.update(variantId, { price, salePrice, options });
+      } catch (syncError) {
+        throw new Error(`La variante ${productVariantLabel(variant)} n’a pas pu être synchronisée : ${syncError.message}`);
+      }
+    }
+  };
+  const draftVariantFlavor = flavors.find((item) => relationToIri(item, 'flavors') === variantDraft.flavor);
+  const draftVariantSize = form.weight === '' ? '' : `${Number(form.weight)} kg`;
+  const draftVariantSku = modal?.id && (!form.hasFlavors || variantDraft.flavor)
+    ? generateVariantSku(
+      modal.id,
+      form.name,
+      displayName(draftVariantFlavor),
+      draftVariantSize,
+      productVariants.map(variantSku)
+    )
+    : '';
   const setHasFlavors = (nextValue) => {
     if (!nextValue && form.hasFlavors) {
-      const hasFlavorData = form.flavors.length > 0 || Object.values(flavorImageFiles).some((files) => files.length > 0) || productImages.some((image) => getProductImageFlavorId(image) != null);
+      const hasFlavorData = form.flavors.length > 0 || productImages.some((image) => getProductImageFlavorId(image) != null);
       if (hasFlavorData && !window.confirm('Passer à « Non » retirera les saveurs associées à ce produit lors de l’enregistrement. Les fichiers déjà téléversés ne seront pas supprimés. Continuer ?')) return;
     }
     setForm((current) => ({ ...current, hasFlavors: nextValue, ...(nextValue ? {} : { flavors: [] }) }));
@@ -577,15 +668,6 @@ export const ProductManager = () => {
       return [...currentFiles, ...filesToAdd];
     });
   };
-  const addFlavorImages = (flavorIri, nextFiles) => {
-    const validationError = validateImageFiles(nextFiles);
-    if (validationError) return setError(validationError);
-    setFlavorImageFiles((current) => {
-      const existing = current[flavorIri] || [];
-      const knownFiles = new Set(existing.map(fileKey));
-      return { ...current, [flavorIri]: [...existing, ...nextFiles.filter((file) => !knownFiles.has(fileKey(file)))] };
-    });
-  };
   const removeProductImageFile = (indexToRemove) => {
     const nextFiles = imageFiles.filter((_, index) => index !== indexToRemove);
     setImageFiles(nextFiles);
@@ -595,25 +677,31 @@ export const ProductManager = () => {
       return currentPrimaryIndex > indexToRemove ? currentPrimaryIndex - 1 : currentPrimaryIndex;
     });
   };
-  const removeFlavorImageFile = (flavorIri, fileToRemove) => {
-    const keyToRemove = fileKey(fileToRemove);
-    setFlavorImageFiles((current) => ({
-      ...current,
-      [flavorIri]: (current[flavorIri] || []).filter((file) => fileKey(file) !== keyToRemove),
-    }));
-  };
-
   const handleSave = async (e) => {
     e.preventDefault();
     if (saving) return;
+    if (variantsLoading || variantsLoadFailed) {
+      setError(variantsLoadFailed
+        ? 'Impossible de vérifier les variantes. Fermez puis rouvrez le produit avant de modifier le prix ou le stock.'
+        : 'Patientez pendant le chargement des variantes.');
+      return;
+    }
     setSaving(true);
     setError('');
     setNotice('');
     try {
       if (form.hasFlavors && form.flavors.length === 0) throw new Error('Sélectionnez au moins une saveur ou choisissez « Non ».');
-      if (form.hasFlavors) {
-        const flavorWithoutImage = form.flavors.find((flavorIri) => imagesForFlavor(flavorIri).length === 0 && (flavorImageFiles[flavorIri] || []).length === 0);
-        if (flavorWithoutImage) throw new Error('Chaque saveur doit avoir au moins une image.');
+      const parentPrice = Number(form.price);
+      const parentSalePrice = form.salePrice === '' ? null : Number(form.salePrice);
+      if (!Number.isFinite(parentPrice) || parentPrice <= 0) {
+        throw new Error('Saisissez un prix produit valide.');
+      }
+      if (parentSalePrice !== null
+        && (!Number.isFinite(parentSalePrice) || parentSalePrice < 0 || parentSalePrice >= parentPrice)) {
+        throw new Error('Le prix promo doit être inférieur au prix produit.');
+      }
+      if (form.weight !== '' && (!Number.isFinite(Number(form.weight)) || Number(form.weight) < 0)) {
+        throw new Error('Saisissez un poids produit valide.');
       }
       const payload = {
         ...form,
@@ -625,9 +713,9 @@ export const ProductManager = () => {
         isBestSeller: form.isBestSeller,
         sku: undefined,
         expirationDate: undefined,
-        price: form.price ? String(parseFloat(form.price).toFixed(2)) : undefined,
-        salePrice: form.salePrice ? String(parseFloat(form.salePrice).toFixed(2)) : undefined,
-        stock: form.stock !== '' ? parseInt(form.stock) : undefined,
+        price: parentPrice.toFixed(2),
+        salePrice: parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
+        stock: editingProductHasVariants ? undefined : form.stock !== '' ? parseInt(form.stock) : undefined,
         minimumStock: form.minimumStock !== '' ? parseInt(form.minimumStock) : undefined,
         weight: form.weight === '' ? null : String(form.weight).trim(),
         dateProduit: form.dateProduit ? `${form.dateProduit}T00:00:00+00:00` : null,
@@ -652,7 +740,19 @@ export const ProductManager = () => {
         throw new Error("Le serveur n’a pas renvoyé l’identifiant du produit. Vérifiez la liste des produits avant de réessayer.");
       }
       if (modal.mode === 'add') setModal({ mode: 'edit', id: savedId });
-      if (savedId && !form.hasFlavors && imageFiles.length > 0) {
+      if (editingProductHasVariants) {
+        try {
+          await syncVariantValues(
+            productVariants,
+            parentPrice.toFixed(2),
+            parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
+            form.weight
+          );
+        } catch (syncError) {
+          throw new Error(`Le produit est enregistré, mais ${syncError.message}`);
+        }
+      }
+      if (savedId && imageFiles.length > 0) {
         const selectedPrimaryIndex = Math.max(0, Math.min(primaryImageIndex, imageFiles.length - 1));
         let selectedPrimaryImage = null;
         for (let i = 0; i < imageFiles.length; i += 1) {
@@ -673,20 +773,9 @@ export const ProductManager = () => {
           await productService.setImagePrimary(selectedPrimaryId);
         }
       }
-      if (savedId && form.hasFlavors) {
-        for (const flavorIri of form.flavors) {
-          const flavorId = iriToId(flavorIri);
-          const files = flavorImageFiles[flavorIri] || [];
-          for (let index = 0; index < files.length; index += 1) {
-            await productService.uploadImage(savedId, files[index], index, false, flavorId);
-          }
-        }
-      }
-
       setModal(null);
       setImageFiles([]);
       setImagePreviews([]);
-      setFlavorImageFiles({});
       setPrimaryImageIndex(0);
       setProductImages([]);
       const savedProduct = {
@@ -698,6 +787,7 @@ export const ProductManager = () => {
         isBestSeller: form.isBestSeller,
         isFeatured: form.isFeatured,
         isOnSale: form.isOnSale,
+        variants: products.find((product) => String(product.id) === String(savedId))?.variants || [],
         productImages: saved?.productImages || [],
       };
       setProducts((current) => {
@@ -809,9 +899,89 @@ export const ProductManager = () => {
     try { await productService.duplicate(id); fetchProducts(); } catch (e) { alert(e.message); }
   };
 
+  const openStockManager = async (product) => {
+    setStockError('');
+    setStockForm({ operation: 'add', quantity: 1, reason: '', variantId: '' });
+    setStockModal({ id: product.id, name: product.name, loadingVariants: true });
+    try {
+      const response = await productVariantService.getAll(
+        { 'product.id': product.id },
+        true,
+        true
+      );
+      const variants = response['hydra:member'];
+      if (variants.length > 0) {
+        const selected = variants[0];
+        setStockModal({ id: product.id, name: product.name, variants });
+        setStockForm({
+          operation: 'adjust',
+          quantity: Number(selected.stock ?? 0),
+          reason: '',
+          variantId: String(selected.id ?? iriToId(selected['@id']) ?? ''),
+        });
+        return;
+      }
+      setStockModal({ id: product.id, name: product.name, variants: [] });
+    } catch (e) {
+      setStockError(e.message || 'Impossible de vérifier les variantes du produit.');
+      setStockModal({ id: product.id, name: product.name, loadingVariants: false, variantLoadFailed: true });
+    }
+  };
+
   const handleStockSave = async () => {
     const quantity = Number(stockForm.quantity);
     if (stockSaving) return;
+    if (stockModal?.loadingVariants) return;
+    if (stockModal?.variantLoadFailed) {
+      setStockError('Le stock ne peut pas être modifié tant que les variantes ne sont pas chargées.');
+      return;
+    }
+    if (stockModal?.variants?.length > 0) {
+      const variant = stockModal.variants.find((item) => String(item.id ?? iriToId(item['@id'])) === stockForm.variantId);
+      if (!variant) {
+        setStockError('Sélectionnez une variante valide.');
+        return;
+      }
+      if (!Number.isInteger(quantity) || (stockForm.operation === 'adjust' ? quantity < 0 : quantity < 1)) {
+        setStockError(stockForm.operation === 'adjust'
+          ? 'Saisissez un stock entier positif ou nul.'
+          : 'Saisissez une quantité entière supérieure à zéro.');
+        return;
+      }
+      if (stockForm.operation !== 'add' && !stockForm.reason.trim()) {
+        setStockError('Le motif est obligatoire pour cette opération.');
+        return;
+      }
+      setStockSaving(true);
+      setStockError('');
+      try {
+        await productVariantService.adjustStock(
+          variant.id ?? iriToId(variant['@id']),
+          stockForm.operation,
+          quantity,
+          stockForm.reason
+        );
+      } catch (e) {
+        setStockError(e.message || 'Échec de la mise à jour du stock de la variante.');
+        return;
+      } finally {
+        setStockSaving(false);
+      }
+
+      setStockModal(null);
+      void fetchProducts();
+      try {
+        const updatedVariants = await productVariantService.getAll(
+          { 'product.id': stockModal.id },
+          true,
+          true
+        );
+        setProductVariants(updatedVariants['hydra:member']);
+      } catch (e) {
+        setError(`Stock enregistré, mais impossible d’actualiser les variantes : ${e.message}`);
+      }
+      return;
+    }
     if (!Number.isInteger(quantity) || quantity < 1) {
       setStockError('Saisissez une quantité entière supérieure à zéro.');
       return;
@@ -875,12 +1045,169 @@ export const ProductManager = () => {
     setDetailsModal({ product, images: [], loading: true, error: '' });
     try {
       const fullProduct = await productService.getOne(product.id).catch(() => product);
-      const images = await hydrateProductImages(fullProduct.id || product.id, fullProduct.productImages || product.productImages || []);
+      const [images, variantsResponse] = await Promise.all([
+        hydrateProductImages(fullProduct.id || product.id, fullProduct.productImages || product.productImages || []),
+        productVariantService.getAll({ 'product.id': product.id }, true, true),
+      ]);
       const primaryIndex = images.findIndex(isPrimaryProductImage);
       setSelectedDetailImage(primaryIndex >= 0 ? primaryIndex : 0);
-      setDetailsModal({ product: fullProduct, images, loading: false, error: '' });
+      setDetailsModal({
+        product: { ...fullProduct, variants: variantsResponse['hydra:member'] },
+        images,
+        loading: false,
+        error: '',
+      });
     } catch (e) {
       setDetailsModal({ product, images: [], loading: false, error: e.message || 'Impossible de charger les détails.' });
+    }
+  };
+
+  const createVariant = async () => {
+    if (variantSaving || !modal?.id) return;
+    const flavorRecord = flavors.find((item) => relationToIri(item, 'flavors') === variantDraft.flavor);
+    const flavorName = displayName(flavorRecord);
+    const size = form.weight === '' ? '' : `${Number(form.weight)} kg`;
+    const sku = generateVariantSku(
+      modal.id,
+      form.name,
+      flavorName,
+      size,
+      productVariants.map(variantSku)
+    );
+    const price = Number(form.price);
+    const salePrice = form.salePrice === '' ? null : Number(form.salePrice);
+    const stock = Number(variantDraft.stock);
+    if (!Number.isFinite(price) || price <= 0
+      || (salePrice !== null && (!Number.isFinite(salePrice) || salePrice < 0 || salePrice >= price))) {
+      setVariantError('Enregistrez d’abord un prix produit valide dans la partie supérieure.');
+      return;
+    }
+    if (!Number.isInteger(stock) || stock < 0) {
+      setVariantError('Le stock doit être un nombre entier positif ou nul.');
+      return;
+    }
+    if (form.hasFlavors && !variantDraft.flavor) {
+      setVariantError('Sélectionnez la saveur de cette variante.');
+      return;
+    }
+    const flavorId = relationId(variantDraft.flavor);
+    const duplicateVariant = productVariants.some((variant) => (
+      String(relationId(variant.flavor)) === String(flavorId)
+      && String(variant.options?.size ?? variant.size ?? '').toLowerCase() === size.toLowerCase()
+    ));
+    if (duplicateVariant) {
+      setVariantError('Cette variante existe déjà. Utilisez son action « Ajuster le stock ».');
+      return;
+    }
+
+    setVariantSaving(true);
+    setVariantError('');
+    setVariantNotice('');
+    try {
+      await productService.update(modal.id, {
+        price: price.toFixed(2),
+        salePrice: salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
+        weight: form.weight === '' ? null : String(form.weight).trim(),
+        hasFlavors: form.hasFlavors,
+        flavors: form.hasFlavors ? form.flavors : [],
+      });
+      await syncVariantValues(
+        productVariants,
+        price.toFixed(2),
+        salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
+        form.weight
+      );
+      const created = await productVariantService.create({
+        product: `/api/products/${modal.id}`,
+        flavor: variantDraft.flavor || null,
+        sku,
+        barcode: null,
+        price: price.toFixed(2),
+        salePrice: salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
+        stock,
+        options: size ? { size } : {},
+        isActive: form.isActive,
+      });
+      let variants = productVariants;
+      if (created?.id != null || created?.['@id']) {
+        variants = [...productVariants, {
+          ...created,
+          id: created.id ?? iriToId(created['@id']),
+          product: `/api/products/${modal.id}`,
+          flavor: variantDraft.flavor || null,
+          sku,
+          barcode: null,
+          price: price.toFixed(2),
+          salePrice: salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
+          stock,
+          options: size ? { size } : {},
+          isActive: form.isActive,
+        }];
+      } else {
+        const response = await productVariantService.getAll(
+          { 'product.id': modal.id },
+          true,
+          true
+        );
+        variants = response['hydra:member'];
+      }
+      setProductVariants(variants);
+      setEditingProductHasVariants(variants.length > 0);
+      setVariantDraft({ flavor: '', stock: '0' });
+      setVariantNotice(`Variante créée avec le SKU ${sku}. Le prix et le poids proviennent du produit ; son stock reste indépendant.`);
+      await fetchProducts({ silent: true });
+    } catch (e) {
+      setVariantError(e.message || 'Impossible de créer cette variante.');
+    } finally {
+      setVariantSaving(false);
+    }
+  };
+
+  const uploadVariantImages = async (variant) => {
+    const variantId = variant?.id ?? iriToId(variant?.['@id']);
+    const files = variantImageFiles[String(variantId)] || [];
+    if (!variantId || files.length === 0) return;
+    const validationError = validateImageFiles(files);
+    if (validationError) {
+      setVariantError(validationError);
+      return;
+    }
+
+    setVariantSaving(true);
+    setVariantError('');
+    setVariantNotice('');
+    let uploadedCount = 0;
+    try {
+      const currentImages = imagesForVariant(variant);
+      for (let index = 0; index < files.length; index += 1) {
+        await productService.uploadImage(modal.id, files[index], currentImages.length + index, false, variantId);
+        uploadedCount += 1;
+      }
+      setVariantImageFiles((current) => ({ ...current, [String(variantId)]: [] }));
+      setVariantNotice(`Images ajoutées à la variante ${productVariantLabel(variant)}.`);
+      try {
+        const imageData = await productService.getImages({ 'variant.id': variantId, itemsPerPage: 100 }, true);
+        setProductImages((current) => mergeProductImages(current, collectionItems(imageData)));
+      } catch (e) {
+        setVariantError(`Images téléversées, mais galerie non actualisée : ${e.message}`);
+      }
+    } catch (e) {
+      let refreshError = '';
+      if (uploadedCount > 0) {
+        setVariantImageFiles((current) => ({
+          ...current,
+          [String(variantId)]: (current[String(variantId)] || []).slice(uploadedCount),
+        }));
+        try {
+          const imageData = await productService.getImages({ 'variant.id': variantId, itemsPerPage: 100 }, true);
+          setProductImages((current) => mergeProductImages(current, collectionItems(imageData)));
+        } catch (galleryError) {
+          refreshError = ` La galerie n’a pas pu être actualisée : ${galleryError.message}`;
+        }
+      }
+      setVariantError(`${e.message || "Impossible d'ajouter les images à cette variante."}${refreshError}`);
+    } finally {
+      setVariantSaving(false);
     }
   };
 
@@ -993,13 +1320,30 @@ export const ProductManager = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-xs font-mono text-gray-400">{p.sku || '—'}</td>
-                  <td className="px-5 py-4 font-bold text-white">{parseFloat(p.price || 0).toFixed(2)} TND</td>
+                  <td className="px-5 py-4 text-xs font-mono text-gray-400">
+                    {p.variants.length > 0
+                      ? <div className="space-y-1">{p.variants.map((variant, index) => <div key={variant.id ?? index}>{variantSku(variant) || 'SKU manquant'}</div>)}</div>
+                      : p.sku || '—'}
+                  </td>
+                  <td className="px-5 py-4 font-bold text-white">
+                    {p.variants.length > 0
+                      ? <div className="space-y-1 text-xs">{p.variants.map((variant, index) => <div key={variant.id ?? index}>{productVariantLabel(variant)} · {variantPrice(variant).toFixed(2)} TND</div>)}</div>
+                      : `${parseFloat(p.price || 0).toFixed(2)} TND`}
+                  </td>
                   <td className="px-5 py-4">
-                    <span className={`text-sm font-bold ${(p.stock || 0) <= 0 ? 'text-red-400' : (p.stock || 0) < (p.minimumStock || 5) ? 'text-yellow-400' : 'text-gray-300'}`}>
-                      {p.stock ?? 0}
-                    </span>
-                    {Number(p.stock || 0) <= 0 && <span className="ml-2 inline-flex rounded-full bg-[#d90429]/15 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#ff526d]">Rupture de stock</span>}
+                    {p.variants.length > 0
+                      ? <div className="space-y-1 text-xs">{p.variants.map((variant, index) => {
+                        const stock = Number(variant.stock || 0);
+                        return <div key={variant.id ?? index} className={stock > 0 ? 'text-gray-300' : 'text-red-400'}>
+                          {productVariantLabel(variant)} · {stock} en stock
+                        </div>;
+                      })}</div>
+                      : <>
+                        <span className={`text-sm font-bold ${(p.stock || 0) <= 0 ? 'text-red-400' : (p.stock || 0) < (p.minimumStock || 5) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                          {p.stock ?? 0}
+                        </span>
+                        {Number(p.stock || 0) <= 0 && <span className="ml-2 inline-flex rounded-full bg-[#d90429]/15 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#ff526d]">Rupture de stock</span>}
+                      </>}
                   </td>
                   <td className="px-5 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${p.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'}`}>
@@ -1011,7 +1355,7 @@ export const ProductManager = () => {
                       <AdminActionButton label="Voir les détails" onClick={() => openDetails(p)} className="p-1.5 text-gray-300 hover:text-sky-400 hover:bg-sky-400/10">
                         <Eye size={14} />
                       </AdminActionButton>
-                      <AdminActionButton label="Stock" onClick={() => { setStockError(''); setStockForm({ operation: 'add', quantity: 1, reason: '' }); setStockModal({ id: p.id, name: p.name }); }} className="p-1.5 text-gray-300 hover:text-blue-400 hover:bg-blue-400/10">
+                      <AdminActionButton label={p.variants.length > 0 ? 'Stock des variantes' : 'Stock'} onClick={() => { void openStockManager(p); }} className="p-1.5 text-gray-300 hover:text-blue-400 hover:bg-blue-400/10">
                         <Package size={14} />
                       </AdminActionButton>
                       <AdminActionButton label="Duplicate" onClick={() => handleDuplicate(p.id)} className="p-1.5 text-gray-300 hover:text-yellow-400 hover:bg-yellow-400/10">
@@ -1060,18 +1404,20 @@ export const ProductManager = () => {
               </div>
               <div><label className={labelCls}>Code-barres</label><input value={form.barcode} onChange={e => setForm(p => ({ ...p, barcode: e.target.value }))} className={inputCls} /></div>
               <div className="grid grid-cols-3 gap-4">
-                <div><label className={labelCls}>Prix (TND) *</label><input type="number" step="0.01" required value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Prix promo</label><input type="number" step="0.01" value={form.salePrice} onChange={e => setForm(p => ({ ...p, salePrice: e.target.value }))} className={inputCls} /></div>
-                <div><label className={labelCls}>Stock</label><input type="number" min="0" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={inputCls} /></div>
+                <div><label className={labelCls}>Prix (TND) *</label><input type="number" min="0.01" step="0.01" required disabled={variantsLoading || variantsLoadFailed} value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
+                <div><label className={labelCls}>Prix promo</label><input type="number" min="0" step="0.01" disabled={variantsLoading || variantsLoadFailed} value={form.salePrice} onChange={e => setForm(p => ({ ...p, salePrice: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
+                <div><label className={labelCls}>Stock{editingProductHasVariants ? ' parent · non utilisé' : ''}</label><input type="number" min="0" disabled={editingProductHasVariants || variantsLoading || variantsLoadFailed} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
               </div>
+              {editingProductHasVariants && <p className="-mt-3 text-xs text-gray-500">Le prix et le poids sont repris du produit pour chaque variante. Le stock, lui, se modifie séparément par variante.</p>}
+              {variantsLoading && <p role="status" className="-mt-3 text-xs text-gray-500">Chargement des variantes avant l’édition du stock…</p>}
               <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
               <div><label className={labelCls}>Date du produit</label><input type="date" value={form.dateProduit} onChange={e => setForm(p => ({ ...p, dateProduit: e.target.value }))} className={inputCls} /></div>
               <fieldset className="rounded-lg border border-[#333] bg-[#111] p-4">
                 <legend className={labelCls}>Ce produit a-t-il des saveurs ?</legend>
                 <div className="flex gap-5 text-sm text-gray-200"><label className="cursor-pointer"><input type="radio" name="has-flavors" checked={form.hasFlavors} onChange={() => setHasFlavors(true)} className="mr-2 accent-[#d90429]" />Oui</label><label className="cursor-pointer"><input type="radio" name="has-flavors" checked={!form.hasFlavors} onChange={() => setHasFlavors(false)} className="mr-2 accent-[#d90429]" />Non</label></div>
-                <p className="mt-2 text-xs text-gray-500">Oui : une ou plusieurs images par saveur. Non : une galerie d’images du produit.</p>
+                <p className="mt-2 text-xs text-gray-500">Les saveurs décrivent le catalogue. Créez des variantes pour définir séparément chaque SKU, prix et stock ; aucune variante n’est créée automatiquement.</p>
               </fieldset>
-              {!form.hasFlavors && <div>
+              <div>
                 <label className={labelCls}>Image produit</label>
                 <label className="border-2 border-dashed border-[#333] rounded-lg p-4 text-center hover:bg-[#222] transition-colors cursor-pointer block">
                   <Upload size={18} className="mx-auto text-gray-500 mb-1" />
@@ -1128,8 +1474,8 @@ export const ProductManager = () => {
                     })}
                   </div>
                 )}
-              </div>}
-              {!form.hasFlavors && modal.mode === 'edit' && productOnlyImages.length > 0 && (
+              </div>
+              {modal.mode === 'edit' && productOnlyImages.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <label className={labelCls}>Images existantes</label>
@@ -1410,21 +1756,146 @@ export const ProductManager = () => {
                     >{f.name}</button>;
                   })}
                 </div>
-                {form.flavors.length > 0 && <div className="mt-4 space-y-3 border-t border-[#333] pt-4"><p className="text-xs font-bold uppercase text-gray-400">Images par saveur</p>{form.flavors.map((flavorIri) => {
-                  const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
-                  return <FlavorImageUploader
-                    key={flavorIri}
-                    flavor={flavor || { name: flavorIri.split('/').pop() }}
-                    files={flavorImageFiles[flavorIri] || []}
-                    existingImages={imagesForFlavor(flavorIri)}
-                    onAdd={(files) => addFlavorImages(flavorIri, files)}
-                    onRemoveFile={(file) => removeFlavorImageFile(flavorIri, file)}
-                    onRemoveExisting={handleDeleteImage}
-                  />;
-                })}</div>}
+                {form.flavors.some((flavorIri) => legacyImagesForFlavor(flavorIri).length > 0) && (
+                  <div className="mt-4 space-y-3 border-t border-[#333] pt-4">
+                    <p className="text-xs font-bold uppercase text-gray-400">Images existantes par saveur</p>
+                    <p className="text-[11px] text-gray-500">Les images historiques restent affichées ici. Les nouvelles images de variantes doivent être téléversées depuis la galerie SKU ci-dessous.</p>
+                    {form.flavors.map((flavorIri) => {
+                      const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
+                      const legacyImages = legacyImagesForFlavor(flavorIri);
+                      if (legacyImages.length === 0) return null;
+                      return <div key={flavorIri} className="rounded-lg border border-[#333] bg-[#0b0b0b] p-3">
+                        <p className="mb-2 text-xs font-bold text-white">{displayName(flavor) || flavorIri.split('/').pop()}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {legacyImages.map((image, index) => {
+                            const imageId = getProductImageId(image);
+                            return <div key={imageId ?? index} className="relative h-16 w-16 overflow-hidden rounded border border-[#333] bg-black/20">
+                              {productImageUrl(image)
+                                ? <img src={productImageUrl(image)} alt={`Image ${displayName(flavor) || 'de saveur'}`} className="h-full w-full object-cover" />
+                                : <div className="flex h-full items-center justify-center text-[10px] text-gray-500">Image</div>}
+                              <button type="button" disabled={!imageId} onClick={() => handleDeleteImage(image)} aria-label="Supprimer l’image historique" className="absolute right-0 top-0 rounded-bl bg-black/80 p-1 text-white hover:bg-red-700 disabled:opacity-40"><X size={12} /></button>
+                            </div>;
+                          })}
+                        </div>
+                      </div>;
+                    })}
+                  </div>
+                )}
                 {flavors.length > 0 && visibleFlavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur trouvée.</p>}
                 {flavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur. Ajoutez la première ci-dessus.</p>}
               </div>}
+
+              <section className="space-y-4 rounded-lg border border-[#333] bg-[#111] p-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Variantes · stock par saveur</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Le poids et le prix viennent du produit ci-dessus. Un SKU est généré automatiquement ; seul le stock est saisi par variante.
+                  </p>
+                </div>
+                {modal.mode !== 'edit' ? (
+                  <p className="rounded border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">
+                    Enregistrez d’abord le produit, puis rouvrez-le pour ajouter ses variantes. Aucune variante n’est créée automatiquement.
+                  </p>
+                ) : <>
+                  {productVariants.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[700px] text-left text-xs">
+                        <thead className="text-[10px] uppercase tracking-wide text-gray-500">
+                          <tr><th className="pb-2 pr-3">Variante</th><th className="pb-2 pr-3">SKU / code-barres</th><th className="pb-2 pr-3">Prix normal / promo</th><th className="pb-2 pr-3">Stock</th><th className="pb-2 pr-3">État</th><th className="pb-2">Galerie / stock</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#29313D]">
+                          {productVariants.map((variant, index) => {
+                            const variantId = variant.id ?? iriToId(variant['@id']);
+                            const images = imagesForVariant(variant);
+                            const files = variantImageFiles[String(variantId)] || [];
+                            return <tr key={variantId ?? index} className="align-top">
+                              <td className="py-3 pr-3 text-gray-200">{productVariantLabel(variant)}</td>
+                              <td className="py-3 pr-3">
+                                <span className="font-mono text-gray-300">{variantSku(variant) || '—'}</span>
+                                {variant.barcode && <span className="mt-1 block text-gray-500">{variant.barcode}</span>}
+                              </td>
+                              <td className="py-3 pr-3 text-gray-200">
+                                {Number(variant.price ?? 0).toFixed(2)} TND
+                                {Number(variant.salePrice ?? variant.sale_price) > 0 && Number(variant.salePrice ?? variant.sale_price) < Number(variant.price)
+                                  ? <span className="ml-1 text-emerald-400">→ {Number(variant.salePrice ?? variant.sale_price).toFixed(2)}</span>
+                                  : null}
+                              </td>
+                              <td className={`py-3 pr-3 font-bold ${Number(variant.stock || 0) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {Number(variant.stock || 0)}
+                              </td>
+                              <td className="py-3 pr-3 text-gray-400">{variant.isActive === false ? 'Inactive' : 'Active'}</td>
+                              <td className="py-3">
+                                <div className="flex min-w-[210px] flex-col gap-2">
+                                  <div className="flex flex-wrap gap-1">
+                                    {images.map((image, imageIndex) => {
+                                      const imageId = getProductImageId(image);
+                                      return <div key={imageId ?? imageIndex} className="relative h-10 w-10 overflow-hidden rounded border border-[#333]">
+                                        {productImageUrl(image) && <img src={productImageUrl(image)} alt="" className="h-full w-full object-cover" />}
+                                        <button type="button" disabled={!imageId} onClick={() => handleDeleteImage(image)} aria-label="Supprimer l’image de la variante" className="absolute right-0 top-0 rounded-bl bg-black/80 p-0.5 text-white disabled:opacity-40"><X size={11} /></button>
+                                      </div>;
+                                    })}
+                                  </div>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    multiple
+                                    aria-label={`Choisir des images pour ${productVariantLabel(variant)}`}
+                                    onChange={(event) => {
+                                      const filesToAdd = Array.from(event.target.files || []);
+                                      const validationError = validateImageFiles(filesToAdd);
+                                      if (validationError) setVariantError(validationError);
+                                      else {
+                                        setVariantError('');
+                                        setVariantImageFiles((current) => ({ ...current, [String(variantId)]: filesToAdd }));
+                                      }
+                                      event.target.value = '';
+                                    }}
+                                    className="max-w-[210px] text-[10px] text-gray-400 file:mr-2 file:rounded file:border-0 file:bg-[#222] file:px-2 file:py-1 file:text-[10px] file:font-bold file:text-gray-200"
+                                  />
+                                  {files.length > 0 && <button type="button" disabled={variantSaving} onClick={() => { void uploadVariantImages(variant); }} className="rounded bg-[#222] px-2 py-1 text-[10px] font-bold text-white disabled:opacity-50">
+                                    Téléverser {files.length} image(s)
+                                  </button>}
+                                  <button type="button" onClick={() => { void openStockManager({ id: modal.id, name: `${form.name} · ${productVariantLabel(variant)}` }); }} className="w-fit rounded bg-[#222] px-2 py-1 text-[10px] font-bold text-gray-200 hover:text-white">
+                                    Ajuster le stock
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>;
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p className="rounded border border-dashed border-[#444] p-3 text-xs text-gray-500">
+                    Aucune variante : le produit utilise encore son stock parent. Créez ici une variante par saveur ; son prix et son poids seront repris du produit.
+                  </p>}
+
+                  <div className="grid gap-3 rounded-lg border border-[#333] bg-[#0b0b0b] p-3 sm:grid-cols-2">
+                    <div>
+                      <label className={labelCls}>Saveur{form.hasFlavors ? ' *' : ''}</label>
+                      <select value={variantDraft.flavor} onChange={(event) => setVariantDraft((current) => ({ ...current, flavor: event.target.value }))} className={inputCls} disabled={!form.hasFlavors}>
+                        <option value="">{form.hasFlavors ? 'Choisir une saveur' : 'Sans saveur'}</option>
+                        {form.flavors.map((flavorIri) => {
+                          const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
+                          return <option key={flavorIri} value={flavorIri}>{displayName(flavor) || flavorIri.split('/').pop()}</option>;
+                        })}
+                      </select>
+                    </div>
+                    <div><label className={labelCls}>Stock initial *</label><input type="number" min="0" step="1" value={variantDraft.stock} onChange={(event) => setVariantDraft((current) => ({ ...current, stock: event.target.value }))} className={inputCls} /></div>
+                    <div className="sm:col-span-2">
+                      <p className="mb-3 text-xs text-gray-500">
+                        SKU généré : <code className="font-mono text-gray-300">{draftVariantSku || 'choisissez une saveur'}</code>
+                        {' · '}Poids : {draftVariantSize || 'non défini'}
+                        {' · '}Prix : {form.price ? `${Number(form.salePrice || form.price).toFixed(2)} TND` : 'non défini'}
+                      </p>
+                      {variantError && <p role="alert" className="mb-2 text-xs text-red-300">{variantError}</p>}
+                      {variantNotice && <p role="status" className="mb-2 text-xs text-emerald-300">{variantNotice}</p>}
+                      <button type="button" disabled={variantSaving} onClick={() => { void createVariant(); }} className="inline-flex items-center gap-2 rounded-lg bg-[#d90429] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+                        {variantSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Créer la variante
+                      </button>
+                    </div>
+                  </div>
+                </>}
+              </section>
 
               {/* Booleans */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1440,7 +1911,7 @@ export const ProductManager = () => {
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2a2a2a] bg-[#1a1a1a] p-5">
               {error && <p role="alert" className="mr-auto w-full text-sm text-red-300 sm:w-auto">{error}</p>}
               <button type="button" onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">Annuler</button>
-              <button type="submit" form="product-edit-form" disabled={saving} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
+              <button type="submit" form="product-edit-form" disabled={saving || variantsLoading || variantsLoadFailed} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
                 {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
               </button>
             </div>
@@ -1466,7 +1937,7 @@ export const ProductManager = () => {
         const amount = product.montantRemise ?? product.montant_remise;
         const headerFormat = [product.weight ? `${product.weight} kg` : '', product.productOptions?.type].filter(Boolean).join(' ? ');
         const details = [
-          [Barcode, 'SKU', product.sku || '?'],
+          ...(product.variants?.length > 0 ? [] : [[Barcode, 'SKU', product.sku || '?']]),
           [Barcode, 'Code-barres', product.barcode || '?'],
           [Layers, 'Cat?gorie', displayName(product.category) || '?'],
           [BadgeCheck, 'Marque', brand],
@@ -1512,9 +1983,28 @@ export const ProductManager = () => {
                 <section className="overflow-hidden rounded-xl border border-[#29313D] bg-[#11151C]">
                   <div className="flex items-center justify-between border-b border-[#29313D] px-5 py-4"><h3 className="text-sm font-black uppercase tracking-wider text-[#FF665F]">Informations produit</h3><span className={`rounded-full px-3 py-1 text-xs font-bold ${product.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-400'}`}>{product.isActive ? 'Actif' : 'Inactif'}</span></div>
                   <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
-                    <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Prix actuel</p><p className="mt-1 text-2xl font-black text-white">{finalPrice.toFixed(2)} TND</p></div>{hasPromotion && <div className="text-right"><p className="text-xs text-gray-500">Prix initial</p><p className="text-sm text-gray-500 line-through">{price.toFixed(2)} TND</p><p className="mt-1 text-xs font-bold text-emerald-400">Promotion active</p></div>}{product.packing && Number(amount) > 0 && <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-400">Remise pack : {Number(amount).toFixed(2)} DT</div>}</div></div>
+                    <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{product.variants?.length > 0 ? 'Prix produit · repris par les variantes' : 'Prix actuel'}</p><p className="mt-1 text-2xl font-black text-white">{finalPrice.toFixed(2)} TND</p></div>{hasPromotion && <div className="text-right"><p className="text-xs text-gray-500">Prix initial</p><p className="text-sm text-gray-500 line-through">{price.toFixed(2)} TND</p><p className="mt-1 text-xs font-bold text-emerald-400">Promotion active</p></div>}{product.packing && Number(amount) > 0 && <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-400">Remise pack : {Number(amount).toFixed(2)} DT</div>}</div></div>
                     {details.map(([Icon, label, value]) => <div key={label} className="flex min-w-0 gap-3 rounded-lg border border-[#29313D] bg-[#0B0D11] p-3.5"><Icon size={17} className="mt-0.5 shrink-0 text-[#FF5148]" /><div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</p><p className="mt-1 break-words text-sm font-medium text-gray-200">{value}</p></div></div>)}
-                    <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Warehouse size={17} className="text-[#FF5148]" /><span className="text-xs font-bold uppercase tracking-wide text-gray-400">Stock disponible</span></div><span className={`text-sm font-bold ${lowStock ? 'text-amber-300' : 'text-emerald-400'}`}>{stock} en stock {lowStock ? '? Stock faible' : ''}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-[#29313D]"><div className={`h-full rounded-full transition-all ${lowStock ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${stockPercent}%` }} /></div><p className="mt-2 text-xs text-gray-500">Seuil minimum : {minimumStock}</p></div>
+                    {product.variants?.length > 0
+                      ? <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2">
+                        <div className="mb-3 flex items-center gap-2"><Warehouse size={17} className="text-[#FF5148]" /><span className="text-xs font-bold uppercase tracking-wide text-gray-400">Variantes · stock par SKU</span></div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[520px] text-left text-xs">
+                            <thead className="text-[10px] uppercase tracking-wide text-gray-500"><tr><th className="pb-2 pr-3">Variante</th><th className="pb-2 pr-3">SKU</th><th className="pb-2 pr-3">Prix</th><th className="pb-2 pr-3">Stock</th><th className="pb-2">Action</th></tr></thead>
+                            <tbody className="divide-y divide-[#29313D]">
+                              {product.variants.map((variant, index) => <tr key={variant.id ?? index}>
+                                <td className="py-2 pr-3 text-gray-200">{productVariantLabel(variant)}</td>
+                                <td className="py-2 pr-3 font-mono text-gray-400">{variantSku(variant) || '—'}</td>
+                                <td className="py-2 pr-3 text-gray-200">{variantPrice(variant).toFixed(2)} TND</td>
+                                <td className={`py-2 ${Number(variant.stock || 0) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{Number(variant.stock || 0)}</td>
+                                <td className="py-2"><button type="button" onClick={() => { void openStockManager({ id: product.id, name: `${product.name} · ${productVariantLabel(variant)}` }); }} className="rounded bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-300 hover:text-white">Ajuster</button></td>
+                              </tr>)}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="mt-3 text-xs text-gray-500">Les prix et le poids sont repris du produit. Le stock est ajusté séparément pour chaque variante.</p>
+                      </div>
+                      : <div className="rounded-lg border border-[#29313D] bg-[#0B0D11] p-4 sm:col-span-2"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Warehouse size={17} className="text-[#FF5148]" /><span className="text-xs font-bold uppercase tracking-wide text-gray-400">Stock disponible</span></div><span className={`text-sm font-bold ${lowStock ? 'text-amber-300' : 'text-emerald-400'}`}>{stock} en stock {lowStock ? '? Stock faible' : ''}</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-[#29313D]"><div className={`h-full rounded-full transition-all ${lowStock ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${stockPercent}%` }} /></div><p className="mt-2 text-xs text-gray-500">Seuil minimum : {minimumStock}</p></div>}
                   </div>
                 </section>
                 <div className="grid gap-4 lg:grid-cols-2">{descriptionBlock('Description courte', product.shortDescription)}{descriptionBlock('Description d?taill?e', product.description)}</div>
@@ -1539,27 +2029,74 @@ export const ProductManager = () => {
             </div>
             <div className="p-5 space-y-4">
               {stockError && <div role="alert" className="text-sm text-red-300 bg-red-900/20 border border-red-500/30 rounded-lg p-3">{stockError}</div>}
-              <div>
-                <label className={labelCls}>Opération</label>
-                <select value={stockForm.operation} onChange={e => setStockForm(p => ({ ...p, operation: e.target.value }))} className={inputCls}>
-                  <option value="add">Ajouter</option>
-                  <option value="remove">Retirer</option>
-                  <option value="adjust">Ajuster (stock réel constaté)</option>
-                  <option value="return">Retour</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Quantité</label>
-                <input type="number" min="1" step="1" value={stockForm.quantity} onChange={e => setStockForm(p => ({ ...p, quantity: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Motif {stockForm.operation === 'add' ? '(facultatif)' : '*'}</label>
-                <input value={stockForm.reason} onChange={e => setStockForm(p => ({ ...p, reason: e.target.value }))} className={inputCls} placeholder="ex: Réception fournisseur" />
-              </div>
+              {stockModal.loadingVariants ? <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-[#d90429]" /></div> : stockModal.variants?.length > 0 ? <>
+                <div>
+                  <label className={labelCls}>Variante</label>
+                  <select
+                    value={stockForm.variantId}
+                    onChange={(event) => {
+                      const variant = stockModal.variants.find((item) => String(item.id ?? iriToId(item['@id'])) === event.target.value);
+                      setStockForm((current) => ({
+                        ...current,
+                        variantId: event.target.value,
+                        quantity: current.operation === 'adjust' ? Number(variant?.stock ?? 0) : 1,
+                      }));
+                    }}
+                    className={inputCls}
+                  >
+                    {stockModal.variants.map((variant, index) => <option key={variant.id ?? index} value={String(variant.id ?? iriToId(variant['@id']) ?? '')}>
+                      {productVariantLabel(variant)} · {variantSku(variant) || 'SKU manquant'}
+                    </option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Opération</label>
+                  <select value={stockForm.operation} onChange={(event) => {
+                    const selected = stockModal.variants.find((variant) => String(variant.id ?? iriToId(variant['@id'])) === stockForm.variantId);
+                    setStockForm((current) => ({
+                      ...current,
+                      operation: event.target.value,
+                      quantity: event.target.value === 'adjust' ? Number(selected?.stock ?? 0) : 1,
+                    }));
+                  }} className={inputCls}>
+                    <option value="add">Ajouter</option>
+                    <option value="remove">Retirer</option>
+                    <option value="adjust">Ajuster (stock réel constaté)</option>
+                    <option value="return">Retour</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>{stockForm.operation === 'adjust' ? 'Stock réel' : 'Quantité'}</label>
+                  <input type="number" min={stockForm.operation === 'adjust' ? '0' : '1'} step="1" value={stockForm.quantity} onChange={e => setStockForm(p => ({ ...p, quantity: e.target.value }))} className={inputCls} />
+                  <p className="mt-1 text-[11px] text-gray-500">Le stock de la variante est modifié, jamais celui du produit parent.</p>
+                </div>
+                <div>
+                  <label className={labelCls}>Motif {stockForm.operation === 'add' ? '(facultatif)' : '*'}</label>
+                  <input value={stockForm.reason} onChange={e => setStockForm(p => ({ ...p, reason: e.target.value }))} className={inputCls} placeholder="ex: Réception fournisseur" />
+                </div>
+              </> : <>
+                <div>
+                  <label className={labelCls}>Opération</label>
+                  <select value={stockForm.operation} onChange={e => setStockForm(p => ({ ...p, operation: e.target.value }))} className={inputCls}>
+                    <option value="add">Ajouter</option>
+                    <option value="remove">Retirer</option>
+                    <option value="adjust">Ajuster (stock réel constaté)</option>
+                    <option value="return">Retour</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Quantité</label>
+                  <input type="number" min="1" step="1" value={stockForm.quantity} onChange={e => setStockForm(p => ({ ...p, quantity: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Motif {stockForm.operation === 'add' ? '(facultatif)' : '*'}</label>
+                  <input value={stockForm.reason} onChange={e => setStockForm(p => ({ ...p, reason: e.target.value }))} className={inputCls} placeholder="ex: Réception fournisseur" />
+                </div>
+              </>}
             </div>
             <div className="p-5 border-t border-[#2a2a2a] flex gap-3 justify-end">
               <button disabled={stockSaving} onClick={() => setStockModal(null)} className="px-4 py-2 text-sm text-gray-300 hover:text-white disabled:opacity-40">Annuler</button>
-              <button disabled={stockSaving} onClick={handleStockSave} className="inline-flex items-center gap-2 bg-[#d90429] hover:bg-[#ff1a3c] text-white px-5 py-2 rounded-lg text-sm font-bold disabled:opacity-60">
+              <button disabled={stockSaving || stockModal.loadingVariants || stockModal.variantLoadFailed} onClick={handleStockSave} className="inline-flex items-center gap-2 bg-[#d90429] hover:bg-[#ff1a3c] text-white px-5 py-2 rounded-lg text-sm font-bold disabled:opacity-60">
                 {stockSaving && <Loader2 size={14} className="animate-spin" />}{stockSaving ? 'Enregistrement…' : 'Confirmer'}
               </button>
             </div>

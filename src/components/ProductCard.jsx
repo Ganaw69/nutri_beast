@@ -88,10 +88,9 @@ export const ProductCard = ({ product }) => {
 
           {/* Red Square Shopping Bag Button */}
           <button
-            onClick={() => inStock && addToCart(product)}
-            disabled={!inStock}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#d90429] text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111]"
-            title={inStock ? "Ajouter au panier" : "Indisponible"}
+            onClick={() => { void addToCart(product); }}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#d90429] text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111]"
+            title={inStock ? "Ajouter au panier" : "Vérifier la disponibilité"}
           >
             <ShoppingBag className="w-4 h-4 text-white fill-white/20" />
           </button>

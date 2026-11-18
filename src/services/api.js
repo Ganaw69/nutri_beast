@@ -452,6 +452,7 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
     const id = pathname.split('/').pop();
     return clone(findDemoEntity('products', id));
   }
+  if (pathname === '/product_variants' && method === 'GET') return buildHydraCollection([]);
   if (pathname === '/product_images' && method === 'GET') return buildHydraCollection([]);
 
   if (pathname === '/categories/main' && method === 'GET') {
@@ -1339,9 +1340,18 @@ export const authService = {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Identifiants invalides.');
+      if (res.status === 404) {
+        throw new Error("Route d’authentification introuvable. Vérifiez que le backend expose POST /api/login_check.");
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(err.message || 'Identifiants invalides.');
+      }
+      throw new Error(err.message || `Le serveur d’authentification a renvoyé HTTP ${res.status}.`);
     }
     const data = await res.json();
+    if (!data?.token) {
+      throw new Error("Le serveur d’authentification n’a pas renvoyé de jeton.");
+    }
     return data.token; // standard Lexik JWT format
   },
 };
@@ -1549,17 +1559,13 @@ export const productService = {
     clearProductReadCache();
     return product;
   },
-  async uploadImage(productId, file, position = 0, isPrimary = false, flavorId = null) {
+  async uploadImage(productId, file, position = 0, isPrimary = false, variantId = null) {
     const fd = new FormData();
     fd.append('productId', String(productId));
     fd.append('position', String(position));
     fd.append('isPrimary', isPrimary ? 'true' : 'false');
-    if (flavorId !== null && flavorId !== undefined && flavorId !== '') {
-      fd.append('flavorId', String(flavorId));
-      const flavorReference = String(flavorId);
-      fd.append('flavor', flavorReference.startsWith('/api/')
-        ? flavorReference
-        : `/api/flavors/${flavorReference}`);
+    if (variantId !== null && variantId !== undefined && variantId !== '') {
+      fd.append('variantId', String(variantId));
     }
     fd.append('imageFile', file);
     const image = await apiFetch('/product_images', { method: 'POST', body: fd }, true);
@@ -1567,6 +1573,10 @@ export const productService = {
     const assignedProductId = getProductImageProductId(image);
     if (assignedProductId != null && String(assignedProductId) !== String(productId)) {
       throw new Error("L'image a été associée au mauvais produit.");
+    }
+    const assignedVariantId = getRelationId(image?.variant ?? image?.variantId ?? image?.variant_id);
+    if (variantId != null && assignedVariantId != null && String(assignedVariantId) !== String(variantId)) {
+      throw new Error("L'image a été associée à la mauvaise variante.");
     }
 
     clearProductReadCache();
@@ -1616,6 +1626,56 @@ export const productService = {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/merge-patch+json' },
       body: JSON.stringify({ position }),
+    });
+    clearProductReadCache();
+    return result;
+  },
+};
+
+export const productVariantService = {
+  async getAll(params = {}, skipAuth = true, fresh = false) {
+    const path = `/product_variants${buildQuery(params)}`;
+    const response = fresh
+      ? await requestApi(path, {}, false, skipAuth)
+      : await apiFetch(path, {}, false, skipAuth);
+    return normalizeCollectionResponse(response);
+  },
+  async getAllPages(params = {}, skipAuth = true, fresh = false) {
+    const firstPage = await this.getAll({ ...params, page: 1, itemsPerPage: 100 }, skipAuth, fresh);
+    const firstItems = firstPage['hydra:member'];
+    const total = Number(firstPage['hydra:totalItems'] ?? firstItems.length);
+    if (firstItems.length === 0 || firstItems.length >= total) return firstPage;
+
+    const remaining = await Promise.all(
+      Array.from({ length: Math.ceil(total / firstItems.length) - 1 }, (_, index) =>
+        this.getAll({ ...params, page: index + 2, itemsPerPage: 100 }, skipAuth, fresh)
+      )
+    );
+    const members = [...firstItems, ...remaining.flatMap((page) => page['hydra:member'])];
+    return { ...firstPage, 'hydra:member': members, 'hydra:totalItems': members.length };
+  },
+  async create(data) {
+    const variant = await apiFetch('/product_variants', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    clearProductReadCache();
+    return variant;
+  },
+  async update(id, data) {
+    const variant = await apiFetch(`/product_variants/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify(data),
+    });
+    clearProductReadCache();
+    return variant;
+  },
+  async adjustStock(id, operation, quantity, reason = '') {
+    const result = await apiFetch(`/product_variants/${id}/stock/${operation}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/merge-patch+json' },
+      body: JSON.stringify({ quantity, reason: reason.trim() }),
     });
     clearProductReadCache();
     return result;
