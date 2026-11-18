@@ -275,6 +275,8 @@ export const ProductManager = () => {
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('');
   const [stockFilter, setStockFilter] = useState('');
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit', data? }
+  const [isProductCreationFlow, setIsProductCreationFlow] = useState(false);
+  const [productCreationStep, setProductCreationStep] = useState(1);
   const [editingProductHasVariants, setEditingProductHasVariants] = useState(false);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [variantsLoadFailed, setVariantsLoadFailed] = useState(false);
@@ -537,13 +539,20 @@ export const ProductManager = () => {
     setPage(1);
   }, [searchTerm, selectedParentCategoryId, selectedSubCategoryId]);
 
-  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setEditingProductHasVariants(false); setVariantsLoading(false); setVariantsLoadFailed(false); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setProductVariants([]); setVariantImageFiles({}); setVariantDraft({ flavor: '', stock: '0' }); setVariantError(''); setVariantNotice(''); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const closeProductModal = () => {
+    setModal(null);
+    setIsProductCreationFlow(false);
+    setProductCreationStep(1);
+  };
+  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setIsProductCreationFlow(true); setProductCreationStep(1); setEditingProductHasVariants(false); setVariantsLoading(false); setVariantsLoadFailed(false); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setProductVariants([]); setVariantImageFiles({}); setVariantDraft({ flavor: '', stock: '0' }); setVariantError(''); setVariantNotice(''); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
     setNotice('');
     setFlavorError('');
     setNewFlavorName('');
     setFlavorSearch('');
+    setIsProductCreationFlow(false);
+    setProductCreationStep(1);
     setImageFiles([]);
     setImagePreviews([]);
     setProductVariants([]);
@@ -723,7 +732,7 @@ export const ProductManager = () => {
         expirationDate: undefined,
         price: parentPrice.toFixed(2),
         salePrice: parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
-        stock: editingProductHasVariants ? undefined : form.stock !== '' ? parseInt(form.stock) : undefined,
+        stock: editingProductHasVariants || form.hasFlavors ? undefined : form.stock !== '' ? parseInt(form.stock) : undefined,
         minimumStock: form.minimumStock !== '' ? parseInt(form.minimumStock) : undefined,
         weight: form.weight === '' ? null : String(form.weight).trim(),
         dateProduit: form.dateProduit ? `${form.dateProduit}T00:00:00+00:00` : null,
@@ -806,9 +815,17 @@ export const ProductManager = () => {
       setNotice(creatingProduct ? 'Produit créé avec succès.' : 'Modifications enregistrées avec succès.');
       setVariantNotice(
         creatingProduct
-          ? 'Produit créé. Vous pouvez maintenant ajouter ses variantes ci-dessous.'
+          ? 'Produit créé. Ajoutez maintenant les variantes et leur stock.'
           : 'Modifications enregistrées. Vous pouvez continuer à gérer les variantes, leurs images et leur stock ici.'
       );
+      if (isProductCreationFlow) {
+        if (form.hasFlavors) {
+          setProductCreationStep(2);
+          setVariantError('');
+        } else {
+          closeProductModal();
+        }
+      }
       void fetchProducts({ silent: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue pendant l’enregistrement.');
@@ -1248,6 +1265,7 @@ export const ProductManager = () => {
 
   const inputCls = "w-full bg-[#111] border border-[#333] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d90429] transition-colors";
   const labelCls = "block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1";
+  const isCreationVariantStep = isProductCreationFlow && productCreationStep === 2;
 
   return (
     <div className="space-y-6">
@@ -1421,10 +1439,24 @@ export const ProductManager = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[92vh]">
             <div className="flex justify-between items-center p-6 border-b border-[#2a2a2a]">
-              <h2 className="text-xl font-bold text-white">{modal.mode === 'add' ? 'Nouveau Produit' : 'Modifier le Produit'}</h2>
-              <button type="button" onClick={() => setModal(null)} className="text-gray-400 hover:text-white p-1"><X size={20} /></button>
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  {isCreationVariantStep ? 'Ajouter les variantes' : isProductCreationFlow ? 'Nouveau Produit' : modal.mode === 'add' ? 'Nouveau Produit' : 'Modifier le Produit'}
+                </h2>
+                {isProductCreationFlow && (
+                  <ol className="mt-3 flex items-center gap-3 text-xs font-bold">
+                    <li className={productCreationStep === 1 ? 'text-white' : 'text-emerald-400'}>
+                      {productCreationStep === 1 ? '1. Produit' : '✓ Produit'}
+                    </li>
+                    <li aria-hidden="true" className="text-gray-600">→</li>
+                    <li className={productCreationStep === 2 ? 'text-white' : 'text-gray-500'}>2. Variantes et stock</li>
+                  </ol>
+                )}
+              </div>
+              <button type="button" onClick={closeProductModal} className="text-gray-400 hover:text-white p-1"><X size={20} /></button>
             </div>
             <form id="product-edit-form" onSubmit={handleSave} className="p-6 overflow-y-auto flex-1 space-y-5">
+              {!isCreationVariantStep && <>
               
               <div>
                 <label className={labelCls}>Nom *</label>
@@ -1434,9 +1466,9 @@ export const ProductManager = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div><label className={labelCls}>Prix (TND) *</label><input type="number" min="0.01" step="0.01" required disabled={variantsLoading || variantsLoadFailed} value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
                 <div><label className={labelCls}>Prix promo</label><input type="number" min="0" step="0.01" disabled={variantsLoading || variantsLoadFailed} value={form.salePrice} onChange={e => setForm(p => ({ ...p, salePrice: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
-                <div><label className={labelCls}>Stock{editingProductHasVariants ? ' parent · non utilisé' : ''}</label><input type="number" min="0" disabled={editingProductHasVariants || variantsLoading || variantsLoadFailed} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
+                <div><label className={labelCls}>Stock{editingProductHasVariants || form.hasFlavors ? ' parent · non utilisé' : ''}</label><input type="number" min="0" disabled={editingProductHasVariants || form.hasFlavors || variantsLoading || variantsLoadFailed} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
               </div>
-              {editingProductHasVariants && <p className="-mt-3 text-xs text-gray-500">Le prix et le poids sont repris du produit pour chaque variante. Le stock, lui, se modifie séparément par variante.</p>}
+              {(editingProductHasVariants || form.hasFlavors) && <p className="-mt-3 text-xs text-gray-500">Le prix et le poids sont repris du produit pour chaque variante. Le stock, lui, se gère séparément par variante.</p>}
               {variantsLoading && <p role="status" className="-mt-3 text-xs text-gray-500">Chargement des variantes avant l’édition du stock…</p>}
               <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
               <div><label className={labelCls}>Date du produit</label><input type="date" value={form.dateProduit} onChange={e => setForm(p => ({ ...p, dateProduit: e.target.value }))} className={inputCls} /></div>
@@ -1812,8 +1844,9 @@ export const ProductManager = () => {
                 {flavors.length > 0 && visibleFlavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur trouvée.</p>}
                 {flavors.length === 0 && <p className="text-xs text-gray-500">Aucune saveur. Ajoutez la première ci-dessus.</p>}
               </div>}
+              </>}
 
-              <section className="space-y-4 rounded-lg border border-[#333] bg-[#111] p-4">
+              {(!isProductCreationFlow || isCreationVariantStep) && <section className="space-y-4 rounded-lg border border-[#333] bg-[#111] p-4">
                 <div>
                   <h3 className="text-sm font-bold text-white">Variantes · stock par saveur</h3>
                   <p className="mt-1 text-xs text-gray-500">
@@ -1923,8 +1956,9 @@ export const ProductManager = () => {
                     </div>
                   </div>
                 </>}
-              </section>
+              </section>}
 
+              {!isCreationVariantStep && <>
               {/* Booleans */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[['isActive','Actif'],['isFeatured','En Vedette'],['isNew','Nouveau'],['isBestSeller','Best seller'],['isOnSale','En Promo'],['packing','Disponible dans « Composer votre pack »']].map(([key, label]) => (
@@ -1935,13 +1969,23 @@ export const ProductManager = () => {
                 ))}
               </div>
               {form.packing && <div className="mt-4 max-w-xs"><label className={labelCls}>Montant de remise pack (DT)</label><input type="number" min="0" step="0.01" value={form.montantRemise} onChange={e => setForm(p => ({ ...p, montantRemise: e.target.value }))} className={inputCls} placeholder="0.00" /><p className="mt-1 text-[11px] text-gray-500">Remise fixe appliquée par le backend lors de la composition d’un pack.</p></div>}
+              </>}
             </form>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2a2a2a] bg-[#1a1a1a] p-5">
               {error && <p role="alert" className="mr-auto w-full text-sm text-red-300 sm:w-auto">{error}</p>}
-              <button type="button" onClick={() => setModal(null)} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">{modal.mode === 'edit' ? 'Fermer' : 'Annuler'}</button>
-              <button type="submit" form="product-edit-form" disabled={saving || variantsLoading || variantsLoadFailed} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
-                {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
-              </button>
+              {isCreationVariantStep ? (
+                <>
+                  <button type="button" disabled={variantSaving} onClick={() => { setError(''); setProductCreationStep(1); }} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white disabled:opacity-50">Retour</button>
+                  <button type="button" disabled={variantSaving} onClick={closeProductModal} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60">Terminer</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={closeProductModal} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">{modal.mode === 'edit' ? 'Fermer' : 'Annuler'}</button>
+                  <button type="submit" form="product-edit-form" disabled={saving || variantsLoading || variantsLoadFailed} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
+                    {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
