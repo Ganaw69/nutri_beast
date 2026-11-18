@@ -174,8 +174,12 @@ export const CheckoutPage = () => {
               quantity: item.quantity || 1,
             }];
           }
+          const sku = String(item.sku || item.SKU || "").trim();
+          if (!sku) {
+            throw new Error(`Le produit "${item.name || "sélectionné"}" n’a pas de SKU valide.`);
+          }
           return [{
-            product: `/api/products/${productId}`,
+            sku,
             quantity: item.quantity || 1,
           }];
         }),
