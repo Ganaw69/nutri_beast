@@ -609,7 +609,7 @@ export const ProductDetailPage = () => {
       {/* Main Product Hero Section (2-Column Layout) */}
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Column: Vertical Thumbnails + Main Image */}
-        <div className="relative flex w-full flex-col items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-5 lg:col-span-6 lg:p-4 xl:col-span-5">
+        <div className="relative flex w-full flex-col items-start gap-3 overflow-hidden rounded-2xl border border-white/10 bg-[#1a1a1a] lg:col-span-6 xl:col-span-5">
           {(product.badge || product.isNew || product.isOnSale) && (
             <div className="absolute right-6 top-6 z-10 flex flex-wrap gap-2">
               {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
@@ -620,7 +620,7 @@ export const ProductDetailPage = () => {
 
           {/* Vertical Thumbnail Column on the Left of Main Image */}
           {visibleGalleryImages.length > 0 && (
-            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0">
+            <div className="flex w-full flex-row gap-3 overflow-x-auto px-3 pt-3 sm:px-5 sm:pt-5 lg:px-4 lg:pt-4">
               {visibleGalleryImages.map((img, index) => {
                 const imageSrc = productImageUrl(img) || product.image;
                 return (
@@ -644,7 +644,7 @@ export const ProductDetailPage = () => {
           {/* Main Product Image Container */}
           <div className="relative min-w-0 w-full self-start">
             {activeImage || product.image ? (
-              <div className="relative aspect-square w-full max-w-[1080px] overflow-hidden">
+              <div className="relative aspect-square w-full max-w-[1080px] overflow-hidden rounded-b-2xl">
                 <img
                   src={activeImage || product.image}
                   alt={product.name}
