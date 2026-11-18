@@ -680,6 +680,7 @@ export const ProductManager = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     if (saving) return;
+    const creatingProduct = modal.mode === 'add';
     if (variantsLoading || variantsLoadFailed) {
       setError(variantsLoadFailed
         ? 'Impossible de vérifier les variantes. Fermez puis rouvrez le produit avant de modifier le prix ou le stock.'
@@ -773,7 +774,7 @@ export const ProductManager = () => {
           await productService.setImagePrimary(selectedPrimaryId);
         }
       }
-      setModal(null);
+      if (!creatingProduct) setModal(null);
       setImageFiles([]);
       setImagePreviews([]);
       setPrimaryImageIndex(0);
@@ -796,7 +797,10 @@ export const ProductManager = () => {
         return page === 1 ? [savedProduct, ...current].slice(0, 20) : current;
       });
       setTotal((current) => products.some((product) => String(product.id) === String(savedId)) ? current : current + 1);
-      setNotice(modal.mode === 'add' ? 'Produit créé avec succès.' : 'Modifications enregistrées avec succès.');
+      setNotice(creatingProduct ? 'Produit créé avec succès.' : 'Modifications enregistrées avec succès.');
+      if (creatingProduct) {
+        setVariantNotice('Produit créé. Vous pouvez maintenant ajouter ses variantes ci-dessous.');
+      }
       void fetchProducts({ silent: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue pendant l’enregistrement.');
