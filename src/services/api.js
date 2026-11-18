@@ -437,7 +437,7 @@ function upsertDemoEntity(resource, item) {
 }
 
 async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = false) {
-  let method = String(opts.method || 'GET').toUpperCase();
+  const method = String(opts.method || 'GET').toUpperCase();
   const url = new URL(path, 'http://local');
   const pathname = url.pathname;
 
@@ -446,9 +446,6 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
   }
 
   const body = await readBody(opts.body);
-  if (method === 'POST' && String(body._method || '').toUpperCase() === 'PATCH') {
-    method = 'PATCH';
-  }
 
   if (pathname === '/products' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.products, path));
   if (pathname.startsWith('/products/') && method === 'GET') {
@@ -1838,13 +1835,11 @@ export const brandService = {
     return apiFetch('/brands', { method: 'POST', body: formData }, true);
   },
   async update(id, data) {
-    const formData = new FormData();
-    formData.append('_method', 'PATCH');
-    Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
     const result = await apiFetch(`/brands/${id}`, {
-      method: 'POST',
-      body: formData,
-    }, true);
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
     clearProductReadCache();
     return result;
   },

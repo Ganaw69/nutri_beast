@@ -50,6 +50,39 @@ const variantLabel = (variant, flavors = []) => {
     .map((value) => typeof value === "number" ? `${value} kg` : value)
     .join(" · ") || "Variante";
 };
+const variantFlavorOption = (variant, flavors = []) => {
+  const relation = variant?.flavor ?? variant?.flavour;
+  const id = getRelationId(relation);
+  const flavorRecord = flavors.find((item) => id != null && String(getRelationId(item)) === String(id));
+  const name = (typeof relation === "object" && relation?.name)
+    || variant?.flavorName
+    || variant?.flavor_name
+    || variant?.flavourName
+    || flavorRecord?.name
+    || (typeof relation === "string" && !relation.startsWith("/api/") ? relation : "");
+  return name ? { id: id ?? flavorRecord?.id, name: String(name) } : null;
+};
+const buildVariantFlavorOptions = (variants, flavors) => {
+  const options = (flavors || [])
+    .filter((flavor) => flavor?.name)
+    .map((flavor) => ({ ...flavor, variants: [] }));
+
+  variants.forEach((variant) => {
+    const flavor = variantFlavorOption(variant, flavors);
+    if (!flavor) return;
+    let option = options.find((item) => (
+      (flavor.id != null && item.id != null && String(item.id) === String(flavor.id))
+      || item.name.trim().toLowerCase() === flavor.name.trim().toLowerCase()
+    ));
+    if (!option) {
+      option = { ...flavor, variants: [] };
+      options.push(option);
+    }
+    option.variants.push(variant);
+  });
+
+  return options;
+};
 const variantUnitPrice = (variant) => {
   const price = Number(variant?.price ?? 0);
   const salePrice = Number(variant?.salePrice ?? variant?.sale_price ?? 0);
@@ -316,13 +349,14 @@ export const ProductDetailPage = () => {
         setSelectedVariantKey(firstAvailableVariant ? variantKey(firstAvailableVariant) : "");
         setProduct(norm);
         const hydratedInitialFlavor = norm.flavorOptions[0];
+        const initialVariantFlavor = variantFlavorOption(firstAvailableVariant, norm.flavorOptions);
         setActiveImage(
           resolveVariantImage(productImages, firstAvailableVariant?.id ?? getRelationId(firstAvailableVariant?.['@id']))
           || (activeVariants.length === 0 ? resolveFlavorImage(productImages, hydratedInitialFlavor?.id) : null)
           || resolveProductImage(productWithImages, norm.image)
           || productImageUrl(productImages[0])
         );
-        setSelectedFlavor(activeVariants.length > 0 ? "" : hydratedInitialFlavor?.name || "");
+        setSelectedFlavor(initialVariantFlavor?.name || (activeVariants.length === 0 ? hydratedInitialFlavor?.name || "" : ""));
 
         const relatedWithImages = await hydrateProductsWithImages(
           (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
@@ -377,6 +411,7 @@ export const ProductDetailPage = () => {
     const requestId = flavorImageRequestRef.current + 1;
     flavorImageRequestRef.current = requestId;
     setSelectedVariantKey(variant ? variantKey(variant) : '');
+    setSelectedFlavor(variantFlavorOption(variant, product?.flavorOptions)?.name || '');
     if (!variant) return;
 
     const variantId = variant.id ?? getRelationId(variant['@id']);
@@ -480,12 +515,16 @@ export const ProductDetailPage = () => {
 
   const selectedVariant = variants.find((variant) => variantKey(variant) === selectedVariantKey);
   const hasVariants = variants.length > 0;
+  const variantFlavorChoices = buildVariantFlavorOptions(variants, product.flavorOptions);
+  const hasVariantFlavors = variantFlavorChoices.some((choice) => choice.variants.length > 0);
   const selectedVariantPrice = selectedVariant ? variantUnitPrice(selectedVariant) : null;
   const selectedVariantOriginalPrice = selectedVariant
     && selectedVariantPrice < Number(selectedVariant.price)
     ? Number(selectedVariant.price)
     : null;
-  const selectedVariantLabel = selectedVariant ? variantLabel(selectedVariant, product.flavorOptions) : '';
+  const selectedVariantLabel = selectedVariant
+    ? variantFlavorOption(selectedVariant, product.flavorOptions)?.name || variantLabel(selectedVariant, product.flavorOptions)
+    : '';
   const selectedVariantInStock = Boolean(selectedVariant && variantSku(selectedVariant) && Number(selectedVariant.stock ?? 0) > 0);
   const newShopFilter = ["new", "nouveaute", "nouveautes"].includes(
     String(shopRouteFilters?.filter || "").trim().toLocaleLowerCase("fr")
@@ -570,7 +609,7 @@ export const ProductDetailPage = () => {
       {/* Main Product Hero Section (2-Column Layout) */}
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Column: Vertical Thumbnails + Main Image */}
-        <div className="relative flex w-full flex-col-reverse items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-8 lg:col-span-7 xl:col-span-6 lg:flex-row">
+        <div className="relative flex w-full flex-col-reverse items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-5 lg:col-span-6 lg:p-4 xl:col-span-5 lg:flex-col-reverse">
           {(product.badge || product.isNew || product.isOnSale) && (
             <div className="absolute left-6 top-6 z-10 flex flex-wrap gap-2">
               {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
@@ -581,7 +620,7 @@ export const ProductDetailPage = () => {
 
           {/* Vertical Thumbnail Column on the Left of Main Image */}
           {visibleGalleryImages.length > 0 && (
-            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0 lg:w-24 lg:flex-col lg:overflow-visible lg:pt-10">
+            <div className="flex w-full flex-row gap-3 overflow-x-auto pt-0">
               {visibleGalleryImages.map((img, index) => {
                 const imageSrc = productImageUrl(img) || product.image;
                 return (
@@ -589,7 +628,7 @@ export const ProductDetailPage = () => {
                     key={img.id ?? img['@id'] ?? `${img.image || 'img'}-${index}`}
                     type="button"
                     onClick={() => setActiveImage(imageSrc)}
-                    className={`h-20 w-20 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-24 sm:w-24 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
+                    className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-[#111] p-1.5 transition-colors sm:h-20 sm:w-20 ${activeImage === imageSrc ? 'border-[#d90429]' : 'border-white/10 hover:border-white/30'}`}
                   >
                     {imageSrc ? (
                       <img src={imageSrc} alt="" className="w-full h-full object-contain" />
@@ -603,7 +642,7 @@ export const ProductDetailPage = () => {
           )}
 
           {/* Main Product Image Container */}
-          <div className="relative min-w-0 w-full flex-1 self-start lg:w-auto">
+          <div className="relative min-w-0 w-full self-start">
             {activeImage || product.image ? (
               <div className="relative aspect-square w-full max-w-[1080px] overflow-hidden">
                 <img
@@ -632,7 +671,7 @@ export const ProductDetailPage = () => {
         </div>
 
         {/* Right Column: Product Info & Cart Actions */}
-        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
+        <div className="space-y-6 lg:col-span-6 xl:col-span-5">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
@@ -645,7 +684,7 @@ export const ProductDetailPage = () => {
             <div className="flex items-baseline gap-3 mt-4">
               <span className="font-black text-3xl text-white">
                 {hasVariants
-                  ? selectedVariantPrice == null ? "Choisissez une variante" : selectedVariantPrice.toFixed(2)
+                  ? selectedVariantPrice == null ? hasVariantFlavors ? "Choisissez une saveur" : "Choisissez une variante" : selectedVariantPrice.toFixed(2)
                   : product.price.toFixed(2)}
                 {(!hasVariants || selectedVariantPrice != null) && <span className="text-sm font-bold text-[#d90429]"> TND</span>}
               </span>
@@ -656,7 +695,7 @@ export const ProductDetailPage = () => {
               )}
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${(hasVariants ? selectedVariantInStock : product.inStock) ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
                 {hasVariants
-                  ? selectedVariant ? selectedVariantInStock ? `${selectedVariant.stock} en stock` : "Indisponible" : "Choisissez une variante"
+                  ? selectedVariant ? selectedVariantInStock ? `${selectedVariant.stock} en stock` : "Indisponible" : hasVariantFlavors ? "Choisissez une saveur" : "Choisissez une variante"
                   : product.inStock ? 'En Stock' : 'Rupture de Stock'}
               </span>
             </div>
@@ -687,28 +726,58 @@ export const ProductDetailPage = () => {
                 </div>
               )}
               {hasVariants ? (
-                <label className="block text-xs font-heading font-bold text-gray-300 uppercase">
-                  Variante
-                  <select
-                    value={selectedVariantKey}
-                    onChange={(event) => {
-                      const nextVariant = variants.find((variant) => variantKey(variant) === event.target.value);
-                      void handleVariantSelect(nextVariant);
-                    }}
-                    className="mt-2 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-4 py-3 text-sm font-bold normal-case text-white focus:border-[#d90429] focus:outline-none"
-                  >
-                    <option value="">Choisir une variante</option>
-                    {variants.map((variant, index) => (
-                      <option
-                        key={variantKey(variant) || index}
-                        value={variantKey(variant)}
-                        disabled={!variantSku(variant) || Number(variant.stock ?? 0) <= 0}
-                      >
-                        {variantLabel(variant, product.flavorOptions)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                hasVariantFlavors ? (
+                  <div>
+                    <span className="block text-xs font-heading font-bold text-gray-300 uppercase">Saveur</span>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {variantFlavorChoices.map((choice, index) => {
+                        const choiceVariant = choice.variants.find((variant) => (
+                          variantSku(variant) && Number(variant.stock ?? 0) > 0
+                        )) || choice.variants[0];
+                        const available = choice.variants.some((variant) => (
+                          variantSku(variant) && Number(variant.stock ?? 0) > 0
+                        ));
+                        const isSelected = choiceVariant && variantKey(choiceVariant) === selectedVariantKey;
+                        return (
+                          <button
+                            key={`${choice.id ?? choice.name}-${index}`}
+                            type="button"
+                            disabled={!available}
+                            aria-pressed={Boolean(isSelected)}
+                            title={available ? choice.name : `${choice.name} — Indisponible`}
+                            onClick={() => { if (choiceVariant) void handleVariantSelect(choiceVariant); }}
+                            className={`rounded-lg border px-4 py-2 text-sm font-bold transition-all ${isSelected ? 'border-[#d90429] bg-[#d90429] text-white' : 'border-white/10 bg-[#1a1a1a] text-gray-300 hover:border-white/30'} disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {choice.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <label className="block text-xs font-heading font-bold text-gray-300 uppercase">
+                    Variante
+                    <select
+                      value={selectedVariantKey}
+                      onChange={(event) => {
+                        const nextVariant = variants.find((variant) => variantKey(variant) === event.target.value);
+                        void handleVariantSelect(nextVariant);
+                      }}
+                      className="mt-2 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-4 py-3 text-sm font-bold normal-case text-white focus:border-[#d90429] focus:outline-none"
+                    >
+                      <option value="">Choisir une variante</option>
+                      {variants.map((variant, index) => (
+                        <option
+                          key={variantKey(variant) || index}
+                          value={variantKey(variant)}
+                          disabled={!variantSku(variant) || Number(variant.stock ?? 0) <= 0}
+                        >
+                          {variantLabel(variant, product.flavorOptions)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
               ) : product.flavorOptions.length > 0 && (
                 <>
                   <label className="text-xs font-heading font-bold text-gray-300 block uppercase">Saveur:</label>
@@ -737,7 +806,7 @@ export const ProductDetailPage = () => {
               onClick={() => {
                 if (variants.length > 0) {
                   if (!selectedVariant || !variantSku(selectedVariant)) {
-                    showToast("Sélectionnez une variante avec un SKU valide.");
+                    showToast(`Sélectionnez ${hasVariantFlavors ? "une saveur" : "une variante"} avec un SKU valide.`);
                     return;
                   }
                   void addToCart({
