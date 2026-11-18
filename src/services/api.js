@@ -1839,13 +1839,12 @@ export const brandService = {
     return apiFetch('/brands', { method: 'POST', body: formData }, true);
   },
   async update(id, data) {
-    const formData = new URLSearchParams();
+    const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: formData,
-    });
+    }, true);
     clearProductReadCache();
     return result;
   },
