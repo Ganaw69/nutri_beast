@@ -1829,9 +1829,10 @@ export const brandService = {
   async getOne(id, skipAuth = false) {
     return normalizeBrand(await apiFetch(`/brands/${id}`, {}, false, skipAuth));
   },
-  async create(data) {
+  async create(data, logoFile = null) {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => formData.append(key, String(value)));
+    if (logoFile) formData.append('logoFile', logoFile);
     return apiFetch('/brands', { method: 'POST', body: formData }, true);
   },
   async update(id, data) {

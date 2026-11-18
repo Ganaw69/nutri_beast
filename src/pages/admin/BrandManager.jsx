@@ -70,7 +70,7 @@ export const BrandManager = () => {
       };
       let brandId = modal.mode === 'edit' ? modal.id : null;
       if (modal.mode === 'add') {
-        const createdBrand = await brandService.create(payload);
+        const createdBrand = await brandService.create(payload, logoFile);
         brandId = getBrandId(createdBrand);
         if (!brandId) {
           throw new Error('La marque a été créée, mais son identifiant est introuvable pour continuer.');
@@ -78,8 +78,8 @@ export const BrandManager = () => {
         setModal({ mode: 'edit', id: brandId, brand: createdBrand });
       } else {
         await brandService.update(brandId, payload);
+        if (logoFile) await brandService.uploadLogo(brandId, logoFile);
       }
-      if (logoFile) await brandService.uploadLogo(brandId, logoFile);
       setModal(null); fetchBrands();
     } catch (requestError) {
       setError(requestError.message);
