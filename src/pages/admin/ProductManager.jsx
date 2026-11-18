@@ -733,7 +733,13 @@ export const ProductManager = () => {
         expirationDate: undefined,
         price: parentPrice.toFixed(2),
         salePrice: parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
-        stock: editingProductHasVariants || form.hasFlavors ? undefined : form.stock !== '' ? parseInt(form.stock) : undefined,
+        stock: creatingProduct && form.hasFlavors
+          ? 0
+          : editingProductHasVariants || form.hasFlavors
+            ? undefined
+            : form.stock !== ''
+              ? parseInt(form.stock)
+              : undefined,
         minimumStock: form.minimumStock !== '' ? parseInt(form.minimumStock) : undefined,
         weight: form.weight === '' ? null : String(form.weight).trim(),
         dateProduit: form.dateProduit ? `${form.dateProduit}T00:00:00+00:00` : null,
