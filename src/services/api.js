@@ -1842,7 +1842,7 @@ export const brandService = {
   async update(id, data) {
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/merge-patch+json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     clearProductReadCache();
