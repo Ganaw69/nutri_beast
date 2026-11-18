@@ -695,8 +695,8 @@ export const ProductDetailPage = () => {
               )}
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${(hasVariants ? selectedVariantInStock : product.inStock) ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
                 {hasVariants
-                  ? selectedVariant ? selectedVariantInStock ? `${selectedVariant.stock} en stock` : "Indisponible" : hasVariantFlavors ? "Choisissez une saveur" : "Choisissez une variante"
-                  : product.inStock ? 'En Stock' : 'Rupture de Stock'}
+                  ? selectedVariant ? selectedVariantInStock ? "En stock" : "Rupture de stock" : hasVariantFlavors ? "Choisissez une saveur" : "Choisissez une variante"
+                  : product.inStock ? 'En stock' : 'Rupture de stock'}
               </span>
             </div>
             {product.brand && <div className="mt-4 flex items-center gap-2 border-y border-[#303030] py-3.5 text-sm">
