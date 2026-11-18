@@ -17,9 +17,10 @@ const normalizeProduct = (p) => ({
   originalPrice: p.isOnSale && p.salePrice ? parseFloat(p.price) : null,
   image: resolveProductImage(p, null),
   isNew: p.isNew,
+  isBestSeller: p.isBestSeller,
   isOnSale: p.isOnSale,
   salePrice: p.salePrice,
-  badge: p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : null,
+  badge: p.isBestSeller || p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : null,
   inStock: p.stock > 0,
   flavors: p.flavors?.map(f => f.name) || [],
   sizes: [],
@@ -131,6 +132,8 @@ export const HomePage = () => {
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
   const [newProducts, setNewProducts] = useState([]);
   const [newProductsOffset, setNewProductsOffset] = useState(0);
+  const [bestSellersError, setBestSellersError] = useState('');
+  const [newProductsError, setNewProductsError] = useState('');
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
@@ -139,23 +142,31 @@ export const HomePage = () => {
   useEffect(() => {
     let active = true;
 
-    Promise.all([
-      productService.getBestSellers({ isActive: true }).catch(() => productService.getAllPages({ isActive: true }, true)),
-      productService.getNew({ isActive: true }).catch(() => ({ 'hydra:member': [] })),
+    Promise.allSettled([
+      productService.getBestSellers({ isActive: true }),
+      productService.getNew({ isActive: true }),
       couvertureService.getAll().catch(() => ({ 'hydra:member': [] })),
       brandService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-    ]).then(([bestSellersData, newProductsData, couvertureData, brandData]) => {
+    ]).then(([bestSellersResult, newProductsResult, couvertureResult, brandResult]) => {
       if (!active) return;
+      const bestSellersData = bestSellersResult.status === 'fulfilled' ? bestSellersResult.value : null;
+      const newProductsData = newProductsResult.status === 'fulfilled' ? newProductsResult.value : null;
       const availableProducts = collectionItems(bestSellersData).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
       );
       const availableNewProducts = collectionItems(newProductsData).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
       );
-      // The collection already includes everything a product card needs.
-      // Render it immediately; image enrichment is non-blocking below.
+      setBestSellersError(bestSellersResult.status === 'rejected'
+        ? bestSellersResult.reason?.message || 'Erreur inconnue.'
+        : '');
+      setNewProductsError(newProductsResult.status === 'rejected'
+        ? newProductsResult.reason?.message || 'Erreur inconnue.'
+        : '');
       setBestSellers(availableProducts.map(normalizeProduct));
       setNewProducts(availableNewProducts.map(normalizeProduct));
+      const couvertureData = couvertureResult.status === 'fulfilled' ? couvertureResult.value : {};
+      const brandData = brandResult.status === 'fulfilled' ? brandResult.value : {};
       const couvertures = (couvertureData['hydra:member'] || couvertureData.member || [])
         .filter((couverture) => (
           (couverture.active ?? couverture.isActive ?? couverture.is_active ?? couverture.enabled ?? true) !== false
@@ -289,6 +300,10 @@ export const HomePage = () => {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 text-[#d90429] animate-spin" />
           </div>
+        ) : newProductsError ? (
+          <div role="alert" className="text-center py-8 text-sm text-red-400">
+            Impossible de charger les nouveautés : {newProductsError}
+          </div>
         ) : newProducts.length > 0 ? (
           <div key={newProductsOffset} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-[bestSellerVertical_0.55s_ease-out]">
             {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
@@ -316,6 +331,10 @@ export const HomePage = () => {
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 text-[#d90429] animate-spin" />
+          </div>
+        ) : bestSellersError ? (
+          <div role="alert" className="text-center py-8 text-sm text-red-400">
+            Impossible de charger les meilleures ventes : {bestSellersError}
           </div>
         ) : bestSellers.length > 0 ? (
           <div key={bestSellerOffset} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-[bestSellerVertical_0.55s_ease-out]">

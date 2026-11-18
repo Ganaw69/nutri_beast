@@ -750,7 +750,7 @@ export const ProductManager = () => {
         brand: form.brand || undefined,
         hasFlavors: form.hasFlavors,
         flavors: form.hasFlavors ? form.flavors : [],
-        productOptions: form.productOptions,
+        productOptions: undefined,
       };
 
       const saved = modal.mode === 'add'

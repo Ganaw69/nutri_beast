@@ -78,12 +78,23 @@ export const BrandManager = () => {
         }
         setModal({ mode: 'edit', id: brandId, brand: savedBrand });
       } else {
-        await brandService.update(brandId, payload);
+        const original = modal.brand || {};
+        const patch = Object.fromEntries(Object.entries(payload).filter(([field, value]) => {
+          const previousValue = field === 'isActive'
+            ? (original.isActive ?? original.active ?? true)
+            : original[field];
+          return field === 'isActive'
+            ? previousValue !== value
+            : String(previousValue ?? '').trim() !== String(value ?? '').trim();
+        }));
+        if (Object.keys(patch).length > 0) {
+          await brandService.update(brandId, patch);
+        }
         if (logoFile) {
           await brandService.uploadLogo(brandId, logoFile);
         }
         savedBrand = await brandService.getOne(brandId, false, true);
-        const unpersistedFields = ['name', 'slug', 'description', 'website'].filter((field) =>
+        const unpersistedFields = Object.keys(patch).filter((field) =>
           String(savedBrand?.[field] ?? '').trim() !== String(payload[field] ?? '').trim()
         );
         if (unpersistedFields.length > 0) {

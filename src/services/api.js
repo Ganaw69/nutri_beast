@@ -447,6 +447,26 @@ async function mockApiFetch(path, opts = {}, isMultipart = false, skipAuth = fal
 
   const body = await readBody(opts.body);
 
+  if (pathname === '/products/new' && method === 'GET') {
+    const now = Date.now();
+    const newProducts = demoStore.products
+      .filter((product) => {
+        const createdAt = Date.parse(product.createdAt || '');
+        return product.isActive !== false && product.brand?.isActive !== false
+          && (product.isNew === true || (createdAt >= now - 10 * 86400000 && createdAt <= now));
+      })
+      .sort((first, second) => Date.parse(second.createdAt || '') - Date.parse(first.createdAt || ''));
+    return buildHydraCollection(applyFilters(newProducts, path));
+  }
+  if (pathname === '/products/best-sellers' && method === 'GET') {
+    const availableProducts = demoStore.products.filter((product) =>
+      product.isActive !== false && product.brand?.isActive !== false
+    );
+    const flaggedProducts = availableProducts.filter((product) => product.isBestSeller === true);
+    const bestSellers = (flaggedProducts.length > 0 ? flaggedProducts : availableProducts)
+      .sort((first, second) => Number(second.sales || 0) - Number(first.sales || 0));
+    return buildHydraCollection(applyFilters(bestSellers, path));
+  }
   if (pathname === '/products' && method === 'GET') return buildHydraCollection(applyFilters(demoStore.products, path));
   if (pathname.startsWith('/products/') && method === 'GET') {
     const id = pathname.split('/').pop();
@@ -1426,13 +1446,30 @@ const clearProductReadCache = () => {
   }
 };
 
+const getProductCollection = (path, skipAuth = true, fresh = false) => {
+  const load = async (useApiCache) => {
+    const data = normalizeCollectionResponse(
+      await (useApiCache
+        ? apiFetch(path, {}, false, skipAuth)
+        : requestApi(path, {}, false, skipAuth))
+    );
+    return { ...data, 'hydra:member': data['hydra:member'].map(normalizeProduct) };
+  };
+
+  if (fresh) return load(false);
+  return readCachedProductData(
+    `collection:${skipAuth}:${path}`,
+    () => load(true)
+  );
+};
+
 export const productService = {
   // Product reads are public: do not depend on an admin JWT being present.
   async getNew(params = {}) {
-    return this.getAll({ ...params, isNew: true }, true);
+    return getProductCollection(`/products/new${buildQuery(params)}`);
   },
   async getBestSellers(params = {}) {
-    return this.getAll({ ...params, isBestSeller: true }, true);
+    return getProductCollection(`/products/best-sellers${buildQuery(params)}`);
   },
   async getNewPages() {
     const response = await this.getNew({ isActive: true });
@@ -1443,22 +1480,7 @@ export const productService = {
   },
   getAll(params = {}, skipAuth = true, fresh = false) {
     const path = `/products${buildQuery(params)}`;
-    if (fresh) {
-      return requestApi(path, {}, false, skipAuth).then((response) => {
-        const normalized = normalizeCollectionResponse(response);
-        return {
-          ...normalized,
-          'hydra:member': normalized['hydra:member'].map(normalizeProduct),
-        };
-      });
-    }
-    return readCachedProductData(
-      `collection:${skipAuth}:${path}`,
-      async () => {
-        const response = normalizeCollectionResponse(await apiFetch(path, {}, false, skipAuth));
-        return { ...response, 'hydra:member': response['hydra:member'].map(normalizeProduct) };
-      }
-    );
+    return getProductCollection(path, skipAuth, fresh);
   },
   /**
    * Return the complete filtered collection even when the API applies a
@@ -1842,7 +1864,7 @@ export const brandService = {
   async update(id, data) {
     const result = await apiFetch(`/brands/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/merge-patch+json' },
       body: JSON.stringify(data),
     });
     clearProductReadCache();
