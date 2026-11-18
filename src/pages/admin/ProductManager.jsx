@@ -217,6 +217,13 @@ const getProductImageVariantId = (img) => {
   if (typeof variant === 'string') return iriToId(variant) ?? variant;
   return variant?.id ?? iriToId(variant?.['@id'] || variant?.iri) ?? null;
 };
+const withPrimaryImageState = (image, isPrimary) => {
+  const updated = { ...image, isPrimary };
+  ['is_primary', 'primary', 'isMain', 'is_main', 'main'].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(image, key)) updated[key] = isPrimary;
+  });
+  return updated;
+};
 
 const mergeProductImages = (embeddedImages = [], fetchedImages = []) => {
   const byId = new Map();
@@ -835,6 +842,13 @@ export const ProductManager = () => {
     if (!imageId) return;
     if (!confirm('Supprimer cette image ?')) return;
     try {
+      const replacementImage = isPrimaryProductImage(imageRecord)
+        ? productOnlyImages.find((item) => String(getProductImageId(item)) !== String(imageId))
+        : null;
+      const replacementImageId = getProductImageId(replacementImage);
+      if (replacementImageId != null) {
+        await productService.setImagePrimary(replacementImageId);
+      }
       await productService.deleteImage(imageRecord?.['@id'] || imageRecord?.iri || imageId);
       const deletedImageKey = getProductImageKey(
         productImages.find((image) => String(getProductImageId(image)) === String(imageId))
@@ -843,9 +857,20 @@ export const ProductManager = () => {
         String(getProductImageId(image)) === String(imageId)
         || Boolean(deletedImageKey && getProductImageKey(image) === deletedImageKey)
       );
-      setProductImages((current) => current.filter(
-        (image) => String(getProductImageId(image)) !== String(imageId)
-      ));
+      const updateImageList = (images = []) => images
+        .filter((image) => !isDeletedImage(image))
+        .map((image) => {
+          if (replacementImageId == null
+            || !image
+            || typeof image !== 'object'
+            || getProductImageFlavorId(image) != null
+            || getProductImageVariantId(image) != null) return image;
+          return withPrimaryImageState(
+            image,
+            String(getProductImageId(image)) === String(replacementImageId)
+          );
+        });
+      setProductImages(updateImageList);
       if (modal?.id) {
         setProducts((current) => current.map((product) => {
           if (String(product.id) !== String(modal.id)) return product;
@@ -856,11 +881,9 @@ export const ProductManager = () => {
           const deletedDirectImage = deletedImageKey && directImageKey === deletedImageKey;
           return {
             ...product,
-            productImages: (product.productImages || []).filter(
-              (image) => !isDeletedImage(image)
-            ),
-            ...(Array.isArray(product.images) ? { images: product.images.filter((image) => !isDeletedImage(image)) } : {}),
-            ...(Array.isArray(product.media) ? { media: product.media.filter((image) => !isDeletedImage(image)) } : {}),
+            productImages: updateImageList(product.productImages || []),
+            ...(Array.isArray(product.images) ? { images: updateImageList(product.images) } : {}),
+            ...(Array.isArray(product.media) ? { media: updateImageList(product.media) } : {}),
             ...(deletedDirectImage ? {
               image: null,
               imagePath: null,

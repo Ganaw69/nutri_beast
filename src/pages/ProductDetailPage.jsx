@@ -609,9 +609,9 @@ export const ProductDetailPage = () => {
       {/* Main Product Hero Section (2-Column Layout) */}
       <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 xl:gap-8">
         {/* Left Column: Vertical Thumbnails + Main Image */}
-        <div className="relative flex w-full flex-col-reverse items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-5 lg:col-span-6 lg:p-4 xl:col-span-5 lg:flex-col-reverse">
+        <div className="relative flex w-full flex-col items-start gap-4 rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 sm:p-5 lg:col-span-6 lg:p-4 xl:col-span-5">
           {(product.badge || product.isNew || product.isOnSale) && (
-            <div className="absolute left-6 top-6 z-10 flex flex-wrap gap-2">
+            <div className="absolute right-6 top-6 z-10 flex flex-wrap gap-2">
               {product.badge && <span className="rounded-full bg-[#1c1b1b] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">{product.badge}</span>}
               {product.isNew && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">NOUVEAU</span>}
               {product.isOnSale && <span className="rounded-full bg-[#f0143c] px-3 py-1 text-xs font-black uppercase text-white shadow-lg">REMISE</span>}

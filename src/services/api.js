@@ -1528,7 +1528,7 @@ export const productService = {
     } catch (deleteError) {
       if (!(deleteError?.status >= 500)) throw deleteError;
       try {
-        await requestApi(path, {}, false, true);
+        await requestApi(path);
       } catch (verificationError) {
         if (verificationError?.status === 404) {
           clearProductReadCache();
