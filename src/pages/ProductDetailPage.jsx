@@ -196,9 +196,39 @@ export const ProductDetailPage = () => {
       return () => { active = false; };
     }
 
-    Promise.all(selectedShopCategoryIds.map((id) => categoryService.getOne(id, true).catch(() => null)))
-      .then((categories) => {
-        if (active) setSelectedBreadcrumbCategories(categories.map((category) => category?.name).filter(Boolean));
+    const categoryRequests = new Map();
+    const getCategory = (id) => {
+      const key = String(id);
+      if (!categoryRequests.has(key)) {
+        categoryRequests.set(key, categoryService.getOne(id, true).catch(() => null));
+      }
+      return categoryRequests.get(key);
+    };
+    const loadCategoryPath = async (id, visited = new Set()) => {
+      const category = await getCategory(id);
+      if (!category) return [];
+
+      const categoryId = getRelationId(category) ?? id;
+      const key = String(categoryId);
+      if (visited.has(key)) return [];
+      visited.add(key);
+
+      const parentId = getRelationId(category.parent ?? category.parent_id ?? category.parentId);
+      const parentPath = parentId == null ? [] : await loadCategoryPath(parentId, visited);
+      const name = category.name ?? category.label;
+      return name ? [...parentPath, { id: categoryId, name }] : parentPath;
+    };
+
+    Promise.all(selectedShopCategoryIds.map((id) => loadCategoryPath(id)))
+      .then((paths) => {
+        if (!active) return;
+        const seen = new Set();
+        setSelectedBreadcrumbCategories(paths.flat().filter((category) => {
+          const key = String(category.id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }));
       });
 
     return () => { active = false; };
@@ -461,9 +491,11 @@ export const ProductDetailPage = () => {
     String(shopRouteFilters?.filter || "").trim().toLocaleLowerCase("fr")
   );
   const categoryIsSelected = selectedShopCategoryIds.length > 0 || Boolean(shopRouteFilters?.category);
-  const breadcrumbCategory = selectedBreadcrumbCategories.join(" · ")
-    || (categoryIsSelected ? product.category : "")
-    || "Toutes les offres";
+  const breadcrumbCategories = selectedBreadcrumbCategories.length > 0
+    ? selectedBreadcrumbCategories
+    : categoryIsSelected && product.category
+      ? [{ id: product.categoryId, name: product.category }]
+      : [{ id: null, name: "Toutes les offres" }];
   const showNewBreadcrumb = product.isNew || newShopFilter;
 
   const selectedFlavorOption = product.flavorOptions.find((flavor) => flavor.name === selectedFlavor);
@@ -486,23 +518,32 @@ export const ProductDetailPage = () => {
               Accueil
             </button>
           </li>
-          <li aria-hidden="true" className="text-gray-600">›</li>
-          <li>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                navigateTo("shop", {
-                  shopFilters: selectedShopCategoryIds.length === 0 && shopRouteFilters?.category
-                    ? { category: shopRouteFilters.category }
-                    : {},
-                });
-              }}
-              className="transition-colors hover:text-white"
-            >
-              {breadcrumbCategory}
-            </button>
-          </li>
+          {breadcrumbCategories.map((category) => (
+            <React.Fragment key={category.id ?? category.name}>
+              <li aria-hidden="true" className="text-gray-600">›</li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    if (category.id != null) {
+                      setSelectedShopCategoryIds([category.id]);
+                      navigateTo("shop");
+                    } else {
+                      navigateTo("shop", {
+                        shopFilters: selectedShopCategoryIds.length === 0 && shopRouteFilters?.category
+                          ? { category: shopRouteFilters.category }
+                          : {},
+                      });
+                    }
+                  }}
+                  className="transition-colors hover:text-white"
+                >
+                  {category.name}
+                </button>
+              </li>
+            </React.Fragment>
+          ))}
           {showNewBreadcrumb && (
             <>
               <li aria-hidden="true" className="text-gray-600">›</li>
