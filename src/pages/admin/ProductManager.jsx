@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { productService, productVariantService, categoryService, brandService, goalService, flavorService, productImageUrl, resolveProductImage, iriToId, isPrimaryProductImage } from '../../services/api';
 import { buildCategoryTree, extractCategoryItems, getCategoryParentId } from '../../utils/categoryTree';
+import { getVariantOptionLabels } from '../../utils/productVariantOptions';
 import { Search, Plus, Edit2, Trash2, X, Loader2, Check, Package, RefreshCw, ToggleLeft, Copy, Upload, Eye, Pencil, Barcode, Tag, Weight, Layers, Target, CalendarDays, Star, Sparkles, Warehouse, BadgeCheck, Image as ImageIcon } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
@@ -12,6 +13,9 @@ const EMPTY_FORM = {
   category: '', brand: '', goals: [], flavors: [], hasFlavors: false,
   productOptions: { type: '', sizes: [], colors: [], styles: [], capacityLiters: '' },
   metaTitle: '', metaDescription: '',
+};
+const EMPTY_VARIANT_DRAFT = {
+  flavor: '', design: '', color: '', size: '', capacityLiters: '', stock: '0',
 };
 
 const relationToIri = (value, resource) => {
@@ -59,7 +63,7 @@ const variantProductId = (variant) => relationId(variant?.product ?? variant?.pr
 const variantSku = (variant) => variant?.sku ?? variant?.SKU ?? '';
 const variantLabel = (variant) => {
   const flavor = typeof variant?.flavor === 'object' ? displayName(variant.flavor) : variant?.flavorName ?? variant?.flavor_name;
-  return [variant?.name ?? variant?.label ?? variant?.title, flavor, variant?.options?.size, variant?.size, variant?.weight]
+  return [variant?.name ?? variant?.label ?? variant?.title, flavor, ...getVariantOptionLabels(variant)]
     .filter(Boolean)
     .map((value) => typeof value === 'number' ? `${value} kg` : value)
     .join(' · ') || variantSku(variant) || 'Variante';
@@ -287,7 +291,7 @@ export const ProductManager = () => {
   const [primaryImageIndex, setPrimaryImageIndex] = useState(0);
   const [productImages, setProductImages] = useState([]);
   const [productVariants, setProductVariants] = useState([]);
-  const [variantDraft, setVariantDraft] = useState({ flavor: '', stock: '0' });
+  const [variantDraft, setVariantDraft] = useState(EMPTY_VARIANT_DRAFT);
   const [variantImageFiles, setVariantImageFiles] = useState({});
   const [variantSaving, setVariantSaving] = useState(false);
   const [variantError, setVariantError] = useState('');
@@ -544,7 +548,7 @@ export const ProductManager = () => {
     setIsProductCreationFlow(false);
     setProductCreationStep(1);
   };
-  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setIsProductCreationFlow(true); setProductCreationStep(1); setEditingProductHasVariants(false); setVariantsLoading(false); setVariantsLoadFailed(false); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setProductVariants([]); setVariantImageFiles({}); setVariantDraft({ flavor: '', stock: '0' }); setVariantError(''); setVariantNotice(''); setBrandSearch(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setError(''); setNotice(''); setFlavorError(''); setNewFlavorName(''); setFlavorSearch(''); setForm(EMPTY_FORM); setIsProductCreationFlow(true); setProductCreationStep(1); setEditingProductHasVariants(false); setVariantsLoading(false); setVariantsLoadFailed(false); setSelectedFormParentCategoryId(''); setImageFiles([]); setImagePreviews([]); setPrimaryImageIndex(0); setProductImages([]); setProductVariants([]); setVariantImageFiles({}); setVariantDraft(EMPTY_VARIANT_DRAFT); setVariantError(''); setVariantNotice(''); setBrandSearch(''); setModal({ mode: 'add' }); };
   const openEdit = async (p) => {
     setError('');
     setNotice('');
@@ -557,7 +561,7 @@ export const ProductManager = () => {
     setImagePreviews([]);
     setProductVariants([]);
     setVariantImageFiles({});
-    setVariantDraft({ flavor: '', stock: '0' });
+    setVariantDraft(EMPTY_VARIANT_DRAFT);
     setVariantError('');
     setVariantNotice('');
     setEditingProductHasVariants((p.variants || []).length > 0);
@@ -641,14 +645,16 @@ export const ProductManager = () => {
     const flavor = flavors.find((item) => String(entityId(item)) === String(flavorId));
     return variantLabel(flavor ? { ...variant, flavor } : variant);
   };
-  const syncVariantValues = async (variants, price, salePrice, weight) => {
+  const syncVariantValues = async (variants, price, salePrice, weight, preserveVariantSize = false) => {
     const size = weight === '' || weight == null ? null : `${Number(weight)} kg`;
     for (const variant of variants) {
       const variantId = variant.id ?? iriToId(variant['@id']);
       if (variantId == null) throw new Error(`Impossible de synchroniser la variante ${productVariantLabel(variant)} : identifiant manquant.`);
       const options = { ...(variant.options || {}) };
-      if (size) options.size = size;
-      else delete options.size;
+      if (!preserveVariantSize) {
+        if (size) options.size = size;
+        else delete options.size;
+      }
       try {
         await productVariantService.update(variantId, { price, salePrice, options });
       } catch (syncError) {
@@ -657,12 +663,27 @@ export const ProductManager = () => {
     }
   };
   const draftVariantFlavor = flavors.find((item) => relationToIri(item, 'flavors') === variantDraft.flavor);
-  const draftVariantSize = form.weight === '' ? '' : `${Number(form.weight)} kg`;
-  const draftVariantSku = modal?.id && (!form.hasFlavors || variantDraft.flavor)
+  const draftVariantOptions = selectedAccessoryContext.isAccessory ? {
+    accessoryType: selectedAccessoryContext.type || 'accessory',
+    ...(variantDraft.design.trim() ? { design: variantDraft.design.trim() } : {}),
+    ...(variantDraft.color.trim() ? { color: variantDraft.color.trim() } : {}),
+    ...(variantDraft.size.trim() ? { size: variantDraft.size.trim() } : {}),
+    ...(variantDraft.capacityLiters.trim() ? { capacityLiters: variantDraft.capacityLiters.trim() } : {}),
+  } : {};
+  const draftAccessoryHasOptions = Object.keys(draftVariantOptions).some((key) => key !== 'accessoryType');
+  const draftVariantSize = selectedAccessoryContext.isAccessory
+    ? variantDraft.size.trim()
+    : form.weight === '' ? '' : `${Number(form.weight)} kg`;
+  const draftVariantDescriptor = selectedAccessoryContext.isAccessory
+    ? [variantDraft.design, variantDraft.color, variantDraft.capacityLiters && `${variantDraft.capacityLiters} L`].filter(Boolean).join(' ')
+    : displayName(draftVariantFlavor);
+  const draftVariantSku = modal?.id
+    && (!form.hasFlavors || variantDraft.flavor)
+    && (!selectedAccessoryContext.isAccessory || draftAccessoryHasOptions)
     ? generateVariantSku(
       modal.id,
       form.name,
-      displayName(draftVariantFlavor),
+      draftVariantDescriptor,
       draftVariantSize,
       productVariants.map(variantSku)
     )
@@ -733,9 +754,11 @@ export const ProductManager = () => {
         expirationDate: undefined,
         price: parentPrice.toFixed(2),
         salePrice: parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
-        stock: creatingProduct && form.hasFlavors
+        stock: creatingProduct && (form.hasFlavors || selectedAccessoryContext.isAccessory)
           ? 0
-          : editingProductHasVariants || form.hasFlavors
+          : editingProductHasVariants
+            || form.hasFlavors
+            || (selectedAccessoryContext.isAccessory && productVariants.length > 0)
             ? undefined
             : form.stock !== ''
               ? parseInt(form.stock)
@@ -770,7 +793,8 @@ export const ProductManager = () => {
             productVariants,
             parentPrice.toFixed(2),
             parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
-            form.weight
+            form.weight,
+            selectedAccessoryContext.isAccessory
           );
         } catch (syncError) {
           throw new Error(`Le produit est enregistré, mais ${syncError.message}`);
@@ -826,7 +850,7 @@ export const ProductManager = () => {
           : 'Modifications enregistrées. Vous pouvez continuer à gérer les variantes, leurs images et leur stock ici.'
       );
       if (isProductCreationFlow) {
-        if (form.hasFlavors) {
+        if (form.hasFlavors || selectedAccessoryContext.isAccessory) {
           setProductCreationStep(2);
           setVariantError('');
         } else {
@@ -1116,16 +1140,8 @@ export const ProductManager = () => {
 
   const createVariant = async () => {
     if (variantSaving || !modal?.id) return;
-    const flavorRecord = flavors.find((item) => relationToIri(item, 'flavors') === variantDraft.flavor);
-    const flavorName = displayName(flavorRecord);
-    const size = form.weight === '' ? '' : `${Number(form.weight)} kg`;
-    const sku = generateVariantSku(
-      modal.id,
-      form.name,
-      flavorName,
-      size,
-      productVariants.map(variantSku)
-    );
+    const size = draftVariantSize;
+    const sku = draftVariantSku;
     const price = Number(form.price);
     const salePrice = form.salePrice === '' ? null : Number(form.salePrice);
     const stock = Number(variantDraft.stock);
@@ -1138,15 +1154,39 @@ export const ProductManager = () => {
       setVariantError('Le stock doit être un nombre entier positif ou nul.');
       return;
     }
-    if (form.hasFlavors && !variantDraft.flavor) {
+    if (selectedAccessoryContext.isAccessory && !draftAccessoryHasOptions) {
+      setVariantError('Renseignez au moins une option : design, couleur, taille ou contenance.');
+      return;
+    }
+    if (variantDraft.capacityLiters.trim()
+      && (!Number.isFinite(Number(variantDraft.capacityLiters)) || Number(variantDraft.capacityLiters) <= 0)) {
+      setVariantError('La contenance doit être un nombre supérieur à zéro.');
+      return;
+    }
+    if (form.hasFlavors && !selectedAccessoryContext.isAccessory && !variantDraft.flavor) {
       setVariantError('Sélectionnez la saveur de cette variante.');
       return;
     }
-    const flavorId = relationId(variantDraft.flavor);
-    const duplicateVariant = productVariants.some((variant) => (
-      String(relationId(variant.flavor)) === String(flavorId)
-      && String(variant.options?.size ?? variant.size ?? '').toLowerCase() === size.toLowerCase()
-    ));
+    const normalizeOption = (value, key) => {
+      const normalized = String(value ?? '').trim().toLowerCase();
+      if (key === 'capacityLiters' && normalized && Number.isFinite(Number(normalized))) {
+        return String(Number(normalized));
+      }
+      return normalized;
+    };
+    const optionKeys = selectedAccessoryContext.isAccessory
+      ? ['design', 'color', 'size', 'capacityLiters']
+      : [];
+    const duplicateVariant = productVariants.some((variant) => {
+      if (selectedAccessoryContext.isAccessory) {
+        return optionKeys.every((key) => (
+          normalizeOption(variant.options?.[key] ?? variant[key], key) === normalizeOption(draftVariantOptions[key], key)
+        ));
+      }
+      const flavorId = relationId(variantDraft.flavor);
+      return String(relationId(variant.flavor)) === String(flavorId)
+        && normalizeOption(variant.options?.size ?? variant.size, 'size') === normalizeOption(size, 'size');
+    });
     if (duplicateVariant) {
       setVariantError('Cette variante existe déjà. Utilisez son action « Ajuster le stock ».');
       return;
@@ -1160,6 +1200,7 @@ export const ProductManager = () => {
         price: price.toFixed(2),
         salePrice: salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
         weight: form.weight === '' ? null : String(form.weight).trim(),
+        stock: selectedAccessoryContext.isAccessory ? 0 : undefined,
         hasFlavors: form.hasFlavors,
         flavors: form.hasFlavors ? form.flavors : [],
       });
@@ -1167,7 +1208,8 @@ export const ProductManager = () => {
         productVariants,
         price.toFixed(2),
         salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
-        form.weight
+        form.weight,
+        selectedAccessoryContext.isAccessory
       );
       const created = await productVariantService.create({
         product: `/api/products/${modal.id}`,
@@ -1177,7 +1219,9 @@ export const ProductManager = () => {
         price: price.toFixed(2),
         salePrice: salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
         stock,
-        options: size ? { size } : {},
+        options: selectedAccessoryContext.isAccessory
+          ? draftVariantOptions
+          : size ? { size } : {},
         isActive: form.isActive,
       });
       let variants = productVariants;
@@ -1192,7 +1236,9 @@ export const ProductManager = () => {
           price: price.toFixed(2),
           salePrice: salePrice === null || salePrice === 0 ? null : salePrice.toFixed(2),
           stock,
-          options: size ? { size } : {},
+          options: selectedAccessoryContext.isAccessory
+            ? draftVariantOptions
+            : size ? { size } : {},
           isActive: form.isActive,
         }];
       } else {
@@ -1205,8 +1251,10 @@ export const ProductManager = () => {
       }
       setProductVariants(variants);
       setEditingProductHasVariants(variants.length > 0);
-      setVariantDraft({ flavor: '', stock: '0' });
-      setVariantNotice(`Variante créée avec le SKU ${sku}. Le prix et le poids proviennent du produit ; son stock reste indépendant.`);
+      setVariantDraft(EMPTY_VARIANT_DRAFT);
+      setVariantNotice(selectedAccessoryContext.isAccessory
+        ? `Variante créée avec le SKU ${sku}. Son stock est indépendant.`
+        : `Variante créée avec le SKU ${sku}. Le prix et le poids proviennent du produit ; son stock reste indépendant.`);
       await fetchProducts({ silent: true });
     } catch (e) {
       setVariantError(e.message || 'Impossible de créer cette variante.');
@@ -1855,9 +1903,13 @@ export const ProductManager = () => {
 
               {(!isProductCreationFlow || isCreationVariantStep) && <section className="space-y-4 rounded-lg border border-[#333] bg-[#111] p-4">
                 <div>
-                  <h3 className="text-sm font-bold text-white">Variantes · stock par saveur</h3>
+                  <h3 className="text-sm font-bold text-white">
+                    {selectedAccessoryContext.isAccessory ? 'Variantes · stock par option' : 'Variantes · stock par saveur'}
+                  </h3>
                   <p className="mt-1 text-xs text-gray-500">
-                    Le poids et le prix viennent du produit ci-dessus. Un SKU est généré automatiquement ; seul le stock est saisi par variante.
+                    {selectedAccessoryContext.isAccessory
+                      ? 'Créez un SKU pour chaque combinaison souhaitée. Le prix vient du produit ; le stock est saisi par variante.'
+                      : 'Le poids et le prix viennent du produit ci-dessus. Un SKU est généré automatiquement ; seul le stock est saisi par variante.'}
                   </p>
                 </div>
                 {modal.mode !== 'edit' ? (
@@ -1934,11 +1986,45 @@ export const ProductManager = () => {
                       </table>
                     </div>
                   ) : <p className="rounded border border-dashed border-[#444] p-3 text-xs text-gray-500">
-                    Aucune variante : le produit utilise encore son stock parent. Créez ici une variante par saveur ; son prix et son poids seront repris du produit.
+                    {selectedAccessoryContext.isAccessory
+                      ? 'Aucune variante : ajoutez ici chaque design, taille, couleur ou contenance à suivre en stock.'
+                      : 'Aucune variante : le produit utilise encore son stock parent. Créez ici une variante par saveur ; son prix et son poids seront repris du produit.'}
                   </p>}
 
                   <div className="grid gap-3 rounded-lg border border-[#333] bg-[#0b0b0b] p-3 sm:grid-cols-2">
-                    <div>
+                    {selectedAccessoryContext.isAccessory ? <>
+                      <div>
+                        <label className={labelCls}>Design / modèle</label>
+                        {form.productOptions.styles.length > 0
+                          ? <select value={variantDraft.design} onChange={(event) => setVariantDraft((current) => ({ ...current, design: event.target.value }))} className={inputCls}>
+                            <option value="">Choisir un design (facultatif)</option>
+                            {form.productOptions.styles.map((style) => <option key={style} value={style}>{style}</option>)}
+                          </select>
+                          : <input value={variantDraft.design} onChange={(event) => setVariantDraft((current) => ({ ...current, design: event.target.value }))} className={inputCls} placeholder="Classique, sport..." />}
+                      </div>
+                      <div>
+                        <label className={labelCls}>Couleur</label>
+                        {form.productOptions.colors.length > 0
+                          ? <select value={variantDraft.color} onChange={(event) => setVariantDraft((current) => ({ ...current, color: event.target.value }))} className={inputCls}>
+                            <option value="">Choisir une couleur (facultatif)</option>
+                            {form.productOptions.colors.map((color) => <option key={color} value={color}>{color}</option>)}
+                          </select>
+                          : <input value={variantDraft.color} onChange={(event) => setVariantDraft((current) => ({ ...current, color: event.target.value }))} className={inputCls} placeholder="Noir, rouge..." />}
+                      </div>
+                      <div>
+                        <label className={labelCls}>Taille</label>
+                        {form.productOptions.sizes.length > 0
+                          ? <select value={variantDraft.size} onChange={(event) => setVariantDraft((current) => ({ ...current, size: event.target.value }))} className={inputCls}>
+                            <option value="">Choisir une taille (facultatif)</option>
+                            {form.productOptions.sizes.map((optionSize) => <option key={optionSize} value={optionSize}>{optionSize}</option>)}
+                          </select>
+                          : <input value={variantDraft.size} onChange={(event) => setVariantDraft((current) => ({ ...current, size: event.target.value }))} className={inputCls} placeholder="S, M, L, 39..." />}
+                      </div>
+                      <div>
+                        <label className={labelCls}>Contenance (litres)</label>
+                        <input type="number" min="0.1" step="0.1" value={variantDraft.capacityLiters} onChange={(event) => setVariantDraft((current) => ({ ...current, capacityLiters: event.target.value }))} className={inputCls} placeholder="0.5, 1..." />
+                      </div>
+                    </> : <div>
                       <label className={labelCls}>Saveur{form.hasFlavors ? ' *' : ''}</label>
                       <select value={variantDraft.flavor} onChange={(event) => setVariantDraft((current) => ({ ...current, flavor: event.target.value }))} className={inputCls} disabled={!form.hasFlavors}>
                         <option value="">{form.hasFlavors ? 'Choisir une saveur' : 'Sans saveur'}</option>
@@ -1947,12 +2033,12 @@ export const ProductManager = () => {
                           return <option key={flavorIri} value={flavorIri}>{displayName(flavor) || flavorIri.split('/').pop()}</option>;
                         })}
                       </select>
-                    </div>
+                    </div>}
                     <div><label className={labelCls}>Stock initial *</label><input type="number" min="0" step="1" value={variantDraft.stock} onChange={(event) => setVariantDraft((current) => ({ ...current, stock: event.target.value }))} className={inputCls} /></div>
                     <div className="sm:col-span-2">
                       <p className="mb-3 text-xs text-gray-500">
-                        SKU généré : <code className="font-mono text-gray-300">{draftVariantSku || 'choisissez une saveur'}</code>
-                        {' · '}Poids : {draftVariantSize || 'non défini'}
+                        SKU généré : <code className="font-mono text-gray-300">{draftVariantSku || (selectedAccessoryContext.isAccessory ? 'renseignez au moins une option' : 'choisissez une saveur')}</code>
+                        {' · '}{selectedAccessoryContext.isAccessory ? 'Option' : 'Poids'} : {selectedAccessoryContext.isAccessory ? draftVariantDescriptor || variantDraft.size || 'non définie' : draftVariantSize || 'non défini'}
                         {' · '}Prix : {form.price ? `${Number(form.salePrice || form.price).toFixed(2)} TND` : 'non défini'}
                       </p>
                       {variantError && <p role="alert" className="mb-2 text-xs text-red-300">{variantError}</p>}

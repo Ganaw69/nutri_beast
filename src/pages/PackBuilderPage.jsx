@@ -14,6 +14,7 @@ import {
 } from "../services/api";
 import { Check, Loader2, Minus, PackagePlus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { buildCategoryTree, mergeCategorySources } from "../utils/categoryTree";
+import { getVariantOptionLabels } from "../utils/productVariantOptions";
 
 const idOf = (value) => {
   if (value == null) return null;
@@ -96,7 +97,7 @@ const variantLabel = (variant, flavors = []) => {
     && !/^variante(?:\s*[-#]?\s*\d+)?$/i.test(String(name).trim())
     ? name
     : "";
-  return [descriptiveName, flavor, variant?.options?.size, variant?.size, variant?.options?.weight, variant?.weight]
+  return [descriptiveName, flavor, ...getVariantOptionLabels(variant)]
     .filter(Boolean)
     .join(" · ") || "Variante";
 };

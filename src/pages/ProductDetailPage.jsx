@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import { productService, productVariantService, reviewService, flavorService, brandService, categoryService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
+import { getVariantOptionLabels } from "../utils/productVariantOptions";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
   Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen, Search, X
@@ -45,7 +46,7 @@ const variantLabel = (variant, flavors = []) => {
     : variant?.flavorName ?? variant?.flavor_name ?? flavorRecord?.name;
   const name = variant?.name ?? variant?.label ?? variant?.title;
   const descriptiveName = name && String(name) !== String(variantSku(variant)) ? name : "";
-  return [descriptiveName, flavor, variant?.options?.size, variant?.size, variant?.weight]
+  return [descriptiveName, flavor, ...getVariantOptionLabels(variant)]
     .filter(Boolean)
     .map((value) => typeof value === "number" ? `${value} kg` : value)
     .join(" · ") || "Variante";
