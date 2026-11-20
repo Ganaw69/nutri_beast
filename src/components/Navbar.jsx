@@ -9,7 +9,7 @@ import {
   resolveProductImage,
 } from "../services/api";
 import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
-import { getProductSearchTerms, productMatchesSearch } from "../utils/productSearch";
+import { normalizeProductSearchText, productMatchesSearch } from "../utils/productSearch";
 import logo from "../assets/logo.png";
 import { FREE_SHIPPING_LABEL } from "../config/store";
 import {
@@ -36,6 +36,28 @@ import {
 const CONTACT_EMAIL = "contact@proteinstore.tn";
 const CONTACT_PHONE = "+216 53 928 675";
 const CONTACT_PHONE_LINK = "+21653928675";
+const SEARCH_CATALOG_CACHE_TTL = 60 * 1000;
+let searchCatalogCache = null;
+let searchCatalogCachedAt = 0;
+let searchCatalogPromise = null;
+
+const loadSearchCatalog = () => {
+  if (searchCatalogCache && Date.now() - searchCatalogCachedAt < SEARCH_CATALOG_CACHE_TTL) {
+    return Promise.resolve(searchCatalogCache);
+  }
+  if (!searchCatalogPromise) {
+    searchCatalogPromise = productService.getAllPages({ isActive: true }, true)
+      .then((response) => {
+        searchCatalogCache = response["hydra:member"] || [];
+        searchCatalogCachedAt = Date.now();
+        return searchCatalogCache;
+      })
+      .finally(() => {
+        searchCatalogPromise = null;
+      });
+  }
+  return searchCatalogPromise;
+};
 
 const CategoryNavLabel = ({ label }) => {
   const words = String(label || "").trim().split(/\s+/).filter(Boolean);
@@ -73,13 +95,15 @@ const ProductSearchThumbnail = ({ product }) => {
   );
 };
 
-const ProductSearchSuggestions = ({ products, loading, onSelect, visible }) => {
+const ProductSearchSuggestions = ({ products, loading, error, onSelect, visible }) => {
   if (!visible) return null;
 
   return (
     <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-lg border border-[#3a3a3a] bg-[#121212] shadow-2xl">
       {loading ? (
         <p className="px-4 py-3 text-xs text-gray-400">Recherche des produits…</p>
+      ) : error ? (
+        <p role="alert" className="px-4 py-3 text-xs text-red-300">{error}</p>
       ) : products.length > 0 ? (
         <ul role="listbox" aria-label="Suggestions de produits" className="max-h-80 overflow-y-auto py-1">
           {products.map((product) => (
@@ -131,6 +155,7 @@ export const Navbar = () => {
   const [shopCategories, setShopCategories] = useState([]);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [searchSurface, setSearchSurface] = useState(null);
   const [navbarBottom, setNavbarBottom] = useState(0);
   const navbarRef = useRef(null);
@@ -272,32 +297,26 @@ export const Navbar = () => {
     if (!normalisedQuery) {
       setSearchSuggestions([]);
       setSearchLoading(false);
+      setSearchError("");
       return undefined;
     }
 
     let current = true;
     const timer = window.setTimeout(async () => {
       setSearchLoading(true);
+      setSearchError("");
       try {
-        const searchTerms = getProductSearchTerms(enteredQuery);
-        const nameTerms = searchTerms.filter((term) => /[a-z]/.test(term));
-        const candidateTerms = (nameTerms.length > 0 ? nameTerms : searchTerms).slice(0, 3);
-        const pages = await Promise.allSettled(candidateTerms.map((term) => productService.getAll({
-          isActive: true,
-          name: term,
-          itemsPerPage: 30,
-        }, true)));
-        const candidates = new Map();
-        pages
-          .filter((result) => result.status === "fulfilled")
-          .flatMap((result) => result.value["hydra:member"] || [])
-          .forEach((product) => {
-            const key = product?.id ?? product?.["@id"] ?? `${product?.name}-${product?.brand?.name || product?.brandName || ""}`;
-            candidates.set(String(key), product);
-          });
-        const suggestions = [...candidates.values()]
+        const catalog = await loadSearchCatalog();
+        const normalizedPhrase = normalizeProductSearchText(enteredQuery);
+        const suggestions = catalog
           .filter((product) => product?.isActive !== false && product?.active !== false)
           .filter((product) => productMatchesSearch(product, enteredQuery))
+          .sort((first, second) => {
+            const firstName = normalizeProductSearchText(first.name);
+            const secondName = normalizeProductSearchText(second.name);
+            const score = (name) => name === normalizedPhrase ? 2 : name.startsWith(normalizedPhrase) ? 1 : 0;
+            return score(secondName) - score(firstName);
+          })
           .slice(0, 7);
         if (!current) return;
         setSearchSuggestions(suggestions);
@@ -307,7 +326,10 @@ export const Navbar = () => {
           if (current) setSearchSuggestions(suggestionsWithImages);
         }
       } catch {
-        if (current) setSearchSuggestions([]);
+        if (current) {
+          setSearchSuggestions([]);
+          setSearchError("La recherche est momentanément indisponible. Réessayez.");
+        }
       } finally {
         if (current) setSearchLoading(false);
       }
@@ -860,6 +882,7 @@ export const Navbar = () => {
                 <ProductSearchSuggestions
                   products={searchSuggestions}
                   loading={searchLoading}
+                  error={searchError}
                   visible={searchSurface === "desktop" && Boolean(searchQuery.trim())}
                   onSelect={selectSearchSuggestion}
                 />
@@ -978,6 +1001,7 @@ export const Navbar = () => {
             <ProductSearchSuggestions
               products={searchSuggestions}
               loading={searchLoading}
+              error={searchError}
               visible={searchSurface === "modal" && Boolean(searchQuery.trim())}
               onSelect={selectSearchSuggestion}
             />
