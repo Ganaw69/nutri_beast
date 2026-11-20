@@ -842,7 +842,7 @@ export const Navbar = () => {
         </div>
 
         {showSearchModal && (
-          <div className="hidden xl:block border-t border-white/20 pt-3">
+          <div className="hidden xl:block -mt-3 border-t border-white/20 pt-3">
             <form onSubmit={handleSearchSubmit} className="mx-auto flex max-w-3xl items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#ff526d]" aria-hidden="true" />
