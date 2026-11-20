@@ -56,19 +56,38 @@ const variantsOf = (product) => {
   return variants?.['hydra:member'] || variants?.member || variants?.items || [];
 };
 const variantSkuOf = (variant) => variant?.sku || variant?.SKU || "";
+const normalizedSkuToken = (value) => String(value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLocaleLowerCase("fr")
+  .replace(/[^a-z0-9]/g, "");
 const variantLabel = (variant, flavors = []) => {
-  const flavorRelation = variant?.flavor ?? variant?.flavour ?? variant?.flavorId ?? variant?.flavor_id;
+  const flavorRelation = variant?.flavor
+    ?? variant?.flavour
+    ?? variant?.flavorId
+    ?? variant?.flavor_id
+    ?? variant?.flavourId
+    ?? variant?.flavour_id
+    ?? variant?.options?.flavor
+    ?? variant?.options?.flavour;
   const flavorId = idOf(flavorRelation);
   const flavorRecord = flavors.find((item) => String(idOf(item)) === String(flavorId));
+  const sku = normalizedSkuToken(variantSkuOf(variant));
+  const skuFlavor = flavors
+    .map((item) => ({
+      name: item?.name ?? item?.label ?? item?.title ?? item?.nom,
+      token: normalizedSkuToken(item?.name ?? item?.label ?? item?.title ?? item?.nom),
+    }))
+    .filter((item) => item.name && item.token.length >= 3 && sku.includes(item.token))
+    .sort((a, b) => b.token.length - a.token.length)[0]?.name;
   const flavor = [
     flavorRelation?.name,
     flavorRelation?.label,
     variant?.flavorName,
     variant?.flavor_name,
     variant?.flavourName,
-    variant?.options?.flavor,
-    variant?.options?.flavour,
-    flavorRecord?.name,
+    flavorRecord?.name ?? flavorRecord?.label ?? flavorRecord?.title ?? flavorRecord?.nom,
+    skuFlavor,
     typeof flavorRelation === "string" && !flavorRelation.startsWith("/api/") ? flavorRelation : "",
   ].find(Boolean);
   const name = variant?.name || variant?.label || variant?.title;
@@ -85,16 +104,16 @@ const readPrice = (value) => value === null || value === undefined || value === 
   ? null
   : Number.isFinite(Number(value)) ? Number(value) : null;
 const variantUnitPrice = (variant) => {
-  const price = readPrice(variant?.price);
-  const salePrice = readPrice(variant?.salePrice ?? variant?.sale_price);
-  const effectivePrice = readPrice(variant?.effectivePrice);
+  const price = readPrice(variant?.price ?? variant?.unitPrice ?? variant?.unit_price ?? variant?.sellingPrice ?? variant?.selling_price ?? variant?.prix);
+  const salePrice = readPrice(variant?.salePrice ?? variant?.sale_price ?? variant?.salePrix ?? variant?.sale_prix);
+  const effectivePrice = readPrice(variant?.effectivePrice ?? variant?.effective_price ?? variant?.currentPrice ?? variant?.current_price);
   if (effectivePrice !== null && effectivePrice > 0) return effectivePrice;
   if (salePrice !== null && salePrice > 0 && (price === null || salePrice < price)) return salePrice;
   return price;
 };
 const productUnitPrice = (product) => {
-  const price = readPrice(product?.price);
-  const salePrice = readPrice(product?.salePrice ?? product?.sale_price);
+  const price = readPrice(product?.price ?? product?.unitPrice ?? product?.unit_price ?? product?.sellingPrice ?? product?.selling_price ?? product?.currentPrice ?? product?.current_price ?? product?.prix);
+  const salePrice = readPrice(product?.salePrice ?? product?.sale_price ?? product?.salePrix ?? product?.sale_prix);
   return salePrice !== null && salePrice > 0 && (price === null || salePrice < price)
     ? salePrice
     : price ?? salePrice;
@@ -368,14 +387,14 @@ export const PackBuilderPage = () => {
                   const available = activeValue(product) !== false && stock > 0;
                   const availabilityLabel = requiresVariant && !selectedVariant
                     ? "Choisissez une variante"
-                    : available ? `${stock} en stock` : "Rupture de stock";
+                    : available ? "" : "Rupture de stock";
                   const image = resolveProductImage(product, null);
                   const reachedLimit = selectedQuantity === 0 && selectedCount >= maxProducts;
                   return <article key={productId} className="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#111]">
                     <div className="relative flex aspect-square items-center justify-center bg-[#f0f0f0] p-3 sm:p-5">{image ? <img src={image} alt={product.name} loading="lazy" className="h-full w-full object-contain" /> : <ShoppingBag className="h-9 w-9 text-gray-400 sm:h-12 sm:w-12" />}{!available && (!requiresVariant || selectedVariant || activeValue(product) === false) && <span className="absolute right-1.5 top-1.5 rounded bg-black/80 px-1.5 py-1 text-[8px] font-black uppercase text-white sm:right-3 sm:top-3 sm:px-2 sm:text-[9px]">Indisponible</span>}</div>
                     <div className="flex flex-1 flex-col gap-2 p-3 text-white sm:gap-3 sm:p-4">
-                      <div className="flex-1"><p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">{product.category?.name || "Nutrition sportive"}{product.brand?.name ? ` · ${product.brand.name}` : ""}</p><h2 className="mt-1 line-clamp-2 min-h-10 text-sm font-black uppercase leading-5">{product.name}</h2>{displayPrice !== null && <p className="mt-1 text-xs font-bold text-white">{showsStartingPrice ? "À partir de" : "Prix"} : {currency(displayPrice)}</p>}{product.montantRemise != null && Number(product.montantRemise) > 0 && <p className="mt-1 text-[10px] font-semibold text-emerald-400">Remise pack : {currency(product.montantRemise)}</p>}<p className="mt-1 text-[10px] text-gray-500">{availabilityLabel}</p></div>
-                      {requiresVariant && <label className="text-[10px] font-bold text-gray-400">Variante<select value={selectedSku} onChange={(event) => { const sku = event.target.value; setVariantSelections((current) => ({ ...current, [productId]: sku })); if (selectedQuantity > 0) updateSelection(productId, selectedQuantity, sku); }} className="mt-1 w-full rounded-lg border border-white/10 bg-[#181818] px-3 py-2 text-xs text-white"><option value="">Choisir une variante</option>{variants.map((variant, index) => <option key={variantSkuOf(variant) || index} value={variantSkuOf(variant)} disabled={!variantSkuOf(variant) || Number(variant.stock ?? 0) <= 0}>{variantLabel(variant, flavors)}{variant.stock != null ? ` - ${variant.stock} en stock` : ""}</option>)}</select></label>}
+                      <div className="flex-1"><p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">{product.category?.name || "Nutrition sportive"}{product.brand?.name ? ` · ${product.brand.name}` : ""}</p><h2 className="mt-1 line-clamp-2 min-h-10 text-sm font-black uppercase leading-5">{product.name}</h2>{displayPrice !== null && <p className="mt-1 text-xs font-bold text-white">{showsStartingPrice ? "À partir de" : "Prix"} : {currency(displayPrice)}</p>}{product.montantRemise != null && Number(product.montantRemise) > 0 && <p className="mt-1 text-[10px] font-semibold text-emerald-400">Remise pack : {currency(product.montantRemise)}</p>}{availabilityLabel && <p className="mt-1 text-[10px] text-gray-500">{availabilityLabel}</p>}</div>
+                      {requiresVariant && <label className="text-[10px] font-bold text-gray-400">Variante<select value={selectedSku} onChange={(event) => { const sku = event.target.value; setVariantSelections((current) => ({ ...current, [productId]: sku })); if (selectedQuantity > 0) updateSelection(productId, selectedQuantity, sku); }} className="mt-1 w-full rounded-lg border border-white/10 bg-[#181818] px-3 py-2 text-xs text-white"><option value="">Choisir une variante</option>{variants.map((variant, index) => <option key={variantSkuOf(variant) || index} value={variantSkuOf(variant)} disabled={!variantSkuOf(variant) || Number(variant.stock ?? 0) <= 0}>{variantLabel(variant, flavors)}</option>)}</select></label>}
                       {selectedQuantity > 0 ? <div className="flex flex-col gap-2 rounded-lg border border-[#d90429]/50 bg-[#d90429]/10 p-2 sm:flex-row sm:items-center sm:justify-between"><span className="text-[9px] font-black uppercase text-[#ff7186] sm:text-[10px]">Dans votre pack</span><div className="flex items-center justify-between gap-3 sm:justify-start"><button type="button" onClick={(event) => { event.stopPropagation(); updateSelection(productId, (current) => current - 1, selectedSku); }} aria-label={`Retirer une unité de ${product.name}`} className="rounded bg-[#252525] p-1.5 text-white hover:bg-[#d90429]"><Minus className="h-3.5 w-3.5" /></button><span className="min-w-4 text-center text-xs font-black">{selectedQuantity}</span><button type="button" disabled={selectedQuantity >= stock} onClick={(event) => { event.stopPropagation(); updateSelection(productId, (current) => current + 1, selectedSku); }} aria-label={`Ajouter une unité de ${product.name}`} className="rounded bg-[#252525] p-1.5 text-white hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"><Plus className="h-3.5 w-3.5" /></button></div></div> : <button type="button" disabled={!available || reachedLimit || (requiresVariant && !selectedSku)} onClick={(event) => { event.stopPropagation(); updateSelection(productId, 1, selectedSku); }} className="inline-flex w-full items-center justify-center gap-2 rounded bg-[#d90429] px-2 py-2.5 text-[9px] font-black uppercase text-white hover:bg-[#b0021f] disabled:cursor-not-allowed disabled:bg-[#333] disabled:text-gray-500 sm:px-3 sm:text-[10px]"><PackagePlus className="h-4 w-4" /> Ajouter au pack</button>}
                     </div>
                   </article>;
