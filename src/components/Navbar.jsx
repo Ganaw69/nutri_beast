@@ -2,7 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
 import { useAdmin } from "../context/AdminContext";
-import { categoryService, productService } from "../services/api";
+import {
+  categoryService,
+  hydrateProductsWithImages,
+  productService,
+  resolveProductImage,
+} from "../services/api";
 import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
 import { getProductSearchTerms, productMatchesSearch } from "../utils/productSearch";
 import logo from "../assets/logo.png";
@@ -47,6 +52,27 @@ const normaliseSearchText = (value) => String(value || "")
   .replace(/[\u0300-\u036f]/g, "")
   .toLocaleLowerCase("fr");
 
+const ProductSearchThumbnail = ({ product }) => {
+  const [imageFailed, setImageFailed] = useState(false);
+  const image = resolveProductImage(product, null);
+
+  return (
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded border border-white/10 bg-white p-1">
+      {image && !imageFailed ? (
+        <img
+          src={image}
+          alt=""
+          className="h-full w-full object-contain"
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <ShoppingBag size={16} className="text-gray-500" />
+      )}
+    </span>
+  );
+};
+
 const ProductSearchSuggestions = ({ products, loading, onSelect, visible }) => {
   if (!visible) return null;
 
@@ -63,16 +89,17 @@ const ProductSearchSuggestions = ({ products, loading, onSelect, visible }) => {
                 role="option"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onSelect(product)}
-                className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none"
+                className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none"
               >
-                <span className="min-w-0">
+                <ProductSearchThumbnail product={product} />
+                <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-white">{product.name}</span>
                   {(product.brand?.name || product.category?.name) && (
                     <span className="block truncate text-[11px] text-gray-400">{[product.brand?.name, product.category?.name].filter(Boolean).join(" · ")}</span>
                   )}
                 </span>
-                {product.price !== undefined && product.price !== null && (
-                  <span className="shrink-0 text-xs font-bold text-[#ff526d]">{Number(product.salePrice ?? product.price).toFixed(2)} €</span>
+                {(product.salePrice ?? product.price) !== undefined && (product.salePrice ?? product.price) !== null && (
+                  <span className="shrink-0 text-xs font-bold text-[#ff526d]">{Number(product.salePrice ?? product.price).toFixed(2)} TND</span>
                 )}
               </button>
             </li>
@@ -255,10 +282,10 @@ export const Navbar = () => {
         const searchTerms = getProductSearchTerms(enteredQuery);
         const nameTerms = searchTerms.filter((term) => /[a-z]/.test(term));
         const candidateTerms = (nameTerms.length > 0 ? nameTerms : searchTerms).slice(0, 3);
-        const pages = await Promise.allSettled(candidateTerms.map((term) => productService.getAllPages({
+        const pages = await Promise.allSettled(candidateTerms.map((term) => productService.getAll({
           isActive: true,
           name: term,
-          itemsPerPage: 100,
+          itemsPerPage: 30,
         }, true)));
         const candidates = new Map();
         pages
@@ -272,7 +299,13 @@ export const Navbar = () => {
           .filter((product) => product?.isActive !== false && product?.active !== false)
           .filter((product) => productMatchesSearch(product, enteredQuery))
           .slice(0, 7);
-        if (current) setSearchSuggestions(suggestions);
+        if (!current) return;
+        setSearchSuggestions(suggestions);
+        setSearchLoading(false);
+        if (suggestions.length > 0) {
+          const suggestionsWithImages = await hydrateProductsWithImages(suggestions, true);
+          if (current) setSearchSuggestions(suggestionsWithImages);
+        }
       } catch {
         if (current) setSearchSuggestions([]);
       } finally {
