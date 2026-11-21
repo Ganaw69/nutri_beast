@@ -72,6 +72,7 @@ export const CheckoutPage = () => {
   const {
     cart,
     subtotal,
+    hasPackInCart,
     discountAmount,
     shippingFee,
     totalPrice,
@@ -245,7 +246,13 @@ export const CheckoutPage = () => {
     <div className="bg-[#131313] min-h-screen text-[#e5e2e1] font-heading py-8 sm:py-12 pb-20 sm:pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
         <h1 className="font-black text-3xl sm:text-5xl text-white uppercase tracking-tight">
-          PAIEMENT
+          CHECKOUT
+        </h1>
+        <h1 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">
+          Veuillez remplir vos informations de livraison et de paiement
+        </h1>
+        <h1 className="font-black text-lg sm:text-xl text-white uppercase tracking-tight">
+          Tous les champs marqués d'un astérisque (*) sont obligatoires
         </h1>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
@@ -403,25 +410,29 @@ export const CheckoutPage = () => {
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                <input
-                  type="text"
-                  placeholder="CODE PROMO"
-                  value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
-                  className="flex-1 bg-[#0e0e0e] border border-white/10 rounded-xs px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#d90429] uppercase"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  disabled={checkingCoupon}
-                  className="bg-[#2a2a2a] hover:bg-white hover:text-black text-white text-xs font-bold px-4 py-2 rounded-xs transition-colors disabled:opacity-50 w-full sm:w-auto"
-                >
-                  {checkingCoupon ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : "Appliquer"}
-                </button>
-              </div>
+              {hasPackInCart ? (
+                <p className="pt-2 text-xs text-amber-300">Les codes promo ne sont pas cumulables avec un pack.</p>
+              ) : (
+                <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+                  <input
+                    type="text"
+                    placeholder="CODE PROMO"
+                    value={promoInput}
+                    onChange={(e) => setPromoInput(e.target.value)}
+                    className="flex-1 rounded-xs border border-white/10 bg-[#0e0e0e] px-3 py-2 text-xs uppercase text-white placeholder-gray-500 focus:border-[#d90429] focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={checkingCoupon}
+                    className="w-full rounded-xs bg-[#2a2a2a] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-white hover:text-black disabled:opacity-50 sm:w-auto"
+                  >
+                    {checkingCoupon ? <Loader2 className="mx-auto h-3 w-3 animate-spin" /> : "Appliquer"}
+                  </button>
+                </div>
+              )}
 
-              {appliedCoupon && (
+              {appliedCoupon && !hasPackInCart && (
                 <p className="text-xs text-emerald-400">
                   Code "{appliedCoupon.code}" applique
                 </p>

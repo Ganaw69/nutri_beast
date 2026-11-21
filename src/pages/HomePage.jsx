@@ -156,6 +156,7 @@ export const HomePage = () => {
   const brandTrackRef = useRef(null);
   const brandGroupRef = useRef(null);
   const isBrandTrackInteracting = useRef(false);
+  const isBrandTrackHovered = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -300,7 +301,7 @@ export const HomePage = () => {
     let previousFrameTime = 0;
     let animationFrame = 0;
     const moveTrack = (time) => {
-      if (previousFrameTime && !isBrandTrackInteracting.current) {
+      if (previousFrameTime && !isBrandTrackInteracting.current && !isBrandTrackHovered.current) {
         track.scrollLeft += Math.min(time - previousFrameTime, 32) * 0.25;
         if (track.scrollLeft >= copyWidth * 2) track.scrollLeft -= copyWidth;
         if (track.scrollLeft <= 0) track.scrollLeft += copyWidth;
@@ -548,6 +549,8 @@ export const HomePage = () => {
             role="region"
             aria-label="Marques partenaires, faites défiler horizontalement"
             tabIndex={0}
+            onMouseEnter={() => { isBrandTrackHovered.current = true; }}
+            onMouseLeave={() => { isBrandTrackHovered.current = false; }}
             onPointerDown={() => { isBrandTrackInteracting.current = true; }}
             onPointerUp={() => { isBrandTrackInteracting.current = false; }}
             onPointerCancel={() => { isBrandTrackInteracting.current = false; }}

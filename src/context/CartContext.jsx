@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { couponService, productService, productVariantService, resolvePackImage, resolveProductImage } from "../services/api";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 
 const CartContext = createContext();
+
+const isPackCartItem = (item) => ["custom-pack", "predefined-pack", "product-bundle"].includes(item?.itemType);
 
 const CLIENT_TABS = new Set([
   "home",
@@ -133,6 +135,8 @@ const routeHash = (tab, id, routeFilters, slug) => {
 export const CartProvider = ({ children }) => {
   const [initialRoute] = useState(readClientRoute);
   const [cart, setCart] = useState([]);
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
   const [activeTab, setActiveTab] = useState(initialRoute.tab);
   const [selectedProductId, setSelectedProductId] = useState(initialRoute.productId || null);
   const [selectedProductSlug, setSelectedProductSlug] = useState(initialRoute.productSlug || null);
@@ -233,6 +237,14 @@ export const CartProvider = ({ children }) => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const clearPromoForPack = () => {
+    if (!appliedCoupon && !promoCode) return;
+    setAppliedCoupon(null);
+    setPromoCode("");
+    setDiscount(0);
+    showToast("Les codes promo ne sont pas cumulables avec un pack. Le code a été retiré.");
+  };
+
   const addToCart = async (product, flavor = null, size = null, qty = 1) => {
     if (!product?.variantSku && product?.id != null) {
       try {
@@ -310,6 +322,7 @@ export const CartProvider = ({ children }) => {
       showToast("Le serveur n’a pas confirmé le prix de ce pack.");
       return false;
     }
+    clearPromoForPack();
     const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const cartItem = {
       id: `custom-pack-${pack.id}-${randomPart}`,
@@ -352,6 +365,7 @@ export const CartProvider = ({ children }) => {
       return false;
     }
 
+    clearPromoForPack();
     const items = products
       .filter((item) => item?.product)
       .map((item) => ({
@@ -384,6 +398,7 @@ export const CartProvider = ({ children }) => {
       showToast("La composition doit contenir des produits avec un SKU valide.");
       return false;
     }
+    clearPromoForPack();
     const items = products.map((product) => ({
       productId: product.productId,
       sku: product.sku,
@@ -434,6 +449,11 @@ export const CartProvider = ({ children }) => {
   };
 
   const applyPromoCode = async (couponOrCode) => {
+    if (cartRef.current.some(isPackCartItem)) {
+      showToast("Les codes promo ne sont pas cumulables avec un pack.");
+      return false;
+    }
+
     let coupon = couponOrCode;
     if (typeof couponOrCode === "string") {
       try {
@@ -442,6 +462,11 @@ export const CartProvider = ({ children }) => {
         showToast("Impossible de vérifier le code promo.");
         return false;
       }
+    }
+
+    if (cartRef.current.some(isPackCartItem)) {
+      showToast("Les codes promo ne sont pas cumulables avec un pack.");
+      return false;
     }
 
     const now = Date.now();
@@ -555,6 +580,7 @@ export const CartProvider = ({ children }) => {
 
   // Calculations
   const subtotal = cart.reduce((acc, item) => acc + item.price * (item.quantity || 1), 0);
+  const hasPackInCart = cart.some(isPackCartItem);
 
   let discountAmount = 0;
   if (appliedCoupon) {
@@ -610,6 +636,7 @@ export const CartProvider = ({ children }) => {
       shopRouteFilters,
       packRouteFilters,
       subtotal,
+      hasPackInCart,
       discountAmount,
       shippingFee,
         totalPrice,
