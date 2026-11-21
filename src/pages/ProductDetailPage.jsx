@@ -101,17 +101,18 @@ const buildVariantFlavorOptions = (variants, flavors) => {
 const buildVariantChoiceGroup = (variants) => {
   const optionRows = variants.map((variant) => getVariantOptionValues(variant));
   const dimensions = optionRows[0] || [];
-  const sharedDimension = dimensions.find((dimension) => {
+  const sharedDimensions = dimensions.filter((dimension) => {
     const values = optionRows.map((options) => options.find((option) => option.key === dimension.key)?.value);
     return values.every(Boolean) && new Set(values.map((value) => value.trim().toLocaleLowerCase())).size === 1;
   });
-  if (!sharedDimension) return null;
 
-  const choiceDimension = dimensions.find((dimension) => {
-    if (dimension.key === sharedDimension.key) return false;
+  const choiceDimensions = dimensions.filter((dimension) => {
     const values = optionRows.map((options) => options.find((option) => option.key === dimension.key)?.value);
     return values.every(Boolean) && new Set(values.map((value) => value.trim().toLocaleLowerCase())).size > 1;
   });
+  const sharedDimension = sharedDimensions[0];
+  const choiceDimension = choiceDimensions.find((dimension) => dimension.key !== sharedDimension?.key)
+    || (sharedDimension ? null : choiceDimensions.length === 1 ? choiceDimensions[0] : null);
   if (!choiceDimension) return null;
 
   const choices = [];
@@ -128,7 +129,9 @@ const buildVariantChoiceGroup = (variants) => {
   });
 
   return {
-    title: `${sharedDimension.label} : ${sharedDimension.value}`,
+    title: sharedDimension
+      ? `${sharedDimension.label} : ${sharedDimension.value}`
+      : choiceDimension.label,
     choiceLabel: choiceDimension.label,
     choices,
   };
