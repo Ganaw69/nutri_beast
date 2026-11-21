@@ -49,6 +49,11 @@ const typeLabel = (pack) => pack.type === "CUSTOM" ? "Personnalisable" : "Pack p
 const PackCard = ({ pack, onDetails }) => {
   const count = packItems(pack).length;
   const hasConfiguredPrice = Number(pack.finalPrice) > 0 || Number(pack.basePrice) > 0;
+  const compositionLabel = count
+    ? `${count} ${count === 1 ? "produit" : "produits"}`
+    : pack.type === "CUSTOM"
+      ? "Composition à compléter"
+      : hasConfiguredPrice ? "Prêt à commander" : "Prix à configurer";
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#111111] shadow-lg shadow-black/20 transition hover:-translate-y-1 hover:border-white/25">
@@ -58,7 +63,7 @@ const PackCard = ({ pack, onDetails }) => {
       <div className="flex flex-1 flex-col gap-4 p-4 text-white sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex gap-2"><span className="rounded border border-[#d90429]/40 bg-[#d90429]/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-[#ff7186]">{typeLabel(pack)}</span><span className="rounded border border-white/15 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-gray-300">{genderLabel(packGender(pack))}</span></div>
-          <span className="text-[10px] text-gray-400">{count ? `${count} ${count === 1 ? "produit" : "produits"}` : "Composition à compléter"}</span>
+          <span className="text-[10px] text-gray-400">{compositionLabel}</span>
         </div>
         <div className="flex-1">
           <h2 className="line-clamp-2 text-base font-black uppercase leading-5">{pack.name}</h2>
