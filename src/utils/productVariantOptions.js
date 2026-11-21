@@ -15,7 +15,7 @@ const capacityLabel = (value, appendLiters) => {
   return `${label} L`;
 };
 
-export const getVariantOptionLabels = (variant) => {
+const getVariantOptionData = (variant) => {
   const options = variant?.options && typeof variant.options === "object" ? variant.options : {};
   const design = displayValue(firstValue(
     options.design,
@@ -47,11 +47,34 @@ export const getVariantOptionLabels = (variant) => {
     || capacity
   );
 
+  return {
+    design,
+    color,
+    size,
+    weight: weight && `${weight}${/kg$/i.test(weight) ? "" : " kg"}`,
+    capacity: capacity && capacityLabel(capacity, genericCapacity == null),
+    isAccessory,
+  };
+};
+
+export const getVariantOptionValues = (variant) => {
+  const { design, color, size, weight, capacity } = getVariantOptionData(variant);
+  return [
+    { key: "design", label: "Design", value: design },
+    { key: "color", label: "Couleur", value: color },
+    { key: "size", label: "Taille", value: size },
+    { key: "weight", label: "Poids", value: weight },
+    { key: "capacity", label: "Contenance", value: capacity },
+  ].filter((option) => option.value);
+};
+
+export const getVariantOptionLabels = (variant) => {
+  const { design, color, size, weight, capacity, isAccessory } = getVariantOptionData(variant);
   return [
     design && `Design : ${design}`,
     color && `Couleur : ${color}`,
     size && (isAccessory ? `Taille : ${size}` : size),
-    !size && weight && `${weight}${/kg$/i.test(weight) ? "" : " kg"}`,
-    capacity && `Contenance : ${capacityLabel(capacity, genericCapacity == null)}`,
+    !size && weight,
+    capacity && `Contenance : ${capacity}`,
   ].filter(Boolean);
 };

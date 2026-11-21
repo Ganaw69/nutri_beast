@@ -4,7 +4,7 @@ import { useCart } from "../context/CartContext";
 import { productService, productVariantService, reviewService, flavorService, brandService, categoryService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
-import { getVariantOptionLabels } from "../utils/productVariantOptions";
+import { getVariantOptionLabels, getVariantOptionValues } from "../utils/productVariantOptions";
 import {
   Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
   Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen, Search, X
@@ -97,6 +97,41 @@ const buildVariantFlavorOptions = (variants, flavors) => {
   });
 
   return options;
+};
+const buildVariantChoiceGroup = (variants) => {
+  const optionRows = variants.map((variant) => getVariantOptionValues(variant));
+  const dimensions = optionRows[0] || [];
+  const sharedDimension = dimensions.find((dimension) => {
+    const values = optionRows.map((options) => options.find((option) => option.key === dimension.key)?.value);
+    return values.every(Boolean) && new Set(values.map((value) => value.trim().toLocaleLowerCase())).size === 1;
+  });
+  if (!sharedDimension) return null;
+
+  const choiceDimension = dimensions.find((dimension) => {
+    if (dimension.key === sharedDimension.key) return false;
+    const values = optionRows.map((options) => options.find((option) => option.key === dimension.key)?.value);
+    return values.every(Boolean) && new Set(values.map((value) => value.trim().toLocaleLowerCase())).size > 1;
+  });
+  if (!choiceDimension) return null;
+
+  const choices = [];
+  variants.forEach((variant, index) => {
+    const value = optionRows[index].find((option) => option.key === choiceDimension.key)?.value;
+    if (!value || choices.some((choice) => choice.value.toLocaleLowerCase() === value.toLocaleLowerCase())) return;
+    choices.push({ value, variants: [] });
+  });
+  choices.forEach((choice) => {
+    choice.variants = variants.filter((variant, index) => (
+      optionRows[index].find((option) => option.key === choiceDimension.key)?.value.toLocaleLowerCase()
+      === choice.value.toLocaleLowerCase()
+    ));
+  });
+
+  return {
+    title: `${sharedDimension.label} : ${sharedDimension.value}`,
+    choiceLabel: choiceDimension.label,
+    choices,
+  };
 };
 const variantUnitPrice = (variant) => {
   const price = Number(variant?.price ?? 0);
@@ -547,6 +582,7 @@ export const ProductDetailPage = () => {
     : variants;
   const capacityVariants = selectedFlavorVariants.filter((variant) => variantCapacity(variant));
   const hasVariantCapacities = variants.some((variant) => variantCapacity(variant));
+  const variantChoiceGroup = buildVariantChoiceGroup(variants);
   const uniqueCapacityVariants = capacityVariants.reduce((choices, variant) => {
     const capacity = variantCapacity(variant);
     const existingIndex = choices.findIndex((choice) => variantCapacity(choice).toLowerCase() === capacity.toLowerCase());
@@ -825,26 +861,49 @@ export const ProductDetailPage = () => {
                 ) : (
                   <fieldset>
                     <legend className="block text-xs font-heading font-bold uppercase text-gray-300">
-                      {hasVariantCapacities ? "Contenance" : "Variante"}
+                      {hasVariantCapacities ? "Contenance" : variantChoiceGroup?.title || "Options"}
                     </legend>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {(hasVariantCapacities ? uniqueCapacityVariants : variants).map((variant, index) => {
-                        const available = Boolean(variantSku(variant)) && Number(variant.stock ?? 0) > 0;
-                        const isSelected = variantKey(variant) === selectedVariantKey;
-                        return (
-                          <button
-                            key={variantKey(variant) || index}
-                            type="button"
-                            disabled={!available}
-                            aria-pressed={isSelected}
-                            title={available ? variantLabel(variant, product.flavorOptions) : `${variantLabel(variant, product.flavorOptions)} — Rupture de stock`}
-                            onClick={() => { void handleVariantSelect(variant); }}
-                            className={`max-w-full rounded-lg border px-3 py-2 text-left text-xs font-bold transition-colors sm:text-sm ${isSelected ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/10 bg-[#1a1a1a] text-gray-300 hover:border-white/30"} disabled:cursor-not-allowed disabled:opacity-45`}
-                          >
-                            {hasVariantCapacities ? variantCapacity(variant) : variantLabel(variant, product.flavorOptions)}
-                          </button>
-                        );
-                      })}
+                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={variantChoiceGroup?.choiceLabel || "Options"}>
+                      {variantChoiceGroup && !hasVariantCapacities
+                        ? variantChoiceGroup.choices.map((choice, index) => {
+                          const choiceVariant = choice.variants.find((variant) => (
+                            variantSku(variant) && Number(variant.stock ?? 0) > 0
+                          )) || choice.variants[0];
+                          const available = choice.variants.some((variant) => (
+                            variantSku(variant) && Number(variant.stock ?? 0) > 0
+                          ));
+                          const isSelected = choice.variants.some((variant) => variantKey(variant) === selectedVariantKey);
+                          return (
+                            <button
+                              key={`${choice.value}-${index}`}
+                              type="button"
+                              disabled={!available}
+                              aria-pressed={isSelected}
+                              title={available ? `${variantChoiceGroup.choiceLabel} : ${choice.value}` : `${choice.value} — Rupture de stock`}
+                              onClick={() => { if (choiceVariant) void handleVariantSelect(choiceVariant); }}
+                              className={`rounded-lg border px-4 py-2 text-sm font-bold transition-all ${isSelected ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/10 bg-[#1a1a1a] text-gray-300 hover:border-white/30"} disabled:cursor-not-allowed disabled:opacity-45`}
+                            >
+                              {choice.value}
+                            </button>
+                          );
+                        })
+                        : (hasVariantCapacities ? uniqueCapacityVariants : variants).map((variant, index) => {
+                          const available = Boolean(variantSku(variant)) && Number(variant.stock ?? 0) > 0;
+                          const isSelected = variantKey(variant) === selectedVariantKey;
+                          return (
+                            <button
+                              key={variantKey(variant) || index}
+                              type="button"
+                              disabled={!available}
+                              aria-pressed={isSelected}
+                              title={available ? variantLabel(variant, product.flavorOptions) : `${variantLabel(variant, product.flavorOptions)} — Rupture de stock`}
+                              onClick={() => { void handleVariantSelect(variant); }}
+                              className={`max-w-full rounded-lg border px-3 py-2 text-left text-xs font-bold transition-colors sm:text-sm ${isSelected ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/10 bg-[#1a1a1a] text-gray-300 hover:border-white/30"} disabled:cursor-not-allowed disabled:opacity-45`}
+                            >
+                              {hasVariantCapacities ? variantCapacity(variant) : variantLabel(variant, product.flavorOptions)}
+                            </button>
+                          );
+                        })}
                     </div>
                   </fieldset>
                 )
