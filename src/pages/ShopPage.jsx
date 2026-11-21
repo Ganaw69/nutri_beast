@@ -5,7 +5,7 @@ import { productService, categoryService, goalService, resolveProductImage, hydr
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, Loader2 } from "lucide-react";
 import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems, mergeCategorySources } from "../utils/categoryTree";
-import { productMatchesSearch } from "../utils/productSearch";
+import { getProductIdentity, productMatchesSearch } from "../utils/productSearch";
 
 const sameId = (first, second) => String(first) === String(second);
 
@@ -248,6 +248,7 @@ export const ShopPage = () => {
     const allowedBrandIds = new Set(selectedBrandIds.map(String));
     const allowedGoalIds = new Set(selectedGoalIds.map(String));
     const searchNeedle = normaliseText(searchQuery.trim());
+    const seenProducts = new Set();
 
     return catalogueProducts
       .filter((product) => {
@@ -274,6 +275,12 @@ export const ShopPage = () => {
         if (sortBy === "price-high") return Number(second.price || 0) - Number(first.price || 0);
         if (sortBy === "featured") return Number(first.position ?? 0) - Number(second.position ?? 0);
         return new Date(second.createdAt || 0) - new Date(first.createdAt || 0);
+      })
+      .filter((product) => {
+        const identity = getProductIdentity(product);
+        if (identity === null || seenProducts.has(identity)) return false;
+        seenProducts.add(identity);
+        return true;
       });
   }, [catalogueProducts, categories, quickCategoryFilters, searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, selectedQuickCategoryKeys, showNewOnly, priceMax, sortBy]);
 

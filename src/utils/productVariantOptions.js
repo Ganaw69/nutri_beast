@@ -9,9 +9,10 @@ const displayValue = (value) => {
   return String(value ?? "").trim();
 };
 
-const capacityLabel = (value) => {
+const capacityLabel = (value, appendLiters) => {
   const label = displayValue(value);
-  return !label || /(?:l|litre|liter)s?$/i.test(label) ? label : `${label} L`;
+  if (!label || !appendLiters || /(?:ml|milliliters?|millilitres?|l|liters?|litres?)$/i.test(label)) return label;
+  return `${label} L`;
 };
 
 export const getVariantOptionLabels = (variant) => {
@@ -28,10 +29,11 @@ export const getVariantOptionLabels = (variant) => {
   const color = displayValue(firstValue(options.color, options.colour, variant?.color, variant?.colour));
   const size = displayValue(firstValue(options.size, variant?.size));
   const weight = displayValue(firstValue(options.weight, variant?.weight));
+  const genericCapacity = firstValue(options.capacity, variant?.capacity);
   const capacity = firstValue(
+    genericCapacity,
     options.capacityLiters,
     options.capacity_liters,
-    options.capacity,
     options.liters,
     options.volume,
     variant?.capacityLiters,
@@ -50,6 +52,6 @@ export const getVariantOptionLabels = (variant) => {
     color && `Couleur : ${color}`,
     size && (isAccessory ? `Taille : ${size}` : size),
     !size && weight && `${weight}${/kg$/i.test(weight) ? "" : " kg"}`,
-    capacity && `Contenance : ${capacityLabel(capacity)}`,
+    capacity && `Contenance : ${capacityLabel(capacity, genericCapacity == null)}`,
   ].filter(Boolean);
 };

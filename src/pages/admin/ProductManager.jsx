@@ -10,12 +10,12 @@ const EMPTY_FORM = {
   price: '', salePrice: '', stock: '', minimumStock: '3', weight: '', dateProduit: '',
   isActive: true, isFeatured: false, isNew: false, isBestSeller: false, isOnSale: false,
   packing: false, montantRemise: '',
-  category: '', brand: '', goals: [], flavors: [], hasFlavors: false,
+  category: '', brand: '', goals: [], flavors: [], hasFlavors: false, hasContenance: false,
   productOptions: { type: '', sizes: [], colors: [], styles: [], capacityLiters: '' },
   metaTitle: '', metaDescription: '',
 };
 const EMPTY_VARIANT_DRAFT = {
-  flavor: '', design: '', color: '', size: '', capacityLiters: '', stock: '0',
+  flavor: '', design: '', color: '', size: '', capacityLiters: '', capacity: '', stock: '0',
 };
 
 const relationToIri = (value, resource) => {
@@ -617,6 +617,14 @@ export const ProductManager = () => {
       setProductImages(hydratedImages);
       setProductVariants(variants);
       setEditingProductHasVariants(variants.length > 0);
+      setForm((current) => ({
+        ...current,
+        hasContenance: variants.some((variant) => {
+          const options = variant?.options && typeof variant.options === 'object' ? variant.options : {};
+          return [options.capacity, options.capacityLiters, options.capacity_liters, options.liters, options.volume, variant?.capacity]
+            .some((value) => value != null && String(value).trim() !== '');
+        }),
+      }));
       setVariantsLoading(false);
       const fullBrand = fullProduct.brand || p.brand;
       const matchedBrand = brands.find((brand) => relationToIri(brand, 'brands') === relationToIri(fullBrand, 'brands'));
@@ -669,17 +677,20 @@ export const ProductManager = () => {
     ...(variantDraft.color.trim() ? { color: variantDraft.color.trim() } : {}),
     ...(variantDraft.size.trim() ? { size: variantDraft.size.trim() } : {}),
     ...(variantDraft.capacityLiters.trim() ? { capacityLiters: variantDraft.capacityLiters.trim() } : {}),
-  } : {};
+  } : {
+    ...(variantDraft.capacity.trim() ? { capacity: variantDraft.capacity.trim() } : {}),
+  };
   const draftAccessoryHasOptions = Object.keys(draftVariantOptions).some((key) => key !== 'accessoryType');
   const draftVariantSize = selectedAccessoryContext.isAccessory
     ? variantDraft.size.trim()
     : form.weight === '' ? '' : `${Number(form.weight)} kg`;
   const draftVariantDescriptor = selectedAccessoryContext.isAccessory
     ? [variantDraft.design, variantDraft.color, variantDraft.capacityLiters && `${variantDraft.capacityLiters} L`].filter(Boolean).join(' ')
-    : displayName(draftVariantFlavor);
+    : [displayName(draftVariantFlavor), variantDraft.capacity.trim()].filter(Boolean).join(' ');
   const draftVariantSku = modal?.id
     && (!form.hasFlavors || variantDraft.flavor)
     && (!selectedAccessoryContext.isAccessory || draftAccessoryHasOptions)
+    && (!form.hasContenance || selectedAccessoryContext.isAccessory || variantDraft.capacity.trim())
     ? generateVariantSku(
       modal.id,
       form.name,
@@ -754,10 +765,11 @@ export const ProductManager = () => {
         expirationDate: undefined,
         price: parentPrice.toFixed(2),
         salePrice: parentSalePrice === null || parentSalePrice === 0 ? null : parentSalePrice.toFixed(2),
-        stock: creatingProduct && (form.hasFlavors || selectedAccessoryContext.isAccessory)
+        stock: creatingProduct && (form.hasFlavors || form.hasContenance || selectedAccessoryContext.isAccessory)
           ? 0
           : editingProductHasVariants
             || form.hasFlavors
+            || form.hasContenance
             || (selectedAccessoryContext.isAccessory && productVariants.length > 0)
             ? undefined
             : form.stock !== ''
@@ -774,6 +786,7 @@ export const ProductManager = () => {
         hasFlavors: form.hasFlavors,
         flavors: form.hasFlavors ? form.flavors : [],
         productOptions: undefined,
+        hasContenance: undefined,
       };
 
       const saved = modal.mode === 'add'
@@ -850,7 +863,7 @@ export const ProductManager = () => {
           : 'Modifications enregistrées. Vous pouvez continuer à gérer les variantes, leurs images et leur stock ici.'
       );
       if (isProductCreationFlow) {
-        if (form.hasFlavors || selectedAccessoryContext.isAccessory) {
+        if (form.hasFlavors || form.hasContenance || selectedAccessoryContext.isAccessory) {
           setProductCreationStep(2);
           setVariantError('');
         } else {
@@ -1163,6 +1176,10 @@ export const ProductManager = () => {
       setVariantError('La contenance doit être un nombre supérieur à zéro.');
       return;
     }
+    if (form.hasContenance && !variantDraft.capacity.trim() && !selectedAccessoryContext.isAccessory) {
+      setVariantError('Renseignez la contenance de cette variante.');
+      return;
+    }
     if (form.hasFlavors && !selectedAccessoryContext.isAccessory && !variantDraft.flavor) {
       setVariantError('Sélectionnez la saveur de cette variante.');
       return;
@@ -1176,7 +1193,7 @@ export const ProductManager = () => {
     };
     const optionKeys = selectedAccessoryContext.isAccessory
       ? ['design', 'color', 'size', 'capacityLiters']
-      : [];
+      : ['capacity'];
     const duplicateVariant = productVariants.some((variant) => {
       if (selectedAccessoryContext.isAccessory) {
         return optionKeys.every((key) => (
@@ -1185,7 +1202,9 @@ export const ProductManager = () => {
       }
       const flavorId = relationId(variantDraft.flavor);
       return String(relationId(variant.flavor)) === String(flavorId)
-        && normalizeOption(variant.options?.size ?? variant.size, 'size') === normalizeOption(size, 'size');
+        && normalizeOption(variant.options?.size ?? variant.size, 'size') === normalizeOption(size, 'size')
+        && normalizeOption(variant.options?.capacity ?? variant.options?.capacityLiters ?? variant.options?.capacity_liters, 'capacity')
+          === normalizeOption(draftVariantOptions.capacity, 'capacity');
     });
     if (duplicateVariant) {
       setVariantError('Cette variante existe déjà. Utilisez son action « Ajuster le stock ».');
@@ -1221,7 +1240,7 @@ export const ProductManager = () => {
         stock,
         options: selectedAccessoryContext.isAccessory
           ? draftVariantOptions
-          : size ? { size } : {},
+          : { ...(size ? { size } : {}), ...draftVariantOptions },
         isActive: form.isActive,
       });
       let variants = productVariants;
@@ -1238,7 +1257,7 @@ export const ProductManager = () => {
           stock,
           options: selectedAccessoryContext.isAccessory
             ? draftVariantOptions
-            : size ? { size } : {},
+            : { ...(size ? { size } : {}), ...draftVariantOptions },
           isActive: form.isActive,
         }];
       } else {
@@ -1521,9 +1540,9 @@ export const ProductManager = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div><label className={labelCls}>Prix (TND) *</label><input type="number" min="0.01" step="0.01" required disabled={variantsLoading || variantsLoadFailed} value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
                 <div><label className={labelCls}>Prix promo</label><input type="number" min="0" step="0.01" disabled={variantsLoading || variantsLoadFailed} value={form.salePrice} onChange={e => setForm(p => ({ ...p, salePrice: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
-                <div><label className={labelCls}>Stock{editingProductHasVariants || form.hasFlavors ? ' parent · non utilisé' : ''}</label><input type="number" min="0" disabled={editingProductHasVariants || form.hasFlavors || variantsLoading || variantsLoadFailed} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
+                <div><label className={labelCls}>Stock{editingProductHasVariants || form.hasFlavors || form.hasContenance ? ' parent · non utilisé' : ''}</label><input type="number" min="0" disabled={editingProductHasVariants || form.hasFlavors || form.hasContenance || variantsLoading || variantsLoadFailed} value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-50`} /></div>
               </div>
-              {(editingProductHasVariants || form.hasFlavors) && <p className="-mt-3 text-xs text-gray-500">Le prix et le poids sont repris du produit pour chaque variante. Le stock, lui, se gère séparément par variante.</p>}
+              {(editingProductHasVariants || form.hasFlavors || form.hasContenance) && <p className="-mt-3 text-xs text-gray-500">Le prix et le poids sont repris du produit pour chaque variante. Le stock, lui, se gère séparément par variante.</p>}
               {variantsLoading && <p role="status" className="-mt-3 text-xs text-gray-500">Chargement des variantes avant l’édition du stock…</p>}
               <div><label className={labelCls}>Poids (kg)</label><input type="number" step="0.01" min="0" value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))} className={inputCls} placeholder="0.00" /></div>
               <div><label className={labelCls}>Date du produit</label><input type="date" value={form.dateProduit} onChange={e => setForm(p => ({ ...p, dateProduit: e.target.value }))} className={inputCls} /></div>
@@ -1531,6 +1550,14 @@ export const ProductManager = () => {
                 <legend className={labelCls}>Ce produit a-t-il des saveurs ?</legend>
                 <div className="flex gap-5 text-sm text-gray-200"><label className="cursor-pointer"><input type="radio" name="has-flavors" checked={form.hasFlavors} onChange={() => setHasFlavors(true)} className="mr-2 accent-[#d90429]" />Oui</label><label className="cursor-pointer"><input type="radio" name="has-flavors" checked={!form.hasFlavors} onChange={() => setHasFlavors(false)} className="mr-2 accent-[#d90429]" />Non</label></div>
                 <p className="mt-2 text-xs text-gray-500">Les saveurs décrivent le catalogue. Créez des variantes pour définir séparément chaque SKU, prix et stock ; aucune variante n’est créée automatiquement.</p>
+              </fieldset>
+              <fieldset className="rounded-lg border border-[#333] bg-[#111] p-4">
+                <legend className={labelCls}>Ce produit a-t-il plusieurs contenances ?</legend>
+                <div className="flex gap-5 text-sm text-gray-200">
+                  <label className="cursor-pointer"><input type="radio" name="has-contenance" checked={form.hasContenance} onChange={() => setForm((current) => ({ ...current, hasContenance: true }))} className="mr-2 accent-[#d90429]" />Oui</label>
+                  <label className="cursor-pointer"><input type="radio" name="has-contenance" checked={!form.hasContenance} onChange={() => setForm((current) => ({ ...current, hasContenance: false }))} className="mr-2 accent-[#d90429]" />Non</label>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">Chaque contenance est créée comme une variante avec son propre SKU et son stock.</p>
               </fieldset>
               <div>
                 <label className={labelCls}>Image produit</label>
@@ -1904,12 +1931,12 @@ export const ProductManager = () => {
               {(!isProductCreationFlow || isCreationVariantStep) && <section className="space-y-4 rounded-lg border border-[#333] bg-[#111] p-4">
                 <div>
                   <h3 className="text-sm font-bold text-white">
-                    {selectedAccessoryContext.isAccessory ? 'Variantes · stock par option' : 'Variantes · stock par saveur'}
+                    {selectedAccessoryContext.isAccessory ? 'Variantes · stock par option' : form.hasContenance ? 'Variantes · saveur et contenance' : 'Variantes · stock par saveur'}
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
                     {selectedAccessoryContext.isAccessory
                       ? 'Créez un SKU pour chaque combinaison souhaitée. Le prix vient du produit ; le stock est saisi par variante.'
-                      : 'Le poids et le prix viennent du produit ci-dessus. Un SKU est généré automatiquement ; seul le stock est saisi par variante.'}
+                      : 'Le poids et le prix viennent du produit ci-dessus. Définissez la saveur et, si nécessaire, la contenance de chaque SKU ; le stock est saisi par variante.'}
                   </p>
                 </div>
                 {modal.mode !== 'edit' ? (
@@ -1988,7 +2015,7 @@ export const ProductManager = () => {
                   ) : <p className="rounded border border-dashed border-[#444] p-3 text-xs text-gray-500">
                     {selectedAccessoryContext.isAccessory
                       ? 'Aucune variante : ajoutez ici chaque design, taille, couleur ou contenance à suivre en stock.'
-                      : 'Aucune variante : le produit utilise encore son stock parent. Créez ici une variante par saveur ; son prix et son poids seront repris du produit.'}
+                      : 'Aucune variante : le produit utilise encore son stock parent. Créez ici une variante par saveur et/ou contenance ; son prix et son poids seront repris du produit.'}
                   </p>}
 
                   <div className="grid gap-3 rounded-lg border border-[#333] bg-[#0b0b0b] p-3 sm:grid-cols-2">
@@ -2024,20 +2051,26 @@ export const ProductManager = () => {
                         <label className={labelCls}>Contenance (litres)</label>
                         <input type="number" min="0.1" step="0.1" value={variantDraft.capacityLiters} onChange={(event) => setVariantDraft((current) => ({ ...current, capacityLiters: event.target.value }))} className={inputCls} placeholder="0.5, 1..." />
                       </div>
-                    </> : <div>
-                      <label className={labelCls}>Saveur{form.hasFlavors ? ' *' : ''}</label>
-                      <select value={variantDraft.flavor} onChange={(event) => setVariantDraft((current) => ({ ...current, flavor: event.target.value }))} className={inputCls} disabled={!form.hasFlavors}>
-                        <option value="">{form.hasFlavors ? 'Choisir une saveur' : 'Sans saveur'}</option>
-                        {form.flavors.map((flavorIri) => {
-                          const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
-                          return <option key={flavorIri} value={flavorIri}>{displayName(flavor) || flavorIri.split('/').pop()}</option>;
-                        })}
-                      </select>
-                    </div>}
+                    </> : <>
+                      <div>
+                        <label className={labelCls}>Saveur{form.hasFlavors ? ' *' : ''}</label>
+                        <select value={variantDraft.flavor} onChange={(event) => setVariantDraft((current) => ({ ...current, flavor: event.target.value }))} className={inputCls} disabled={!form.hasFlavors}>
+                          <option value="">{form.hasFlavors ? 'Choisir une saveur' : 'Sans saveur'}</option>
+                          {form.flavors.map((flavorIri) => {
+                            const flavor = flavors.find((item) => relationToIri(item, 'flavors') === flavorIri);
+                            return <option key={flavorIri} value={flavorIri}>{displayName(flavor) || flavorIri.split('/').pop()}</option>;
+                          })}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Contenance{form.hasContenance ? ' *' : ''}</label>
+                        <input value={variantDraft.capacity} onChange={(event) => setVariantDraft((current) => ({ ...current, capacity: event.target.value }))} className={inputCls} placeholder="500 ml, 1 L..." />
+                      </div>
+                    </>}
                     <div><label className={labelCls}>Stock initial *</label><input type="number" min="0" step="1" value={variantDraft.stock} onChange={(event) => setVariantDraft((current) => ({ ...current, stock: event.target.value }))} className={inputCls} /></div>
                     <div className="sm:col-span-2">
                       <p className="mb-3 text-xs text-gray-500">
-                        SKU généré : <code className="font-mono text-gray-300">{draftVariantSku || (selectedAccessoryContext.isAccessory ? 'renseignez au moins une option' : 'choisissez une saveur')}</code>
+                        SKU généré : <code className="font-mono text-gray-300">{draftVariantSku || (selectedAccessoryContext.isAccessory ? 'renseignez au moins une option' : form.hasFlavors && !variantDraft.flavor ? 'choisissez une saveur' : form.hasContenance && !variantDraft.capacity.trim() ? 'renseignez une contenance' : 'complétez les options')}</code>
                         {' · '}{selectedAccessoryContext.isAccessory ? 'Option' : 'Poids'} : {selectedAccessoryContext.isAccessory ? draftVariantDescriptor || variantDraft.size || 'non définie' : draftVariantSize || 'non défini'}
                         {' · '}Prix : {form.price ? `${Number(form.salePrice || form.price).toFixed(2)} TND` : 'non défini'}
                       </p>
@@ -2066,19 +2099,21 @@ export const ProductManager = () => {
             </form>
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#2a2a2a] bg-[#1a1a1a] p-5">
               {error && <p role="alert" className="mr-auto w-full text-sm text-red-300 sm:w-auto">{error}</p>}
-              {isCreationVariantStep ? (
-                <>
-                  <button type="button" disabled={variantSaving} onClick={() => { setError(''); setProductCreationStep(1); }} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white disabled:opacity-50">Retour</button>
-                  <button type="button" disabled={variantSaving} onClick={closeProductModal} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60">Terminer</button>
-                </>
-              ) : (
-                <>
-                  <button type="button" onClick={closeProductModal} className="px-5 py-2.5 text-sm font-bold text-gray-300 hover:text-white">{modal.mode === 'edit' ? 'Fermer' : 'Annuler'}</button>
-                  <button type="submit" form="product-edit-form" disabled={saving || variantsLoading || variantsLoadFailed} className="bg-[#d90429] hover:bg-[#ff1a3c] text-white px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-60">
-                    {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
-                  </button>
-                </>
-              )}
+              <div className="ml-auto flex items-center gap-3">
+                {isCreationVariantStep ? (
+                  <>
+                    <button type="button" disabled={variantSaving} onClick={() => { setError(''); setProductCreationStep(1); }} className="inline-flex h-11 items-center justify-center whitespace-nowrap px-5 text-sm font-bold text-gray-300 hover:text-white disabled:opacity-50">Retour</button>
+                    <button type="button" disabled={variantSaving} onClick={closeProductModal} className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg bg-[#d90429] px-6 text-sm font-bold text-white hover:bg-[#ff1a3c] disabled:opacity-60">Terminer</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={closeProductModal} className="inline-flex h-11 items-center justify-center whitespace-nowrap px-5 text-sm font-bold text-gray-300 hover:text-white">{modal.mode === 'edit' ? 'Fermer' : 'Annuler'}</button>
+                    <button type="submit" form="product-edit-form" disabled={saving || variantsLoading || variantsLoadFailed} className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#d90429] px-6 text-sm font-bold text-white hover:bg-[#ff1a3c] disabled:opacity-60">
+                      {saving ? <><Loader2 size={14} className="animate-spin" /> Enregistrement...</> : <><Check size={14} /> Enregistrer</>}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -9,6 +9,18 @@ export const normalizeProductSearchText = (value) => String(value || '')
   .replace(/[^a-z0-9]+/g, ' ')
   .trim();
 
+export const getProductIdentity = (product) => {
+  const name = normalizeProductSearchText(product?.name);
+  const brandValue = product?.brand && typeof product.brand === 'object'
+    ? product.brand?.name ?? product.brand?.brandName
+    : product?.brand ?? product?.brandName ?? product?.brand_name;
+  const brand = normalizeProductSearchText(brandValue);
+  if (name) return `name:${name}|brand:${brand}`;
+
+  const id = product?.id ?? product?.['@id'] ?? product?.iri;
+  return id === null || id === undefined || id === '' ? null : `id:${id}`;
+};
+
 export const getProductSearchTerms = (query) => [
   ...new Set(normalizeProductSearchText(query)
     .split(/\s+/)

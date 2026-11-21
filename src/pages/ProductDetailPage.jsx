@@ -38,6 +38,20 @@ const isAvailableProduct = (product) => product?.isActive !== false
   && product?.brand?.active !== false;
 const variantKey = (variant) => String(variant?.id ?? variant?.["@id"] ?? variant?.sku ?? variant?.SKU ?? "");
 const variantSku = (variant) => variant?.sku ?? variant?.SKU ?? "";
+const variantCapacity = (variant) => {
+  const options = variant?.options && typeof variant.options === "object" ? variant.options : {};
+  const genericCapacity = options.capacity ?? variant?.capacity;
+  const value = genericCapacity
+    ?? options.capacityLiters
+    ?? options.capacity_liters
+    ?? options.liters
+    ?? options.volume;
+  if (value == null || String(value).trim() === "") return "";
+  const label = String(value).trim();
+  return genericCapacity != null || /(?:ml|milliliters?|millilitres?|l|liters?|litres?)$/i.test(label)
+    ? label
+    : `${label} L`;
+};
 const variantLabel = (variant, flavors = []) => {
   const flavorRelationId = getRelationId(variant?.flavor);
   const flavorRecord = flavors.find((item) => String(getRelationId(item)) === String(flavorRelationId));
@@ -519,13 +533,31 @@ export const ProductDetailPage = () => {
   const hasVariants = variants.length > 0;
   const variantFlavorChoices = buildVariantFlavorOptions(variants, product.flavorOptions);
   const hasVariantFlavors = variantFlavorChoices.some((choice) => choice.variants.length > 0);
+  const selectedFlavorVariants = hasVariantFlavors
+    ? variants.filter((variant) => (
+      variantFlavorOption(variant, product.flavorOptions)?.name.trim().toLowerCase()
+      === selectedFlavor.trim().toLowerCase()
+    ))
+    : variants;
+  const capacityVariants = selectedFlavorVariants.filter((variant) => variantCapacity(variant));
+  const hasVariantCapacities = variants.some((variant) => variantCapacity(variant));
+  const uniqueCapacityVariants = capacityVariants.reduce((choices, variant) => {
+    const capacity = variantCapacity(variant);
+    const existingIndex = choices.findIndex((choice) => variantCapacity(choice).toLowerCase() === capacity.toLowerCase());
+    if (existingIndex < 0) choices.push(variant);
+    else if (Number(variant.stock ?? 0) > 0 && Number(choices[existingIndex].stock ?? 0) <= 0) choices[existingIndex] = variant;
+    return choices;
+  }, []);
   const selectedVariantPrice = selectedVariant ? variantUnitPrice(selectedVariant) : null;
   const selectedVariantOriginalPrice = selectedVariant
     && selectedVariantPrice < Number(selectedVariant.price)
     ? Number(selectedVariant.price)
     : null;
   const selectedVariantLabel = selectedVariant
-    ? variantFlavorOption(selectedVariant, product.flavorOptions)?.name || variantLabel(selectedVariant, product.flavorOptions)
+    ? [
+      variantFlavorOption(selectedVariant, product.flavorOptions)?.name,
+      variantCapacity(selectedVariant),
+    ].filter(Boolean).join(" · ") || variantLabel(selectedVariant, product.flavorOptions)
     : '';
   const selectedVariantInStock = Boolean(selectedVariant && variantSku(selectedVariant) && Number(selectedVariant.stock ?? 0) > 0);
   const newShopFilter = ["new", "nouveaute", "nouveautes"].includes(
@@ -739,7 +771,7 @@ export const ProductDetailPage = () => {
                         const available = choice.variants.some((variant) => (
                           variantSku(variant) && Number(variant.stock ?? 0) > 0
                         ));
-                        const isSelected = choiceVariant && variantKey(choiceVariant) === selectedVariantKey;
+                        const isSelected = choice.variants.some((variant) => variantKey(variant) === selectedVariantKey);
                         return (
                           <button
                             key={`${choice.id ?? choice.name}-${index}`}
@@ -755,10 +787,34 @@ export const ProductDetailPage = () => {
                         );
                       })}
                     </div>
+                    {hasVariantCapacities && uniqueCapacityVariants.length > 0 && (
+                      <label className="mt-3 block text-xs font-heading font-bold text-gray-300 uppercase">
+                        Contenance
+                        <select
+                          value={variantCapacity(selectedVariant)}
+                          onChange={(event) => {
+                            const nextVariant = uniqueCapacityVariants.find((variant) => variantCapacity(variant) === event.target.value);
+                            void handleVariantSelect(nextVariant);
+                          }}
+                          className="mt-2 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-4 py-3 text-sm font-bold normal-case text-white focus:border-[#d90429] focus:outline-none"
+                        >
+                          <option value="">Choisir une contenance</option>
+                          {uniqueCapacityVariants.map((variant, index) => (
+                            <option
+                              key={`${variantKey(variant)}-${index}`}
+                              value={variantCapacity(variant)}
+                              disabled={!variantSku(variant) || Number(variant.stock ?? 0) <= 0}
+                            >
+                              {variantCapacity(variant)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                   </div>
                 ) : (
                   <label className="block text-xs font-heading font-bold text-gray-300 uppercase">
-                    Variante
+                    {hasVariantCapacities ? "Contenance" : "Variante"}
                     <select
                       value={selectedVariantKey}
                       onChange={(event) => {
@@ -767,14 +823,14 @@ export const ProductDetailPage = () => {
                       }}
                       className="mt-2 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-4 py-3 text-sm font-bold normal-case text-white focus:border-[#d90429] focus:outline-none"
                     >
-                      <option value="">Choisir une variante</option>
-                      {variants.map((variant, index) => (
+                      <option value="">{hasVariantCapacities ? "Choisir une contenance" : "Choisir une variante"}</option>
+                      {(hasVariantCapacities ? uniqueCapacityVariants : variants).map((variant, index) => (
                         <option
                           key={variantKey(variant) || index}
                           value={variantKey(variant)}
                           disabled={!variantSku(variant) || Number(variant.stock ?? 0) <= 0}
                         >
-                          {variantLabel(variant, product.flavorOptions)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
+                          {hasVariantCapacities ? variantCapacity(variant) : variantLabel(variant, product.flavorOptions)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
                         </option>
                       ))}
                     </select>

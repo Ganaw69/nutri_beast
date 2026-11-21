@@ -9,7 +9,7 @@ import {
   resolveProductImage,
 } from "../services/api";
 import { extractCategoryItems, normalizeCategoryRecord } from "../utils/categoryTree";
-import { normalizeProductSearchText, productMatchesSearch } from "../utils/productSearch";
+import { getProductIdentity, normalizeProductSearchText, productMatchesSearch } from "../utils/productSearch";
 import logo from "../assets/logo.png";
 import { FREE_SHIPPING_LABEL } from "../config/store";
 import {
@@ -308,6 +308,7 @@ export const Navbar = () => {
       try {
         const catalog = await loadSearchCatalog();
         const normalizedPhrase = normalizeProductSearchText(enteredQuery);
+        const seenProducts = new Set();
         const suggestions = catalog
           .filter((product) => product?.isActive !== false && product?.active !== false)
           .filter((product) => productMatchesSearch(product, enteredQuery))
@@ -316,6 +317,12 @@ export const Navbar = () => {
             const secondName = normalizeProductSearchText(second.name);
             const score = (name) => name === normalizedPhrase ? 2 : name.startsWith(normalizedPhrase) ? 1 : 0;
             return score(secondName) - score(firstName);
+          })
+          .filter((product) => {
+            const identity = getProductIdentity(product);
+            if (identity === null || seenProducts.has(identity)) return false;
+            seenProducts.add(identity);
+            return true;
           })
           .slice(0, 7);
         if (!current) return;
