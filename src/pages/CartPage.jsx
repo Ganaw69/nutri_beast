@@ -19,7 +19,14 @@ export const CartPage = () => {
         <div className="flex items-center gap-3">
           <span className="w-1.5 h-8 bg-[#d90429] inline-block rounded-xs" />
           <h1 className="font-black text-3xl sm:text-5xl text-white uppercase tracking-tight">
-            YOUR CART
+            VOTRE PANIER
+          </h1>
+          <span className="w-1.5 h-8 bg-[#d90429] inline-block rounded-xs" />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-6 bg-[#d90429] inline-block rounded-xs" />
+          <h1 className="font-black text-xl sm:text-2xl text-white uppercase tracking-tight">
+            Vérifiez votre panier et passez à la caisse
           </h1>
         </div>
 
