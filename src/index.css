@@ -203,6 +203,9 @@
 }
 
 .brand-logo-marquee-track {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
   width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -223,6 +226,7 @@
 .brand-logo-marquee-group {
   display: flex;
   width: max-content;
+  flex: 0 0 max-content;
   gap: 1.75rem;
   padding-right: 1.75rem;
 }
