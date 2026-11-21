@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
@@ -140,6 +140,8 @@ export const HomePage = () => {
   const [heroCouvertures, setHeroCouvertures] = useState([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const brandTrackRef = useRef(null);
+  const isBrandTrackInteracting = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -257,6 +259,28 @@ export const HomePage = () => {
   const heroHasDestination = Boolean(heroDestination);
   const logoBrands = brands.filter((brand) => resolveBrandLogo(brand));
 
+  useEffect(() => {
+    const track = brandTrackRef.current;
+    if (!track || logoBrands.length < 2) return undefined;
+
+    const copyWidth = track.scrollWidth / 3;
+    track.scrollLeft = copyWidth;
+    let previousFrameTime = 0;
+    let animationFrame = 0;
+    const moveTrack = (time) => {
+      if (previousFrameTime && !isBrandTrackInteracting.current) {
+        track.scrollLeft += Math.min(time - previousFrameTime, 32) * 0.09;
+        if (track.scrollLeft >= copyWidth * 2) track.scrollLeft -= copyWidth;
+        if (track.scrollLeft <= 0) track.scrollLeft += copyWidth;
+      }
+      previousFrameTime = time;
+      animationFrame = window.requestAnimationFrame(moveTrack);
+    };
+
+    animationFrame = window.requestAnimationFrame(moveTrack);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [logoBrands.length]);
+
   const visibleNewProducts = newProducts.length <= 4
     ? newProducts
     : Array.from({ length: 4 }, (_, index) => newProducts[(newProductsOffset + index) % newProducts.length]);
@@ -298,22 +322,12 @@ export const HomePage = () => {
             <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOUVEAUTÉS À DÉCOUVRIR</h2>
             <p className="text-xs text-gray-400 font-body mt-1">Les derniers produits ajoutés à notre sélection.</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {newProducts.length > 4 && <>
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="grid h-9 w-9 place-items-center rounded-full border border-white/20 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Nouveautés précédentes">
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="grid h-9 w-9 place-items-center rounded-full border border-white/20 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Nouveautés suivantes">
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </>}
-            <button
-              onClick={() => navigateTo("shop", { shopFilters: { filter: "new" } })}
-              className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
-            >
-              VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
-            </button>
-          </div>
+          <button
+            onClick={() => navigateTo("shop", { shopFilters: { filter: "new" } })}
+            className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
+          >
+            VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
+          </button>
         </div>
 
         {loading ? (
@@ -325,8 +339,18 @@ export const HomePage = () => {
             Impossible de charger les nouveautés : {newProductsError}
           </div>
         ) : newProducts.length > 0 ? (
-          <div key={newProductsOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
-            {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+          <div className="relative">
+            <div key={newProductsOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
+              {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+            </div>
+            {newProducts.length > 4 && <>
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="absolute -left-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-left-5" aria-label="Nouveautés précédentes">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="absolute -right-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-right-5" aria-label="Nouveautés suivantes">
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500 text-sm">Aucune nouveauté pour l'instant.</div>
@@ -340,22 +364,12 @@ export const HomePage = () => {
             <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOS MEILLEURS VENTES</h2>
             <p className="text-xs text-gray-400 font-body mt-1">Le carburant préféré de nos athlètes d'élite.</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {bestSellers.length > 4 && <>
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="grid h-9 w-9 place-items-center rounded-full border border-white/20 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Meilleures ventes précédentes">
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="grid h-9 w-9 place-items-center rounded-full border border-white/20 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Meilleures ventes suivantes">
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </>}
-            <button
-              onClick={() => navigateTo("shop")}
-              className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
-            >
-              VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
-            </button>
-          </div>
+          <button
+            onClick={() => navigateTo("shop")}
+            className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
+          >
+            VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
+          </button>
         </div>
 
         {loading ? (
@@ -367,8 +381,18 @@ export const HomePage = () => {
             Impossible de charger les meilleures ventes : {bestSellersError}
           </div>
         ) : bestSellers.length > 0 ? (
-          <div key={bestSellerOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
-            {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
+          <div className="relative">
+            <div key={bestSellerOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
+              {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
+            </div>
+            {bestSellers.length > 4 && <>
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="absolute -left-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-left-5" aria-label="Meilleures ventes précédentes">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="absolute -right-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-right-5" aria-label="Meilleures ventes suivantes">
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </>}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500 text-sm">Aucun produit en vedette pour l'instant.</div>
@@ -482,17 +506,28 @@ export const HomePage = () => {
 
       {logoBrands.length > 0 && (
         <section className="brand-logo-marquee-section border-y border-[#d90429]/30 bg-[#0b0b0b] py-6 overflow-hidden" aria-label="Marques partenaires">
-          <div className="brand-logo-marquee-track" role="region" aria-label="Marques partenaires, faites défiler horizontalement" tabIndex={0}>
-            <div className="brand-logo-marquee-group">
-              {logoBrands.map((brand) => {
-                const logoPath = resolveBrandLogo(brand);
-                return (
-                  <button key={brand.id ?? brand.slug ?? brand.name} type="button" onClick={() => viewBrandDetails(brand)} className="brand-logo-card" aria-label={`Découvrir ${brand.name}`}>
-                    <img src={logoPath} alt={brand.name} className="brand-logo-image" />
-                  </button>
-                );
-              })}
-            </div>
+          <div
+            ref={brandTrackRef}
+            className="brand-logo-marquee-track"
+            role="region"
+            aria-label="Marques partenaires, faites défiler horizontalement"
+            tabIndex={0}
+            onPointerDown={() => { isBrandTrackInteracting.current = true; }}
+            onPointerUp={() => { isBrandTrackInteracting.current = false; }}
+            onPointerCancel={() => { isBrandTrackInteracting.current = false; }}
+          >
+            {[0, 1, 2].map((group) => (
+              <div key={group} className="brand-logo-marquee-group" aria-hidden={group !== 0}>
+                {logoBrands.map((brand) => {
+                  const logoPath = resolveBrandLogo(brand);
+                  return (
+                    <button key={`${group}-${brand.id ?? brand.slug ?? brand.name}`} type="button" onClick={() => viewBrandDetails(brand)} tabIndex={group === 0 ? undefined : -1} className="brand-logo-card" aria-label={`Découvrir ${brand.name}`}>
+                      <img src={logoPath} alt={group === 0 ? brand.name : ''} className="brand-logo-image" />
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </section>
       )}
