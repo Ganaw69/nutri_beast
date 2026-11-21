@@ -377,7 +377,7 @@ export const HomePage = () => {
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <div key={newProductsOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
+            <div key={newProductsOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
               {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
             {newProducts.length > 4 && (
@@ -421,7 +421,7 @@ export const HomePage = () => {
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <div key={bestSellerOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
+            <div key={bestSellerOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
               {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
             {bestSellers.length > 4 && (
