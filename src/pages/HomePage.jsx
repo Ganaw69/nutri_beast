@@ -3,6 +3,7 @@ import { useCart } from "../context/CartContext";
 import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { getProductIdentity } from "../utils/productSearch";
 import logo from "../assets/logo.png";
 import packHommeImage from "../assets/pack-homme.jpeg";
 import packFemmeImage from "../assets/pack-femme.jpeg";
@@ -28,6 +29,17 @@ const normalizeProduct = (p) => ({
 });
 
 const collectionItems = (data) => data?.['hydra:member'] || data?.member || (Array.isArray(data) ? data : []);
+
+const uniqueProducts = (products) => {
+  const seen = new Set();
+  return products.filter((product) => {
+    const identity = getProductIdentity(product);
+    if (!identity) return true;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+};
 
 const couvertureDesktopImage = (couverture) => (
   couverture?.image
@@ -140,7 +152,9 @@ export const HomePage = () => {
   const [heroCouvertures, setHeroCouvertures] = useState([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [brandCopies, setBrandCopies] = useState(3);
   const brandTrackRef = useRef(null);
+  const brandGroupRef = useRef(null);
   const isBrandTrackInteracting = useRef(false);
 
   useEffect(() => {
@@ -155,12 +169,12 @@ export const HomePage = () => {
       if (!active) return;
       const bestSellersData = bestSellersResult.status === 'fulfilled' ? bestSellersResult.value : null;
       const newProductsData = newProductsResult.status === 'fulfilled' ? newProductsResult.value : null;
-      const availableProducts = collectionItems(bestSellersData).filter((product) =>
+      const availableProducts = uniqueProducts(collectionItems(bestSellersData).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
-      );
-      const availableNewProducts = collectionItems(newProductsData).filter((product) =>
+      ));
+      const availableNewProducts = uniqueProducts(collectionItems(newProductsData).filter((product) =>
         product.isActive !== false && product.brand?.isActive !== false
-      );
+      ));
       setBestSellersError(bestSellersResult.status === 'rejected'
         ? bestSellersResult.reason?.message || 'Erreur inconnue.'
         : '');
@@ -261,9 +275,27 @@ export const HomePage = () => {
 
   useEffect(() => {
     const track = brandTrackRef.current;
-    if (!track || logoBrands.length < 2) return undefined;
+    const group = brandGroupRef.current;
+    if (!track || !group || !logoBrands.length) return undefined;
 
-    const copyWidth = track.scrollWidth / 3;
+    const updateCopies = () => {
+      const groupWidth = group.getBoundingClientRect().width;
+      if (!groupWidth) return;
+      const requiredCopies = Math.max(3, Math.ceil(track.clientWidth / groupWidth) + 2);
+      setBrandCopies((current) => current === requiredCopies ? current : requiredCopies);
+    };
+
+    updateCopies();
+    window.addEventListener('resize', updateCopies);
+    return () => window.removeEventListener('resize', updateCopies);
+  }, [logoBrands.length]);
+
+  useEffect(() => {
+    const track = brandTrackRef.current;
+    const group = brandGroupRef.current;
+    if (!track || !group || !logoBrands.length) return undefined;
+
+    const copyWidth = group.getBoundingClientRect().width;
     track.scrollLeft = copyWidth;
     let previousFrameTime = 0;
     let animationFrame = 0;
@@ -279,7 +311,7 @@ export const HomePage = () => {
 
     animationFrame = window.requestAnimationFrame(moveTrack);
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [logoBrands.length]);
+  }, [brandCopies, logoBrands.length]);
 
   const visibleNewProducts = newProducts.length <= 4
     ? newProducts
@@ -339,18 +371,20 @@ export const HomePage = () => {
             Impossible de charger les nouveautés : {newProductsError}
           </div>
         ) : newProducts.length > 0 ? (
-          <div className="relative">
+          <div className={`grid items-center gap-2 ${newProducts.length > 4 ? 'grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
+            {newProducts.length > 4 && (
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Nouveautés précédentes">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
             <div key={newProductsOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
               {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
-            {newProducts.length > 4 && <>
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="absolute -left-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-left-5" aria-label="Nouveautés précédentes">
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="absolute -right-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-right-5" aria-label="Nouveautés suivantes">
+            {newProducts.length > 4 && (
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Nouveautés suivantes">
                 <ChevronRight className="h-5 w-5" />
               </button>
-            </>}
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500 text-sm">Aucune nouveauté pour l'instant.</div>
@@ -381,18 +415,20 @@ export const HomePage = () => {
             Impossible de charger les meilleures ventes : {bestSellersError}
           </div>
         ) : bestSellers.length > 0 ? (
-          <div className="relative">
+          <div className={`grid items-center gap-2 ${bestSellers.length > 4 ? 'grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
+            {bestSellers.length > 4 && (
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Meilleures ventes précédentes">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
             <div key={bestSellerOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.35s_ease-out]' : 'animate-[carouselSlideRight_0.35s_ease-out]'}`}>
               {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
-            {bestSellers.length > 4 && <>
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="absolute -left-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-left-5" aria-label="Meilleures ventes précédentes">
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="absolute -right-4 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:-right-5" aria-label="Meilleures ventes suivantes">
+            {bestSellers.length > 4 && (
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Meilleures ventes suivantes">
                 <ChevronRight className="h-5 w-5" />
               </button>
-            </>}
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500 text-sm">Aucun produit en vedette pour l'instant.</div>
@@ -516,8 +552,8 @@ export const HomePage = () => {
             onPointerUp={() => { isBrandTrackInteracting.current = false; }}
             onPointerCancel={() => { isBrandTrackInteracting.current = false; }}
           >
-            {[0, 1, 2].map((group) => (
-              <div key={group} className="brand-logo-marquee-group" aria-hidden={group !== 0}>
+            {Array.from({ length: brandCopies }, (_, group) => (
+              <div key={group} ref={group === 0 ? brandGroupRef : null} className="brand-logo-marquee-group" aria-hidden={group !== 0}>
                 {logoBrands.map((brand) => {
                   const logoPath = resolveBrandLogo(brand);
                   return (
