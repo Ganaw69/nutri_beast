@@ -194,6 +194,7 @@ export const PackDetailPage = () => {
   if (error || !pack) return <div className="min-h-[50vh] bg-[#131313] px-4 py-10 text-white"><div className="mx-auto max-w-4xl rounded-xl border border-[#d90429]/40 bg-[#181818] p-6"><p role="alert" className="text-sm text-red-100">{error || "Pack introuvable."}</p><button onClick={() => navigateTo("packs")} className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase text-white hover:text-[#ff526d]"><ArrowLeft className="h-4 w-4" /> Retour aux packs</button></div></div>;
 
   const customizable = pack.type === "CUSTOM" && (pack.isCustomizable === true || pack.customizable === true);
+  const isCustomPack = pack.type === "CUSTOM";
   const hasConfiguredPrice = Number(pack.finalPrice) > 0 || Number(pack.basePrice) > 0;
   const canPurchase = hasConfiguredPrice && !customizable;
   const addPackToCart = () => {
@@ -214,13 +215,15 @@ export const PackDetailPage = () => {
               {Number(pack.discountAmount) > 0 && <span className="text-sm font-bold text-emerald-400">Économie {money(pack.discountAmount)}</span>}
             </div>
             {pack.description && <p className="mt-6 whitespace-pre-line border-y border-white/10 py-5 text-sm leading-7 text-gray-300">{pack.description}</p>}
-            <div className="mt-6 rounded-xl border border-white/10 bg-[#181818] p-4 sm:p-5">
-              <h2 className="font-black uppercase text-white">Composition du pack <span className="ml-1 text-gray-400">({contents.length})</span></h2>
-              {contents.length ? <ul className="mt-4 divide-y divide-white/10">{contents.map((entry, index) => {
-                const productImage = resolveProductImage(entry.product, null);
-                return <li key={entry.id ?? index} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f0f0f0] p-1.5">{productImage ? <img src={productImage} alt="" loading="lazy" className="h-full w-full object-contain" /> : <ShoppingBag className="h-5 w-5 text-gray-400" />}</div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-white">{entry.product.name}</p><p className="mt-1 text-xs text-gray-400">Quantité : {entry.quantity}{entry.required ? " · Inclus" : " · Optionnel"}</p></div></li>;
-              })}</ul> : <p className="mt-3 text-sm text-gray-400">La composition détaillée n’est pas renseignée. Ce pack prédéfini peut tout de même être commandé au prix affiché.</p>}
-            </div>
+            {(contents.length > 0 || isCustomPack) && (
+              <div className="mt-6 rounded-xl border border-white/10 bg-[#181818] p-4 sm:p-5">
+                <h2 className="font-black uppercase text-white">Composition du pack <span className="ml-1 text-gray-400">({contents.length})</span></h2>
+                {contents.length ? <ul className="mt-4 divide-y divide-white/10">{contents.map((entry, index) => {
+                  const productImage = resolveProductImage(entry.product, null);
+                  return <li key={entry.id ?? index} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f0f0f0] p-1.5">{productImage ? <img src={productImage} alt="" loading="lazy" className="h-full w-full object-contain" /> : <ShoppingBag className="h-5 w-5 text-gray-400" />}</div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-white">{entry.product.name}</p><p className="mt-1 text-xs text-gray-400">Quantité : {entry.quantity}{entry.required ? " · Inclus" : " · Optionnel"}</p></div></li>;
+                })}</ul> : <p className="mt-3 text-sm text-amber-200">Aucun produit n’est actuellement associé à ce pack dans le catalogue.</p>}
+              </div>
+            )}
             {pack.startDate || pack.endDate ? <p className="mt-4 text-xs text-gray-400">Offre valable {pack.startDate ? `à partir du ${new Date(pack.startDate).toLocaleDateString("fr-TN")}` : ""}{pack.startDate && pack.endDate ? " " : ""}{pack.endDate ? `jusqu’au ${new Date(pack.endDate).toLocaleDateString("fr-TN")}` : ""}.</p> : null}
             {customizable && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-5 text-amber-100">Ce pack est configuré comme personnalisable (minimum {pack.minProducts ?? "—"}, maximum {pack.maxProducts ?? "sans limite"}). La configuration client et le calcul de prix ne sont pas exposés par l’API actuelle.</div>}
             {canPurchase ? (
