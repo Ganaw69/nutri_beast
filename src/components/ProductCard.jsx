@@ -38,7 +38,7 @@ export const ProductCard = ({ product }) => {
             ))}
           </div>
         )}
-        {!inStock && (
+        {!inStock && !product.variantStockPending && (
           <span className="absolute right-3 top-3 z-10 rounded-full bg-[#d90429] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white shadow-xs">
             RUPTURE DE STOCK
           </span>

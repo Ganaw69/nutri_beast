@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useCart } from "../context/CartContext";
 import { useAdmin } from "../context/AdminContext";
-import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages } from "../services/api";
+import { productService, categoryService, goalService, resolveProductImage, hydrateProductsWithImages, hydrateProductsWithVariantStock } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, Loader2 } from "lucide-react";
 import { buildCategoryTree, collectExpandedCategoryIds, extractCategoryItems, mergeCategorySources } from "../utils/categoryTree";
@@ -322,7 +322,42 @@ export const ShopPage = () => {
     const requestVersion = ++imageRequestVersionRef.current;
     setProducts(pagedProducts);
     void hydrateProductsWithImages(pagedProducts).then((productsWithImages) => {
-      if (requestVersion === imageRequestVersionRef.current) setProducts(productsWithImages);
+      if (requestVersion !== imageRequestVersionRef.current) return;
+      setProducts((currentProducts) => {
+        const availabilityById = new Map(currentProducts.map((product) => [
+          String(getRelatedId(product.id ?? product['@id'] ?? product.iri)),
+          {
+            hasAvailableVariant: product.hasAvailableVariant,
+            variantStockChecked: product.variantStockChecked,
+          },
+        ]));
+        return productsWithImages.map((product) => {
+          const availability = availabilityById.get(String(getRelatedId(product.id ?? product['@id'] ?? product.iri)));
+          return availability ? { ...product, ...availability } : product;
+        });
+      });
+    }).catch((hydrationError) => {
+      if (requestVersion === imageRequestVersionRef.current) {
+        setError(`Impossible de charger les images des produits : ${hydrationError.message}`);
+      }
+    });
+    void hydrateProductsWithVariantStock(pagedProducts).then((productsWithStock) => {
+      if (requestVersion !== imageRequestVersionRef.current) return;
+      const stockById = new Map(productsWithStock.map((product) => [
+        String(getRelatedId(product.id ?? product['@id'] ?? product.iri)),
+        {
+          hasAvailableVariant: product.hasAvailableVariant,
+          variantStockChecked: product.variantStockChecked,
+        },
+      ]));
+      setProducts((currentProducts) => currentProducts.map((product) => {
+        const stock = stockById.get(String(getRelatedId(product.id ?? product['@id'] ?? product.iri)));
+        return stock ? { ...product, ...stock } : product;
+      }));
+    }).catch((stockError) => {
+      if (requestVersion === imageRequestVersionRef.current) {
+        setError(`Impossible de vérifier le stock des variantes : ${stockError.message}`);
+      }
     });
   }, [pagedProducts]);
 
@@ -421,7 +456,8 @@ export const ShopPage = () => {
     isOnSale: p.isOnSale,
     salePrice: p.salePrice,
     badge: p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : p.isOnSale ? 'PROMO' : null,
-    inStock: p.stock > 0,
+    inStock: p.hasAvailableVariant ?? Number(p.stock || 0) > 0,
+    variantStockPending: Number(p.stock || 0) <= 0 && p.variantStockChecked !== true,
     flavors: p.flavors?.map(f => f.name) || [],
     sizes: [],
     sku: p.sku,

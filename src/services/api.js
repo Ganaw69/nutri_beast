@@ -1071,6 +1071,46 @@ export const hydrateProductsWithImages = async (products = [], skipAuth = true) 
   });
 };
 
+export const hydrateProductsWithVariantStock = async (products = [], skipAuth = true) => {
+  const productIds = products
+    .map((product) => product?.id ?? iriToId(product?.['@id'] || product?.iri))
+    .filter((id) => id !== null && id !== undefined);
+  if (productIds.length === 0) return products;
+
+  const response = await productVariantService.getAllPages({
+    'product.id[]': productIds,
+    isActive: true,
+  }, skipAuth, true);
+  const variantsByProduct = new Map();
+  (response?.['hydra:member'] || []).forEach((variant) => {
+    const relation = variant?.product ?? variant?.productId ?? variant?.productIri;
+    const rawProductId = typeof relation === 'object'
+      ? relation.id ?? relation['@id'] ?? relation.iri
+      : relation;
+    const productId = iriToId(rawProductId) ?? rawProductId;
+    if (productId === null || productId === undefined) return;
+    const key = String(productId);
+    variantsByProduct.set(key, [...(variantsByProduct.get(key) || []), variant]);
+  });
+
+  return products.map((product) => {
+    const id = product?.id ?? iriToId(product?.['@id'] || product?.iri);
+    if (id === null || id === undefined) return product;
+    const variants = variantsByProduct.get(String(id));
+    return {
+      ...product,
+      variantStockChecked: true,
+      ...(variants?.length ? {
+        hasAvailableVariant: variants.some((variant) => (
+          variant.isActive !== false
+          && Boolean(variant.sku ?? variant.SKU)
+          && Number(variant.stock ?? 0) > 0
+        )),
+      } : {}),
+    };
+  });
+};
+
 /** Pick the primary product image if present, otherwise the first image. */
 export const isPrimaryProductImage = (img) =>
   typeof img === 'string' ||

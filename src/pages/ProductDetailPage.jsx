@@ -437,7 +437,7 @@ export const ProductDetailPage = () => {
       const baseImage = (product?.productImages || []).find((image) => (
         getProductImageVariantId(image) == null && getProductImageFlavorId(image) == null
       ));
-      setActiveImage(resolveProductImage(product, product?.image) || productImageUrl(baseImage));
+      setActiveImage(productImageUrl(baseImage) || resolveProductImage(product, product?.image));
     }
     if (variantId == null || !product?.id) return;
 
@@ -445,7 +445,12 @@ export const ProductDetailPage = () => {
       const imageData = await productService.getImages({ 'variant.id': variantId, itemsPerPage: 100 }, true);
       if (flavorImageRequestRef.current !== requestId) return;
       const variantImages = (imageData['hydra:member'] || imageData.member || imageData.items || [])
-        .filter((image) => String(getProductImageProductId(image)) === String(product.id));
+        .filter((image) => {
+          const imageVariantId = getProductImageVariantId(image);
+          const imageProductId = getProductImageProductId(image);
+          return (imageVariantId == null || String(imageVariantId) === String(variantId))
+            && (imageProductId == null || String(imageProductId) === String(product.id));
+        });
       const variantImage = resolveVariantImage(variantImages, variantId) || productImageUrl(variantImages[0]);
       if (variantImage) setActiveImage(variantImage);
       if (variantImages.length > 0) {
@@ -530,6 +535,7 @@ export const ProductDetailPage = () => {
   }
 
   const selectedVariant = variants.find((variant) => variantKey(variant) === selectedVariantKey);
+  const selectedVariantId = selectedVariant?.id ?? getRelationId(selectedVariant?.["@id"]);
   const hasVariants = variants.length > 0;
   const variantFlavorChoices = buildVariantFlavorOptions(variants, product.flavorOptions);
   const hasVariantFlavors = variantFlavorChoices.some((choice) => choice.variants.length > 0);
@@ -572,15 +578,20 @@ export const ProductDetailPage = () => {
   const showNewBreadcrumb = product.isNew || newShopFilter;
 
   const selectedFlavorOption = product.flavorOptions.find((flavor) => flavor.name === selectedFlavor);
+  const variantGalleryImages = selectedVariant
+    ? product.productImages.filter((image) => (
+      String(getProductImageVariantId(image)) === String(selectedVariantId)
+    ))
+    : [];
   const flavorGalleryImages = selectedFlavorOption?.id != null
     ? product.productImages.filter((image) => String(getProductImageFlavorId(image)) === String(selectedFlavorOption.id))
     : [];
   // Most products use one shared gallery and do not set `flavor` on image
   // records. Only narrow the gallery when the API actually supplied images for
   // the selected flavor; otherwise the valid product images would disappear.
-  const visibleGalleryImages = flavorGalleryImages.length > 0
-    ? flavorGalleryImages
-    : product.productImages;
+  const visibleGalleryImages = variantGalleryImages.length > 0
+    ? variantGalleryImages
+    : flavorGalleryImages.length > 0 ? flavorGalleryImages : product.productImages;
 
   return (
     <div className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-10 2xl:px-14 space-y-16">
@@ -788,53 +799,54 @@ export const ProductDetailPage = () => {
                       })}
                     </div>
                     {hasVariantCapacities && uniqueCapacityVariants.length > 0 && (
-                      <label className="mt-3 block text-xs font-heading font-bold text-gray-300 uppercase">
-                        Contenance
-                        <select
-                          value={variantCapacity(selectedVariant)}
-                          onChange={(event) => {
-                            const nextVariant = uniqueCapacityVariants.find((variant) => variantCapacity(variant) === event.target.value);
-                            void handleVariantSelect(nextVariant);
-                          }}
-                          className="mt-2 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-4 py-3 text-sm font-bold normal-case text-white focus:border-[#d90429] focus:outline-none"
-                        >
-                          <option value="">Choisir une contenance</option>
-                          {uniqueCapacityVariants.map((variant, index) => (
-                            <option
-                              key={`${variantKey(variant)}-${index}`}
-                              value={variantCapacity(variant)}
-                              disabled={!variantSku(variant) || Number(variant.stock ?? 0) <= 0}
-                            >
-                              {variantCapacity(variant)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <fieldset className="mt-3">
+                        <legend className="text-xs font-heading font-bold uppercase text-gray-300">Contenance</legend>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {uniqueCapacityVariants.map((variant, index) => {
+                            const available = Boolean(variantSku(variant)) && Number(variant.stock ?? 0) > 0;
+                            const isSelected = variantKey(variant) === selectedVariantKey;
+                            return (
+                              <button
+                                key={`${variantKey(variant)}-${index}`}
+                                type="button"
+                                disabled={!available}
+                                aria-pressed={isSelected}
+                                onClick={() => { void handleVariantSelect(variant); }}
+                                className={`rounded-lg border px-3 py-2 text-sm font-bold transition-colors ${isSelected ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/10 bg-[#1a1a1a] text-gray-300 hover:border-white/30"} disabled:cursor-not-allowed disabled:opacity-45`}
+                              >
+                                {variantCapacity(variant)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
                     )}
                   </div>
                 ) : (
-                  <label className="block text-xs font-heading font-bold text-gray-300 uppercase">
-                    {hasVariantCapacities ? "Contenance" : "Variante"}
-                    <select
-                      value={selectedVariantKey}
-                      onChange={(event) => {
-                        const nextVariant = variants.find((variant) => variantKey(variant) === event.target.value);
-                        void handleVariantSelect(nextVariant);
-                      }}
-                      className="mt-2 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-4 py-3 text-sm font-bold normal-case text-white focus:border-[#d90429] focus:outline-none"
-                    >
-                      <option value="">{hasVariantCapacities ? "Choisir une contenance" : "Choisir une variante"}</option>
-                      {(hasVariantCapacities ? uniqueCapacityVariants : variants).map((variant, index) => (
-                        <option
-                          key={variantKey(variant) || index}
-                          value={variantKey(variant)}
-                          disabled={!variantSku(variant) || Number(variant.stock ?? 0) <= 0}
-                        >
-                          {hasVariantCapacities ? variantCapacity(variant) : variantLabel(variant, product.flavorOptions)}{Number(variant.stock ?? 0) <= 0 ? " — Rupture de stock" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <fieldset>
+                    <legend className="block text-xs font-heading font-bold uppercase text-gray-300">
+                      {hasVariantCapacities ? "Contenance" : "Variante"}
+                    </legend>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(hasVariantCapacities ? uniqueCapacityVariants : variants).map((variant, index) => {
+                        const available = Boolean(variantSku(variant)) && Number(variant.stock ?? 0) > 0;
+                        const isSelected = variantKey(variant) === selectedVariantKey;
+                        return (
+                          <button
+                            key={variantKey(variant) || index}
+                            type="button"
+                            disabled={!available}
+                            aria-pressed={isSelected}
+                            title={available ? variantLabel(variant, product.flavorOptions) : `${variantLabel(variant, product.flavorOptions)} — Rupture de stock`}
+                            onClick={() => { void handleVariantSelect(variant); }}
+                            className={`max-w-full rounded-lg border px-3 py-2 text-left text-xs font-bold transition-colors sm:text-sm ${isSelected ? "border-[#d90429] bg-[#d90429] text-white" : "border-white/10 bg-[#1a1a1a] text-gray-300 hover:border-white/30"} disabled:cursor-not-allowed disabled:opacity-45`}
+                          >
+                            {hasVariantCapacities ? variantCapacity(variant) : variantLabel(variant, product.flavorOptions)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
                 )
               ) : product.flavorOptions.length > 0 && (
                 <>
