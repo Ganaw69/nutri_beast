@@ -346,20 +346,21 @@ export const CartProvider = ({ children }) => {
   };
 
   const addPredefinedPackToCart = (pack, products, quantity = 1) => {
-    const finalPrice = Number(pack?.finalPrice);
-    if (!pack?.id || !Number.isFinite(finalPrice) || finalPrice <= 0 || !Array.isArray(products) || products.length === 0
-      || products.some((item) => !item?.product?.id || !item.product.sku || Number(item.quantity) < 1)) {
+    const finalPrice = Number(pack?.finalPrice ?? pack?.basePrice);
+    if (!pack?.id || !Number.isFinite(finalPrice) || finalPrice <= 0 || !Array.isArray(products)) {
       showToast("Ce pack n’est pas encore prêt à être commandé.");
       return false;
     }
 
-    const items = products.map((item) => ({
-      productId: item.product.id,
-      sku: item.product.sku,
-      name: item.product.name,
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.product.salePrice ?? item.product.currentPrice ?? item.product.price ?? 0),
-    }));
+    const items = products
+      .filter((item) => item?.product)
+      .map((item) => ({
+        productId: item.product.id,
+        sku: item.product.sku,
+        name: item.product.name,
+        quantity: Number(item.quantity) || 1,
+        unitPrice: Number(item.product.salePrice ?? item.product.currentPrice ?? item.product.price ?? 0),
+      }));
     const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     setCart((previous) => [...previous, {

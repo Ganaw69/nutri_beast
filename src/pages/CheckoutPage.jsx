@@ -146,8 +146,8 @@ export const CheckoutPage = () => {
         notes: formData.notes,
         coupon: appliedCoupon?.code || undefined,
         items: cart.flatMap((item) => {
-          if (item.itemType === "custom-pack" || item.itemType === "predefined-pack") {
-            const pack = item.itemType === "custom-pack" ? item.customPack : item.predefinedPack;
+          if (item.itemType === "custom-pack") {
+            const pack = item.customPack;
             return [{
               packId: pack.packId,
               quantity: item.quantity || 1,
@@ -156,6 +156,12 @@ export const CheckoutPage = () => {
                 quantity,
                 ...(variantSku ? { variantSku } : {}),
               })),
+            }];
+          }
+          if (item.itemType === "predefined-pack") {
+            return [{
+              packId: item.predefinedPack.packId,
+              quantity: item.quantity || 1,
             }];
           }
           if (item.itemType === "product-bundle") {
@@ -387,7 +393,7 @@ export const CheckoutPage = () => {
                       <span className="block truncate">{item.name} <span className="text-gray-500">×{item.quantity}</span></span>
                       {item.itemType === "custom-pack" && <span className="mt-1 block truncate text-[10px] text-gray-500">{(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
                       {item.itemType === "custom-pack" && item.customPack && <span className="mt-1 block text-[10px] text-gray-500">Sous-total {amount(item.customPack.subtotal ?? item.originalPrice)} · Remise pack −{amount(item.customPack.discountAmount)} · Total {amount(item.customPack.finalPrice ?? item.price)}</span>}
-                      {item.itemType === "predefined-pack" && <span className="mt-1 block truncate text-[10px] text-gray-500">{(item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
+                      {item.itemType === "predefined-pack" && item.predefinedPack?.items?.length > 0 && <span className="mt-1 block truncate text-[10px] text-gray-500">{item.predefinedPack.items.map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
                       {item.itemType === "product-bundle" && <span className="mt-1 block truncate text-[10px] text-gray-500">{(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}</span>}
                     </span>
                     <span className="font-bold text-white shrink-0">

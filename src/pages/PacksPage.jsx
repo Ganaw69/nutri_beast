@@ -195,8 +195,7 @@ export const PackDetailPage = () => {
 
   const customizable = pack.type === "CUSTOM" && (pack.isCustomizable === true || pack.customizable === true);
   const hasConfiguredPrice = Number(pack.finalPrice) > 0 || Number(pack.basePrice) > 0;
-  const isReadyToOrder = contents.length > 0 && hasConfiguredPrice;
-  const canPurchase = isReadyToOrder && !customizable;
+  const canPurchase = hasConfiguredPrice && !customizable;
   const addPackToCart = () => {
     if (addPredefinedPackToCart(pack, contents)) navigateTo("cart");
   };
@@ -220,16 +219,21 @@ export const PackDetailPage = () => {
               {contents.length ? <ul className="mt-4 divide-y divide-white/10">{contents.map((entry, index) => {
                 const productImage = resolveProductImage(entry.product, null);
                 return <li key={entry.id ?? index} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f0f0f0] p-1.5">{productImage ? <img src={productImage} alt="" loading="lazy" className="h-full w-full object-contain" /> : <ShoppingBag className="h-5 w-5 text-gray-400" />}</div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-white">{entry.product.name}</p><p className="mt-1 text-xs text-gray-400">Quantité : {entry.quantity}{entry.required ? " · Inclus" : " · Optionnel"}</p></div></li>;
-              })}</ul> : <p className="mt-3 text-sm text-amber-200">Aucun produit n’est actuellement associé à ce pack dans le catalogue.</p>}
+              })}</ul> : <p className="mt-3 text-sm text-gray-400">La composition détaillée n’est pas renseignée. Ce pack prédéfini peut tout de même être commandé au prix affiché.</p>}
             </div>
             {pack.startDate || pack.endDate ? <p className="mt-4 text-xs text-gray-400">Offre valable {pack.startDate ? `à partir du ${new Date(pack.startDate).toLocaleDateString("fr-TN")}` : ""}{pack.startDate && pack.endDate ? " " : ""}{pack.endDate ? `jusqu’au ${new Date(pack.endDate).toLocaleDateString("fr-TN")}` : ""}.</p> : null}
             {customizable && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-5 text-amber-100">Ce pack est configuré comme personnalisable (minimum {pack.minProducts ?? "—"}, maximum {pack.maxProducts ?? "sans limite"}). La configuration client et le calcul de prix ne sont pas exposés par l’API actuelle.</div>}
             {canPurchase ? (
               <button type="button" onClick={addPackToCart} className="mt-6 w-full rounded-lg bg-[#d90429] px-5 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-[#d90429]/20 transition-colors hover:bg-[#b0021f]">Ajouter le pack au panier</button>
+            ) : customizable ? (
+              <>
+                <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-lg border border-white/15 bg-[#242424] px-5 py-4 text-xs font-black uppercase tracking-widest text-gray-400">Pack personnalisable</button>
+                <p className="mt-2 text-center text-[11px] leading-5 text-gray-500">La composition personnalisée de ce pack n’est pas disponible ici.</p>
+              </>
             ) : (
               <>
-                <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-lg border border-white/15 bg-[#242424] px-5 py-4 text-xs font-black uppercase tracking-widest text-gray-400">{isReadyToOrder ? "Pack personnalisable" : "Pack à compléter dans le catalogue"}</button>
-                <p className="mt-2 text-center text-[11px] leading-5 text-gray-500">{isReadyToOrder ? "Configurez ce pack avant de l’ajouter au panier." : "Ajoutez les produits et définissez le prix de ce pack dans le back-office avant de le proposer à l’achat."}</p>
+                <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-lg border border-white/15 bg-[#242424] px-5 py-4 text-xs font-black uppercase tracking-widest text-gray-400">Prix à configurer</button>
+                <p className="mt-2 text-center text-[11px] leading-5 text-gray-500">Définissez un prix valide pour commander ce pack.</p>
               </>
             )}
           </div>

@@ -91,7 +91,7 @@ export const CartDrawer = () => {
                       {item.itemType === "custom-pack"
                         ? `Pack personnalise · ${(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                         : item.itemType === "predefined-pack"
-                          ? `Pack prédéfini · ${(item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                        ? `Pack prédéfini${item.predefinedPack?.items?.length ? ` · ${item.predefinedPack.items.map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}` : ""}`
                         : item.itemType === "product-bundle"
                           ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                         : [item.selectedFlavor, item.selectedSize].filter(Boolean).join(" · ")}

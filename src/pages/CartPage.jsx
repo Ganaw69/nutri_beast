@@ -70,7 +70,7 @@ export const CartPage = () => {
                         {item.itemType === "custom-pack"
                           ? `Pack personnalisé · ${(item.customPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                           : item.itemType === "predefined-pack"
-                            ? `Pack prédéfini · ${(item.predefinedPack?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
+                              ? `Pack prédéfini${item.predefinedPack?.items?.length ? ` · ${item.predefinedPack.items.map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}` : ""}`
                           : item.itemType === "product-bundle"
                             ? `Composition · ${(item.productBundle?.items || []).map((entry) => `${entry.name} × ${entry.quantity}`).join(", ")}`
                           : item.flavor || "Standard"}

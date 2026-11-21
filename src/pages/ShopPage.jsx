@@ -249,6 +249,7 @@ export const ShopPage = () => {
     const allowedGoalIds = new Set(selectedGoalIds.map(String));
     const searchNeedle = normaliseText(searchQuery.trim());
     const seenProducts = new Set();
+    const seenProductIds = new Set();
 
     return catalogueProducts
       .filter((product) => {
@@ -278,8 +279,11 @@ export const ShopPage = () => {
       })
       .filter((product) => {
         const identity = getProductIdentity(product);
-        if (identity === null || seenProducts.has(identity)) return false;
-        seenProducts.add(identity);
+        const productId = getRelatedId(product.id ?? product['@id'] ?? product.iri);
+        if (productId !== null && seenProductIds.has(String(productId))) return false;
+        if (identity !== null && seenProducts.has(identity)) return false;
+        if (productId !== null) seenProductIds.add(String(productId));
+        if (identity !== null) seenProducts.add(identity);
         return true;
       });
   }, [catalogueProducts, categories, quickCategoryFilters, searchQuery, selectedShopCategoryIds, selectedBrandIds, selectedGoalIds, selectedQuickCategoryKeys, showNewOnly, priceMax, sortBy]);
