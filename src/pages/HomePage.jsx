@@ -301,7 +301,7 @@ export const HomePage = () => {
     let animationFrame = 0;
     const moveTrack = (time) => {
       if (previousFrameTime && !isBrandTrackInteracting.current) {
-        track.scrollLeft += Math.min(time - previousFrameTime, 32) * 0.15;
+        track.scrollLeft += Math.min(time - previousFrameTime, 32) * 0.25;
         if (track.scrollLeft >= copyWidth * 2) track.scrollLeft -= copyWidth;
         if (track.scrollLeft <= 0) track.scrollLeft += copyWidth;
       }
