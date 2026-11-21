@@ -202,24 +202,28 @@
   animation: marqueeMove 18s linear infinite;
 }
 
-@keyframes brandLogoMarqueeMove {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-50%, 0, 0); }
-}
-
 .brand-logo-marquee-track {
-  display: flex;
-  width: max-content;
-  animation: brandLogoMarqueeMove 32s linear infinite;
-  will-change: transform;
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  cursor: grab;
 }
 
-.brand-logo-marquee-section:hover .brand-logo-marquee-track {
-  animation-play-state: paused;
+.brand-logo-marquee-track:active {
+  cursor: grabbing;
+}
+
+.brand-logo-marquee-track::-webkit-scrollbar {
+  display: none;
 }
 
 .brand-logo-marquee-group {
   display: flex;
+  width: max-content;
   gap: 1.75rem;
   padding-right: 1.75rem;
 }
@@ -240,6 +244,7 @@
   cursor: pointer;
   padding: 0;
   text-align: inherit;
+  scroll-snap-align: start;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
@@ -297,6 +302,24 @@
 
 @media (prefers-reduced-motion: reduce) {
   .about-red-light { animation: none; transform: none; }
+}
+
+@keyframes carouselSlideLeft {
+  from { opacity: 0.65; transform: translate3d(36px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes carouselSlideRight {
+  from { opacity: 0.65; transform: translate3d(-36px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo-card,
+  [class*="animate-[carouselSlide"] {
+    animation: none !important;
+    transition: none;
+  }
 }
 
 /* Industrial Metallic Sheen Hover Effect */
