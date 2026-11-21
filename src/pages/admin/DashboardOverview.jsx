@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { orderService, productService } from "../../services/api";
-import { TrendingUp, TrendingDown, Calendar as CalendarIcon, MoreVertical, Dumbbell, Zap, Droplet, Package, Coffee, Loader2 } from "lucide-react";
+import { orderService, productService, hydrateProductsWithImages, resolveProductImage } from "../../services/api";
+import { TrendingUp, TrendingDown, Calendar as CalendarIcon, MoreVertical, Dumbbell, Zap, Droplet, Package, Coffee, Loader2, X } from "lucide-react";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const PERIODS = [
@@ -21,13 +21,38 @@ const orderItems = (order) => {
   const items = order?.items ?? order?.orderItems ?? order?.order_items ?? [];
   return Array.isArray(items) ? items : [];
 };
+const entityKey = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "object") return entityKey(value.id ?? value["@id"] ?? value.iri);
+  return String(value).split("/").filter(Boolean).pop() || "";
+};
 const itemProductId = (item) => {
   const product = item?.product;
-  if (typeof product === "object") return product.id ?? product["@id"]?.split("/").pop();
-  return product ?? item?.productId ?? item?.productIri;
+  return entityKey(product ?? item?.productId ?? item?.productIri);
 };
 const itemValue = (item) => Number(item?.subtotal ?? item?.lineSubtotal ?? item?.total ?? item?.unitPrice ?? item?.price ?? 0)
   * (item?.subtotal == null && item?.lineSubtotal == null && item?.total == null ? Number(item?.quantity ?? item?.qty ?? 1) : 1);
+const itemQuantity = (item) => {
+  const quantity = Number(item?.quantity ?? item?.qty ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+};
+
+const ProductRankingRow = ({ item, rank, compact = false }) => (
+  <div className={`flex min-w-0 items-center justify-between gap-3 border-b border-[#2a2a2a] last:border-0 hover:bg-[#1a1a1a] ${compact ? "px-4 py-3 sm:px-6" : "px-4 py-3"}`}>
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="w-5 shrink-0 text-xs font-mono text-gray-500">{rank}.</span>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-[#333] bg-[#111] text-gray-400">
+        {item.image
+          ? <img src={item.image} alt="" className="h-full w-full object-contain" loading="lazy" />
+          : <item.icon size={16} />}
+      </div>
+      <span className="min-w-0 truncate text-sm font-bold text-gray-200" title={item.name}>{item.name}</span>
+    </div>
+    <span className="shrink-0 text-right text-xs font-mono text-gray-400">
+      {Number(item.unitsSold || 0).toLocaleString("fr-FR")} vendu{Number(item.unitsSold || 0) === 1 ? "" : "s"}
+    </span>
+  </div>
+);
 
 export const DashboardOverview = () => {
   const [orders, setOrders] = useState([]);
@@ -36,17 +61,37 @@ export const DashboardOverview = () => {
   const [period, setPeriod] = useState("year");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [showAllPerformers, setShowAllPerformers] = useState(false);
+  const [performerLimit, setPerformerLimit] = useState(10);
 
   useEffect(() => {
+    let active = true;
     Promise.all([
       orderService.getAllPages({ itemsPerPage: 100 }).catch(() => ({ "hydra:member": [] })),
       productService.getAllPages({ itemsPerPage: 100 }).catch(() => ({ "hydra:member": [] })),
     ]).then(([orderData, productData]) => {
+      if (!active) return;
       setOrders(orderData["hydra:member"] || []);
-      setProducts(productData["hydra:member"] || []);
+      const catalogProducts = productData["hydra:member"] || [];
+      setProducts(catalogProducts);
       setLoading(false);
+      void hydrateProductsWithImages(catalogProducts).then((productsWithImages) => {
+        if (active) setProducts(productsWithImages);
+      }).catch(() => {
+        if (active) setProducts(catalogProducts);
+      });
     });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!showAllPerformers) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setShowAllPerformers(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showAllPerformers]);
 
   const metrics = useMemo(() => {
     const now = new Date();
@@ -94,28 +139,83 @@ export const DashboardOverview = () => {
       };
     });
 
-    const productMap = new Map(products.map((product) => [String(product.id ?? product["@id"]), product]));
+    const productMap = new Map(products.map((product) => [
+      entityKey(product.id ?? product["@id"] ?? product.iri),
+      product,
+    ]).filter(([id]) => id));
+    const productSales = new Map();
     const categoryMap = new Map();
     filteredOrders.forEach((order) => {
       orderItems(order).forEach((item) => {
-        const product = typeof item.product === "object" ? item.product : productMap.get(String(itemProductId(item)));
+        const productId = itemProductId(item);
+        const embeddedProduct = typeof item.product === "object" ? item.product : null;
+        const product = productMap.get(productId) || embeddedProduct;
+        const productKey = productId || `name:${String(product?.name ?? item?.productName ?? item?.name ?? "Produit inconnu").toLocaleLowerCase()}`;
+        const sales = productSales.get(productKey) || {
+          ...(product || {
+            id: productKey,
+            name: item?.productName ?? item?.name ?? "Produit inconnu",
+            image: item?.productImage ?? item?.image,
+          }),
+          unitsSold: 0,
+          revenue: 0,
+        };
+        sales.unitsSold += itemQuantity(item);
+        sales.revenue += itemValue(item);
+        productSales.set(productKey, sales);
         const category = product?.category?.name || "Other";
         categoryMap.set(category, (categoryMap.get(category) || 0) + itemValue(item));
       });
     });
-    const topPerformers = [...products]
-      .sort((a, b) => Number(b.sales || 0) - Number(a.sales || 0))
-      .slice(0, 5)
-      .map((product) => ({
-        name: product.name,
-        revenue: formatMoney(product.sales || 0),
-        icon:
-          /creatine/i.test(product.name) ? Zap :
-          /water|drink|boisson/i.test(product.name) ? Droplet :
-          /shaker|accessoire|bottle/i.test(product.name) ? Coffee :
-          /gain|mass/i.test(product.name) ? Package :
-          Dumbbell,
-      }));
+
+    const rankedProducts = new Map();
+    products.forEach((product) => {
+      const key = entityKey(product.id ?? product["@id"] ?? product.iri);
+      if (!key) return;
+      rankedProducts.set(key, {
+        ...product,
+        unitsSold: 0,
+        revenue: 0,
+      });
+    });
+    productSales.forEach((sales, key) => {
+      const catalogProduct = productMap.get(key);
+      rankedProducts.set(key, {
+        ...(catalogProduct || sales),
+        ...sales,
+        unitsSold: sales.unitsSold,
+        revenue: sales.revenue,
+      });
+    });
+    const rankByUnits = (first, second) => (
+      second.unitsSold - first.unitsSold
+      || second.revenue - first.revenue
+      || String(first.name || "").localeCompare(String(second.name || ""), "fr")
+    );
+    const decorateProduct = (product) => ({
+      ...product,
+      image: resolveProductImage(product, null),
+      icon:
+        /creatine/i.test(product.name) ? Zap :
+        /water|drink|boisson/i.test(product.name) ? Droplet :
+        /shaker|accessoire|bottle/i.test(product.name) ? Coffee :
+        /gain|mass/i.test(product.name) ? Package :
+        Dumbbell,
+    });
+    const rankedList = [...rankedProducts.values()];
+    const rankedBySales = rankedList
+      .filter((product) => product.unitsSold > 0)
+      .sort(rankByUnits)
+      .map(decorateProduct);
+    const topPerformers = rankedBySales.slice(0, 5);
+    const leastPerformers = rankedList
+      .filter((product) => product.isActive !== false)
+      .sort((first, second) => (
+        first.unitsSold - second.unitsSold
+        || first.revenue - second.revenue
+        || String(first.name || "").localeCompare(String(second.name || ""), "fr")
+      ))
+      .map(decorateProduct);
 
     const heatmap = [...categoryMap.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -126,7 +226,7 @@ export const DashboardOverview = () => {
         color: index === 0 ? "#e60033" : index === 1 ? "#990022" : index === 2 ? "#59111c" : "#222",
       }));
 
-    return { totalRevenue, totalNetSales, totalOrders, avgOrderValue, monthly, topPerformers, heatmap };
+    return { totalRevenue, totalNetSales, totalOrders, avgOrderValue, monthly, topPerformers, rankedBySales, leastPerformers, heatmap };
   }, [orders, products, period, customStart, customEnd]);
 
   const maxHeatValue = Math.max(...metrics.heatmap.map((item) => item.value), 1);
@@ -251,32 +351,90 @@ export const DashboardOverview = () => {
 
         <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg flex flex-col">
           <div className="flex items-center justify-between border-b border-[#2a2a2a] p-4 sm:p-6">
-            <h2 className="text-lg font-bold text-white">Top Performers</h2>
-            <button className="text-[10px] font-bold text-[#e60033] tracking-widest uppercase">View All</button>
+            <h2 className="text-lg font-bold text-white">Top 5 produits vendus</h2>
+            <button
+              type="button"
+              onClick={() => setShowAllPerformers(true)}
+              className="text-[10px] font-bold uppercase tracking-widest text-[#e60033] hover:text-white"
+            >
+              Voir tout
+            </button>
           </div>
 
           <div className="grid grid-cols-4 border-b border-[#2a2a2a] px-4 py-3 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-500 sm:px-6">
-            <div className="col-span-3">Product</div>
-            <div className="text-right">Revenue</div>
+            <div className="col-span-3">Produit</div>
+            <div className="text-right">Vendus</div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {metrics.topPerformers.length > 0 ? metrics.topPerformers.map((item, idx) => (
-              <div key={idx} className="flex cursor-pointer items-center justify-between border-b border-[#2a2a2a] px-4 py-4 last:border-0 hover:bg-[#1a1a1a] sm:px-6">
-                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                  <div className="w-8 h-8 rounded border border-[#333] bg-[#111] flex items-center justify-center text-gray-400">
-                    <item.icon size={16} />
-                  </div>
-                  <span className="text-sm font-bold text-gray-300 truncate max-w-[140px]">{item.name}</span>
-                </div>
-                <span className="shrink-0 text-xs font-mono text-gray-400 sm:text-sm">{item.revenue}</span>
-              </div>
+              <ProductRankingRow key={entityKey(item.id ?? item["@id"]) || item.name} item={item} rank={idx + 1} compact />
             )) : (
-              <div className="px-6 py-8 text-gray-500 text-sm">No product sales data yet.</div>
+              <div className="px-6 py-8 text-sm text-gray-500">Aucune vente de produit pour cette période.</div>
             )}
           </div>
         </div>
       </div>
+
+      {showAllPerformers && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowAllPerformers(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-ranking-title"
+            className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-[#333] bg-[#151515] shadow-2xl"
+          >
+            <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#2a2a2a] p-4 sm:p-6">
+              <div>
+                <h2 id="product-ranking-title" className="text-xl font-bold text-white">Classement des ventes</h2>
+                <p className="mt-1 text-xs text-gray-500">Basé sur les quantités vendues pour la période sélectionnée.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-xs font-bold text-gray-400">
+                  Produits affichés
+                  <select
+                    value={performerLimit}
+                    onChange={(event) => setPerformerLimit(Number(event.target.value))}
+                    className="ml-2 rounded border border-[#333] bg-[#111] px-2 py-2 text-white"
+                  >
+                    {[10, 20, 30].map((limit) => <option key={limit} value={limit}>Top {limit}</option>)}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAllPerformers(false)}
+                  aria-label="Fermer le classement"
+                  className="rounded p-2 text-gray-400 transition hover:bg-white/10 hover:text-white"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </header>
+            <div className="grid min-h-0 gap-4 overflow-y-auto p-4 sm:p-6 lg:grid-cols-2">
+              {[
+                { title: `Les ${performerLimit} plus vendus`, items: metrics.rankedBySales.slice(0, performerLimit) },
+                { title: `Les ${performerLimit} moins vendus`, items: metrics.leastPerformers.slice(0, performerLimit) },
+              ].map((group) => (
+                <section key={group.title} className="min-w-0 rounded-lg border border-[#2a2a2a] bg-[#111]">
+                  <h3 className="border-b border-[#2a2a2a] px-4 py-3 text-sm font-bold text-white">{group.title}</h3>
+                  <div className="max-h-[55vh] overflow-y-auto">
+                    {group.items.length > 0 ? group.items.map((item, index) => (
+                      <ProductRankingRow key={entityKey(item.id ?? item["@id"]) || `${group.title}-${index}`} item={item} rank={index + 1} />
+                    )) : (
+                      <p className="p-4 text-sm text-gray-500">Aucune donnée de vente pour cette période.</p>
+                    )}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="bg-[#161616] border border-[#2a2a2a] rounded-lg p-4 sm:p-6">
         <h2 className="text-lg font-bold text-white mb-4 sm:mb-6">Category Performance Heatmap</h2>

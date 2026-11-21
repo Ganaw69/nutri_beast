@@ -145,8 +145,6 @@ const normalizeProductOptions = (options = {}) => ({
   styles: Array.isArray(options?.styles) ? options.styles : [],
   capacityLiters: options?.capacityLiters ?? '',
 });
-const splitOptionValues = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-
 const normalizeProductImages = (images = []) =>
   [...images].sort((a, b) => Number(isPrimaryProductImage(b)) - Number(isPrimaryProductImage(a)) || Number(a?.position ?? 0) - Number(b?.position ?? 0));
 
@@ -684,6 +682,10 @@ export const ProductManager = () => {
   const draftVariantSize = selectedAccessoryContext.isAccessory
     ? variantDraft.size.trim()
     : form.weight === '' ? '' : `${Number(form.weight)} kg`;
+  const accessoryDesignLabel = selectedAccessoryContext.type === 'cup' ? 'Style / modèle' : 'Design / modèle';
+  const accessorySizeLabel = selectedAccessoryContext.type === 'shoes'
+    ? 'Pointure'
+    : selectedAccessoryContext.type === 'clothes' ? 'Taille' : 'Taille / pointure';
   const draftVariantDescriptor = selectedAccessoryContext.isAccessory
     ? [variantDraft.design, variantDraft.color, variantDraft.capacityLiters && `${variantDraft.capacityLiters} L`].filter(Boolean).join(' ')
     : [displayName(draftVariantFlavor), variantDraft.capacity.trim()].filter(Boolean).join(' ');
@@ -1726,74 +1728,20 @@ export const ProductManager = () => {
                     ))}
                   </select>
                 </div>
-                {selectedAccessoryContext.isAccessory && (
-                  <div className="sm:col-span-2 rounded-xl border border-[#333] bg-[#111] p-4 space-y-4">
-                    <div>
-                      <p className="text-sm font-bold text-white">Options de l’accessoire</p>
-                      <p className="mt-1 text-xs text-gray-500">Ajoutez les choix disponibles, séparés par des virgules.</p>
-                    </div>
-                    {!selectedAccessoryContext.type && (
-                      <div>
-                        <label className={labelCls}>Type d’accessoire</label>
-                        <select
-                          value={form.productOptions.type}
-                          onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, type: event.target.value } }))}
-                          className={inputCls}
-                        >
-                          <option value="">Choisir un type</option>
-                          <option value="shoes">Chaussures</option>
-                          <option value="clothes">Vêtements</option>
-                          <option value="cup">Gourde / shaker / tasse</option>
-                        </select>
-                      </div>
-                    )}
-                    {(selectedAccessoryContext.type === 'shoes' || selectedAccessoryContext.type === 'clothes') && (
-                      <div>
-                        <label className={labelCls}>{selectedAccessoryContext.type === 'shoes' ? 'Pointures' : 'Tailles'}</label>
-                        <input
-                          value={form.productOptions.sizes.join(', ')}
-                          onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, sizes: splitOptionValues(event.target.value) } }))}
-                          className={inputCls}
-                          placeholder={selectedAccessoryContext.type === 'shoes' ? '38, 39, 40, 41' : 'S, M, L, XL'}
-                        />
-                      </div>
-                    )}
-                    {selectedAccessoryContext.type && (
-                      <div>
-                        <label className={labelCls}>Couleurs</label>
-                        <input
-                          value={form.productOptions.colors.join(', ')}
-                          onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, colors: splitOptionValues(event.target.value) } }))}
-                          className={inputCls}
-                          placeholder="Noir, rouge, bleu"
-                        />
-                      </div>
-                    )}
-                    {selectedAccessoryContext.type === 'cup' && (
-                      <>
-                        <div>
-                          <label className={labelCls}>Styles / modèles</label>
-                          <input
-                            value={form.productOptions.styles.join(', ')}
-                            onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, styles: splitOptionValues(event.target.value) } }))}
-                            className={inputCls}
-                            placeholder="Avec paille, sport, classique"
-                          />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Contenance (litres)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.1"
-                            value={form.productOptions.capacityLiters}
-                            onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, capacityLiters: event.target.value } }))}
-                            className={inputCls}
-                            placeholder="1.0"
-                          />
-                        </div>
-                      </>
-                    )}
+                {selectedAccessoryContext.isAccessory && !selectedAccessoryContext.type && (
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Type d’accessoire</label>
+                    <select
+                      value={form.productOptions.type}
+                      onChange={(event) => setForm((current) => ({ ...current, productOptions: { ...current.productOptions, type: event.target.value } }))}
+                      className={inputCls}
+                    >
+                      <option value="">Choisir un type (facultatif)</option>
+                      <option value="shoes">Chaussures</option>
+                      <option value="clothes">Vêtements</option>
+                      <option value="cup">Gourde / shaker / tasse</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">Les pointures, tailles et couleurs se renseignent directement sur chaque variante à l’étape suivante.</p>
                   </div>
                 )}
                 <div>
@@ -1935,7 +1883,7 @@ export const ProductManager = () => {
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
                     {selectedAccessoryContext.isAccessory
-                      ? 'Créez un SKU pour chaque combinaison souhaitée. Le prix vient du produit ; le stock est saisi par variante.'
+                      ? 'Créez un SKU par option ou combinaison. Saisissez les options et le stock une seule fois pour chaque variante.'
                       : 'Le poids et le prix viennent du produit ci-dessus. Définissez la saveur et, si nécessaire, la contenance de chaque SKU ; le stock est saisi par variante.'}
                   </p>
                 </div>
@@ -2021,36 +1969,21 @@ export const ProductManager = () => {
                   <div className="grid gap-3 rounded-lg border border-[#333] bg-[#0b0b0b] p-3 sm:grid-cols-2">
                     {selectedAccessoryContext.isAccessory ? <>
                       <div>
-                        <label className={labelCls}>Design / modèle</label>
-                        {form.productOptions.styles.length > 0
-                          ? <select value={variantDraft.design} onChange={(event) => setVariantDraft((current) => ({ ...current, design: event.target.value }))} className={inputCls}>
-                            <option value="">Choisir un design (facultatif)</option>
-                            {form.productOptions.styles.map((style) => <option key={style} value={style}>{style}</option>)}
-                          </select>
-                          : <input value={variantDraft.design} onChange={(event) => setVariantDraft((current) => ({ ...current, design: event.target.value }))} className={inputCls} placeholder="Classique, sport..." />}
+                        <label className={labelCls}>{accessoryDesignLabel}</label>
+                        <input value={variantDraft.design} onChange={(event) => setVariantDraft((current) => ({ ...current, design: event.target.value }))} className={inputCls} placeholder="Classique, sport..." />
                       </div>
                       <div>
                         <label className={labelCls}>Couleur</label>
-                        {form.productOptions.colors.length > 0
-                          ? <select value={variantDraft.color} onChange={(event) => setVariantDraft((current) => ({ ...current, color: event.target.value }))} className={inputCls}>
-                            <option value="">Choisir une couleur (facultatif)</option>
-                            {form.productOptions.colors.map((color) => <option key={color} value={color}>{color}</option>)}
-                          </select>
-                          : <input value={variantDraft.color} onChange={(event) => setVariantDraft((current) => ({ ...current, color: event.target.value }))} className={inputCls} placeholder="Noir, rouge..." />}
+                        <input value={variantDraft.color} onChange={(event) => setVariantDraft((current) => ({ ...current, color: event.target.value }))} className={inputCls} placeholder="Noir, rouge..." />
                       </div>
-                      <div>
-                        <label className={labelCls}>Taille</label>
-                        {form.productOptions.sizes.length > 0
-                          ? <select value={variantDraft.size} onChange={(event) => setVariantDraft((current) => ({ ...current, size: event.target.value }))} className={inputCls}>
-                            <option value="">Choisir une taille (facultatif)</option>
-                            {form.productOptions.sizes.map((optionSize) => <option key={optionSize} value={optionSize}>{optionSize}</option>)}
-                          </select>
-                          : <input value={variantDraft.size} onChange={(event) => setVariantDraft((current) => ({ ...current, size: event.target.value }))} className={inputCls} placeholder="S, M, L, 39..." />}
-                      </div>
-                      <div>
+                      {selectedAccessoryContext.type !== 'cup' && <div>
+                        <label className={labelCls}>{accessorySizeLabel}</label>
+                        <input value={variantDraft.size} onChange={(event) => setVariantDraft((current) => ({ ...current, size: event.target.value }))} className={inputCls} placeholder={selectedAccessoryContext.type === 'shoes' ? '38, 39, 40...' : 'S, M, L...'} />
+                      </div>}
+                      {(selectedAccessoryContext.type === 'cup' || !selectedAccessoryContext.type) && <div>
                         <label className={labelCls}>Contenance (litres)</label>
                         <input type="number" min="0.1" step="0.1" value={variantDraft.capacityLiters} onChange={(event) => setVariantDraft((current) => ({ ...current, capacityLiters: event.target.value }))} className={inputCls} placeholder="0.5, 1..." />
-                      </div>
+                      </div>}
                     </> : <>
                       <div>
                         <label className={labelCls}>Saveur{form.hasFlavors ? ' *' : ''}</label>
