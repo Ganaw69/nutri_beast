@@ -207,6 +207,7 @@
   flex-flow: row nowrap;
   align-items: center;
   width: 100%;
+  padding-block: 6px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
