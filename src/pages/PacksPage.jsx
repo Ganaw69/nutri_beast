@@ -88,7 +88,6 @@ export const PacksPage = () => {
   const { viewPackDetails, packRouteFilters } = useCart();
   const [packs, setPacks] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPacks, setTotalPacks] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const selectedSexe = packRouteFilters?.sexe || "";
@@ -96,41 +95,58 @@ export const PacksPage = () => {
   useEffect(() => {
     let current = true;
     setLoading(true);
-    packService.getAll({ page: currentPage, itemsPerPage: PAGE_SIZE, isActive: true, sexe: selectedSexe || undefined, "order[position]": "asc" }, true)
+    setError("");
+    packService.getAllPages({ isActive: true, "order[position]": "asc" }, true)
       .then((data) => {
         if (current) {
-          const visiblePacks = (data["hydra:member"] || []).filter((pack) => isAvailable(pack) && !isHiddenPack(pack));
-          const totalItems = Number(data["hydra:totalItems"] ?? data["hydra:member"]?.length ?? 0);
+          const visiblePacks = (data["hydra:member"] || []).filter((pack) => (
+            isAvailable(pack)
+            && !isHiddenPack(pack)
+            && (!selectedSexe || packGender(pack) === selectedSexe)
+          ));
           setPacks(visiblePacks);
-          setTotalPacks(Math.max(0, totalItems - (data["hydra:member"] || []).filter(isHiddenPack).length));
         }
       })
       .catch((err) => { if (current) setError(packReadError(err)); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [currentPage, selectedSexe]);
+  }, [selectedSexe]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedSexe]);
 
+  const totalPacks = packs.length;
   const pageCount = Math.max(1, Math.ceil(totalPacks / PAGE_SIZE));
+  const visiblePacks = packs.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   useEffect(() => {
     if (currentPage > pageCount) setCurrentPage(pageCount);
   }, [currentPage, pageCount]);
 
   return (
-    <div className="min-h-screen bg-[#131313] px-4 py-10 pb-20 text-[#e5e2e1] sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#131313] px-4 py-8 pb-20 text-[#e5e2e1] sm:px-6 sm:py-10 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-5 sm:mb-8 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff526d]">Sélection Protein Store</p><h1 className="mt-2 whitespace-nowrap text-2xl font-black uppercase text-white sm:text-5xl">{selectedSexe ? `Packs ${genderLabel(selectedSexe)}` : 'Nos packs'}</h1><p className="mt-3 max-w-2xl text-sm text-gray-400">{selectedSexe ? `Découvrez notre sélection de packs ${genderLabel(selectedSexe).toLowerCase()}.` : 'Retrouvez la composition et le tarif enregistré de chaque pack.'}</p></div>
           <span className="hidden rounded-lg border border-white/10 bg-[#1b1b1b] px-4 py-3 text-xs font-bold text-gray-300 sm:block">{totalPacks} pack{totalPacks === 1 ? "" : "s"}</span>
         </div>
 
-        {loading ? <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-label="Chargement des packs">{Array.from({ length: 4 }, (_, index) => <div key={index} className="aspect-[3/4] animate-pulse rounded-[14px] border border-white/10 bg-[#1a1a1a]" />)}</div>
+        {loading ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4" aria-label="Chargement des packs">{Array.from({ length: 4 }, (_, index) => <div key={index} className="aspect-[3/4] animate-pulse rounded-[14px] border border-white/10 bg-[#1a1a1a]" />)}</div>
           : error ? <div role="alert" className="rounded-xl border border-[#d90429]/40 bg-[#d90429]/10 p-5 text-sm text-red-100"><p className="font-bold">Impossible d’afficher les packs</p><p className="mt-2 leading-6">{error}</p></div>
             : packs.length === 0 ? <div className="rounded-xl border border-white/10 bg-[#181818] p-10 text-center"><Package className="mx-auto h-10 w-10 text-gray-500" /><h2 className="mt-4 font-black uppercase text-white">Aucun pack disponible</h2><p className="mt-2 text-sm text-gray-400">Les packs actifs seront affichés ici.</p></div>
-                : <><div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{packs.map((pack) => <PackCard key={pack.id ?? pack["@id"]} pack={pack} onDetails={viewPackDetails} />)}</div><div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-5 text-sm text-gray-400 sm:flex-row"><span>Affichage de {(currentPage - 1) * PAGE_SIZE + 1} à {Math.min(currentPage * PAGE_SIZE, totalPacks)} sur {totalPacks} packs</span><div className="flex items-center gap-2"><button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-2 text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Précédent</button><span className="px-2">Page {currentPage} / {pageCount}</span><button type="button" onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage === pageCount} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-2 text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40">Suivant <ChevronRight className="h-4 w-4" /></button></div></div></>}
+                : <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+                    {visiblePacks.map((pack) => <PackCard key={pack.id ?? pack["@id"]} pack={pack} onDetails={viewPackDetails} />)}
+                  </div>
+                  <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-5 text-sm text-gray-400 sm:mt-8 sm:flex-row">
+                    <span>Affichage de {(currentPage - 1) * PAGE_SIZE + 1} à {Math.min(currentPage * PAGE_SIZE, totalPacks)} sur {totalPacks} packs</span>
+                    {pageCount > 1 && <div className="flex flex-wrap items-center justify-center gap-2">
+                      <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-2 text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Précédent</button>
+                      <span className="px-2">Page {currentPage} / {pageCount}</span>
+                      <button type="button" onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))} disabled={currentPage === pageCount} className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-2 text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40">Suivant <ChevronRight className="h-4 w-4" /></button>
+                    </div>}
+                  </div>
+                </>}
       </div>
     </div>
   );

@@ -154,6 +154,8 @@ export const PackBuilderPage = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
+  const [variantsLoading, setVariantsLoading] = useState(true);
+  const [variantsError, setVariantsError] = useState("");
   const [packsError, setPacksError] = useState("");
   const [categoriesError, setCategoriesError] = useState("");
   const [quoting, setQuoting] = useState(false);
@@ -162,42 +164,56 @@ export const PackBuilderPage = () => {
   const [variantSelections, setVariantSelections] = useState({});
   const [error, setError] = useState("");
   const quoteRequestId = useRef(0);
+  const variantsByProductRef = useRef(new Map());
 
   useEffect(() => {
     let current = true;
+    setLoading(true);
+    setVariantsLoading(true);
+    setError("");
+    setVariantsError("");
+
+    productVariantService.getAllPages({ isActive: true }, true)
+      .then((variantData) => {
+        const variantsByProduct = new Map();
+        collectionItems(variantData).forEach((variant) => {
+          const productId = idOf(variant.product ?? variant.productId ?? variant.productIri);
+          if (productId == null) return;
+          const key = String(productId);
+          variantsByProduct.set(key, [...(variantsByProduct.get(key) || []), variant]);
+        });
+        variantsByProductRef.current = variantsByProduct;
+        if (current) {
+          setProducts((currentProducts) => currentProducts.map((product) => ({
+            ...product,
+            variants: variantsByProduct.get(String(idOf(product))) || variantsOf(product),
+          })));
+          setVariantsError("");
+        }
+      })
+      .catch((err) => { if (current) setVariantsError(readError(err)); })
+      .finally(() => { if (current) setVariantsLoading(false); });
+
     Promise.allSettled([
       productService.getAllPages({ isActive: true, packing: true }, true),
       categoryService.getMain(),
       packService.getAllPages({ itemsPerPage: 100, "order[position]": "asc" }, true),
-      productVariantService.getAllPages({ isActive: true }, true),
       flavorService.getAll({ itemsPerPage: 100 }, true),
-    ]).then(async ([productResult, mainCategoryResult, packResult, variantResult, flavorResult]) => {
+    ]).then(([productResult, mainCategoryResult, packResult, flavorResult]) => {
       const productData = productResult.status === "fulfilled" ? productResult.value : null;
       const mainCategoryData = mainCategoryResult.status === "fulfilled" ? mainCategoryResult.value : null;
       const packData = packResult.status === "fulfilled" ? packResult.value : null;
       const flavorCatalog = collectionItems(flavorResult.status === "fulfilled" ? flavorResult.value : null);
-      const variantsByProduct = new Map();
-      collectionItems(variantResult.status === "fulfilled" ? variantResult.value : null).forEach((variant) => {
-        const productId = idOf(variant.product ?? variant.productId ?? variant.productIri);
-        if (productId == null) return;
-        const key = String(productId);
-        variantsByProduct.set(key, [...(variantsByProduct.get(key) || []), variant]);
-      });
-      const sourceProducts = (variantResult.status === "fulfilled"
-        ? collectionItems(productData).filter((product) => activeValue(product) !== false && product.packing === true)
-        : []).map((product) => ({
+      const sourceProducts = collectionItems(productData)
+        .filter((product) => activeValue(product) !== false && product.packing === true)
+        .map((product) => ({
         ...product,
-        variants: variantsByProduct.get(String(idOf(product))) || [],
+        variants: variantsByProductRef.current.get(String(idOf(product))) || variantsOf(product),
       }));
-      let readyProducts = sourceProducts.map((product) => ({
+      const readyProducts = sourceProducts.map((product) => ({
         ...product,
         mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url,
       }));
-      try {
-        readyProducts = await hydrateProductsWithImages(readyProducts, true);
-      } catch {
-        // Keep product cards visible if optional image metadata cannot load.
-      }
       const readyPacks = collectionItems(packData).filter((pack) =>
         String(pack.type || pack.packType || "").toUpperCase() === "CUSTOM"
         && idOf(pack) != null
@@ -222,9 +238,7 @@ export const PackBuilderPage = () => {
         setCustomPacks(readyPacks);
         setProductsError(productResult.status === "rejected"
           ? readError(productResult.reason)
-          : variantResult.status === "rejected"
-            ? readError(variantResult.reason)
-            : "");
+          : "");
         setCategoriesError(mainCategoryResult.status === "rejected" ? readError(mainCategoryResult.reason) : "");
         setPacksError(packResult.status === "rejected" ? readError(packResult.reason) : "");
         if (!readyPacks.some((pack) => String(idOf(pack)) === String(selectedCustomPackId))) {
@@ -233,6 +247,14 @@ export const PackBuilderPage = () => {
           setCustomPackQuote(null);
         }
       }
+      void hydrateProductsWithImages(readyProducts, true).then((hydratedProducts) => {
+        if (!current) return;
+        const hydratedById = new Map(hydratedProducts.map((product) => [String(idOf(product)), product]));
+        setProducts((currentProducts) => currentProducts.map((product) => {
+          const hydrated = hydratedById.get(String(idOf(product)));
+          return hydrated ? { ...product, productImages: hydrated.productImages } : product;
+        }));
+      }).catch((err) => { if (current) setError(readError(err)); });
     }).catch((err) => { if (current) setError(readError(err)); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
@@ -357,7 +379,7 @@ export const PackBuilderPage = () => {
         </header>
 
         {loading && <div className="mb-6 flex items-center gap-3 rounded-lg border border-white/10 bg-[#181818] p-4 text-sm text-gray-300" role="status"><Loader2 className="h-5 w-5 animate-spin text-[#d90429]" />Chargement du catalogue…</div>}
-        {(error || productsError || packsError || categoriesError) && <div role="alert" className="mb-6 space-y-1 rounded-lg border border-[#d90429]/40 bg-[#d90429]/10 p-4 text-sm text-red-100">{[productsError && `Produits : ${productsError}`, categoriesError && `Catégories : ${categoriesError}`, packsError && `Packs : ${packsError}`, error].filter(Boolean).map((message) => <p key={message}>{message}</p>)}</div>}
+        {(error || productsError || variantsError || packsError || categoriesError) && <div role="alert" className="mb-6 space-y-1 rounded-lg border border-[#d90429]/40 bg-[#d90429]/10 p-4 text-sm text-red-100">{[productsError && `Produits : ${productsError}`, variantsError && `Variantes : ${variantsError}`, categoriesError && `Catégories : ${categoriesError}`, packsError && `Packs : ${packsError}`, error].filter(Boolean).map((message) => <p key={message}>{message}</p>)}</div>}
         {loading ? <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]"><div className="min-h-64 animate-pulse rounded-xl border border-white/10 bg-[#181818]" /><div className="min-h-64 animate-pulse rounded-xl border border-white/10 bg-[#181818]" /></div> : (
           <>
             {customPacks.length > 1 && <label className="mb-5 flex w-full max-w-full flex-col gap-2 text-xs font-bold uppercase tracking-wider text-gray-400 sm:max-w-sm">Modèle de composition<select value={selectedCustomPackId || ""} onChange={(event) => { setSelectedCustomPackId(event.target.value); setCustomPackDraft([]); setCustomPackQuote(null); }} className="w-full min-w-0 rounded-lg border border-white/10 bg-[#181818] px-3 py-3 text-sm normal-case tracking-normal text-white"><option value="">Choisir un modèle</option>{customPacks.map((pack) => <option key={idOf(pack)} value={idOf(pack)}>{pack.name}</option>)}</select></label>}
@@ -369,6 +391,7 @@ export const PackBuilderPage = () => {
                   <label className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un produit ou une marque" className="w-full rounded-lg border border-white/10 bg-[#181818] py-3 pl-10 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-[#d90429] focus:outline-none" /></label>
                   <p className="min-w-0 break-words self-center text-sm text-gray-400">{categories.find((category) => String(category.id) === String(categoryId))?.name} / {subcategories.find((subcategory) => String(subcategory.id) === String(subcategoryId))?.name}</p>
                 </div>
+                {variantsLoading && <p className="mb-3 flex items-center gap-2 text-xs text-gray-400" role="status"><Loader2 className="h-4 w-4 animate-spin text-[#d90429]" />Chargement des options de variantes…</p>}
                 {productsError ? <div className="rounded-xl border border-white/10 bg-[#181818] p-8 text-center text-sm text-gray-300">Le catalogue des produits n’a pas pu être chargé. Consultez le message d’erreur ci-dessus.</div> : filteredProducts.length ? <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">{filteredProducts.map((product) => {
                   const productId = product.id ?? iriToId(product["@id"]);
                   const selectedQuantity = getSelectedQuantity(productId);

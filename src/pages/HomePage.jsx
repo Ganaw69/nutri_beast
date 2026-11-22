@@ -142,10 +142,8 @@ export const HomePage = () => {
   const { navigateTo, setSearchQuery, setSelectedShopCategoryIds, viewBrandDetails, viewProductDetails } = useCart();
   const [bestSellers, setBestSellers] = useState([]);
   const [bestSellerOffset, setBestSellerOffset] = useState(0);
-  const [bestSellerDirection, setBestSellerDirection] = useState('left');
   const [newProducts, setNewProducts] = useState([]);
   const [newProductsOffset, setNewProductsOffset] = useState(0);
-  const [newProductsDirection, setNewProductsDirection] = useState('left');
   const [bestSellersError, setBestSellersError] = useState('');
   const [newProductsError, setNewProductsError] = useState('');
   const [brands, setBrands] = useState([]);
@@ -208,24 +206,6 @@ export const HomePage = () => {
 
     return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (bestSellers.length <= 4) return undefined;
-    const interval = window.setInterval(() => {
-      setBestSellerDirection('left');
-      setBestSellerOffset((current) => (current + 4) % bestSellers.length);
-    }, 3500);
-    return () => window.clearInterval(interval);
-  }, [bestSellers.length]);
-
-  useEffect(() => {
-    if (newProducts.length <= 4) return undefined;
-    const interval = window.setInterval(() => {
-      setNewProductsDirection('left');
-      setNewProductsOffset((current) => (current + 4) % newProducts.length);
-    }, 3500);
-    return () => window.clearInterval(interval);
-  }, [newProducts.length]);
 
   useEffect(() => {
     setActiveHeroIndex(0);
@@ -322,9 +302,8 @@ export const HomePage = () => {
     ? bestSellers
     : Array.from({ length: 4 }, (_, index) => bestSellers[(bestSellerOffset + index) % bestSellers.length]);
 
-  const changeProducts = (products, setOffset, setDirection, direction) => {
+  const changeProducts = (products, setOffset, direction) => {
     if (products.length <= 4) return;
-    setDirection(direction);
     setOffset((current) => (current + (direction === 'left' ? 4 : -4) + products.length) % products.length);
   };
 
@@ -374,18 +353,18 @@ export const HomePage = () => {
         ) : newProducts.length > 0 ? (
           <div className={`grid items-center gap-2 ${newProducts.length > 4 ? 'grid-cols-1 sm:grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
             {newProducts.length > 4 && (
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés précédentes">
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, 'right')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés précédentes">
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <div key={newProductsOffset} className={`hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
+            <div className="hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4">
               {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
             <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:hidden" role="region" aria-label="Nouveautés, faites défiler horizontalement" tabIndex={0}>
               {newProducts.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
             </div>
             {newProducts.length > 4 && (
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés suivantes">
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés suivantes">
                 <ChevronRight className="h-5 w-5" />
               </button>
             )}
@@ -421,18 +400,18 @@ export const HomePage = () => {
         ) : bestSellers.length > 0 ? (
           <div className={`grid items-center gap-2 ${bestSellers.length > 4 ? 'grid-cols-1 sm:grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
             {bestSellers.length > 4 && (
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes précédentes">
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, 'right')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes précédentes">
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <div key={bestSellerOffset} className={`hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
+            <div className="hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4">
               {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
             <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:hidden" role="region" aria-label="Meilleures ventes, faites défiler horizontalement" tabIndex={0}>
               {bestSellers.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
             </div>
             {bestSellers.length > 4 && (
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes suivantes">
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes suivantes">
                 <ChevronRight className="h-5 w-5" />
               </button>
             )}
