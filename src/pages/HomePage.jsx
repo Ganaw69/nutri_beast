@@ -381,7 +381,7 @@ export const HomePage = () => {
             <div key={newProductsOffset} className={`hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
               {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
-            <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 touch-pan-x sm:hidden" role="region" aria-label="Nouveautés, faites défiler horizontalement" tabIndex={0}>
+            <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:hidden" role="region" aria-label="Nouveautés, faites défiler horizontalement" tabIndex={0}>
               {newProducts.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
             </div>
             {newProducts.length > 4 && (
@@ -428,7 +428,7 @@ export const HomePage = () => {
             <div key={bestSellerOffset} className={`hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
               {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
-            <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 touch-pan-x sm:hidden" role="region" aria-label="Meilleures ventes, faites défiler horizontalement" tabIndex={0}>
+            <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:hidden" role="region" aria-label="Meilleures ventes, faites défiler horizontalement" tabIndex={0}>
               {bestSellers.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
             </div>
             {bestSellers.length > 4 && (
