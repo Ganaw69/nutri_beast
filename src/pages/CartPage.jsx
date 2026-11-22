@@ -18,14 +18,14 @@ export const CartPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
         <div className="flex items-center gap-3">
           <span className="w-1.5 h-8 bg-[#d90429] inline-block rounded-xs" />
-          <h1 className="font-black text-3xl sm:text-5xl text-white uppercase tracking-tight">
+          <h1 className="whitespace-nowrap font-black text-2xl sm:text-5xl text-white uppercase tracking-tight">
             VOTRE PANIER
           </h1>
           <span className="w-1.5 h-8 bg-[#d90429] inline-block rounded-xs" />
         </div>
         <div className="flex items-center gap-3">
           <span className="w-1.5 h-6 bg-[#d90429] inline-block rounded-xs" />
-          <h1 className="font-black text-xl sm:text-2xl text-white uppercase tracking-tight">
+          <h1 className="font-black text-sm sm:text-2xl text-white uppercase tracking-tight">
             Vérifiez votre panier et passez à la caisse
           </h1>
         </div>
@@ -70,7 +70,7 @@ export const CartPage = () => {
 
                   <div className="flex-1 space-y-3 text-center sm:text-left w-full">
                     <div>
-                      <h3 className="font-black text-base sm:text-lg text-white uppercase tracking-tight">
+                      <h3 className="font-black text-sm sm:text-lg text-white uppercase tracking-tight">
                         {item.name}
                       </h3>
                       <p className="text-xs text-gray-400 font-body mt-0.5">
@@ -113,7 +113,7 @@ export const CartPage = () => {
 
             <div className="lg:col-span-5 lg:sticky lg:top-24">
               <div className="bg-[#181818] border border-white/10 p-5 sm:p-6 lg:p-8 rounded-lg space-y-6 font-heading">
-                <h2 className="font-black text-xl sm:text-2xl text-white uppercase tracking-wider border-b border-white/10 pb-4">
+                <h2 className="font-black text-lg sm:text-2xl text-white uppercase tracking-wider border-b border-white/10 pb-4">
                   SUMMARY
                 </h2>
 

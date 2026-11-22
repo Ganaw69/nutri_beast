@@ -352,12 +352,12 @@ export const HomePage = () => {
       <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10 space-y-6">
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
-            <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOUVEAUTÉS À DÉCOUVRIR</h2>
+            <h2 className="whitespace-nowrap font-black text-[13px] leading-5 text-white uppercase tracking-tight sm:text-3xl">NOUVEAUTÉS À DÉCOUVRIR</h2>
             <p className="text-xs text-gray-400 font-body mt-1">Les derniers produits ajoutés à notre sélection.</p>
           </div>
           <button
             onClick={() => navigateTo("shop", { shopFilters: { filter: "new" } })}
-            className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
+            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase text-white transition-colors hover:text-[#d90429] sm:text-xs"
           >
             VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
           </button>
@@ -372,17 +372,20 @@ export const HomePage = () => {
             Impossible de charger les nouveautés : {newProductsError}
           </div>
         ) : newProducts.length > 0 ? (
-          <div className={`grid items-center gap-2 ${newProducts.length > 4 ? 'grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
+          <div className={`grid items-center gap-2 ${newProducts.length > 4 ? 'grid-cols-1 sm:grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
             {newProducts.length > 4 && (
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Nouveautés précédentes">
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'right')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés précédentes">
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <div key={newProductsOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
+            <div key={newProductsOffset} className={`hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4 ${newProductsDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
               {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
+            <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 touch-pan-x sm:hidden" role="region" aria-label="Nouveautés, faites défiler horizontalement" tabIndex={0}>
+              {newProducts.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
+            </div>
             {newProducts.length > 4 && (
-              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Nouveautés suivantes">
+              <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, setNewProductsDirection, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés suivantes">
                 <ChevronRight className="h-5 w-5" />
               </button>
             )}
@@ -396,12 +399,12 @@ export const HomePage = () => {
       <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10 space-y-6">
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
-            <h2 className="font-black text-2xl sm:text-3xl text-white uppercase tracking-tight">NOS MEILLEURS VENTES</h2>
+            <h2 className="whitespace-nowrap font-black text-[13px] leading-5 text-white uppercase tracking-tight sm:text-3xl">NOS MEILLEURS VENTES</h2>
             <p className="text-xs text-gray-400 font-body mt-1">Le carburant préféré de nos athlètes d'élite.</p>
           </div>
           <button
             onClick={() => navigateTo("shop")}
-            className="text-xs font-black text-white hover:text-[#d90429] flex items-center gap-1 transition-colors uppercase"
+            className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase text-white transition-colors hover:text-[#d90429] sm:text-xs"
           >
             VOIR TOUT <ChevronRight className="w-4 h-4 text-[#d90429]" />
           </button>
@@ -416,17 +419,20 @@ export const HomePage = () => {
             Impossible de charger les meilleures ventes : {bestSellersError}
           </div>
         ) : bestSellers.length > 0 ? (
-          <div className={`grid items-center gap-2 ${bestSellers.length > 4 ? 'grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
+          <div className={`grid items-center gap-2 ${bestSellers.length > 4 ? 'grid-cols-1 sm:grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]' : 'grid-cols-1'}`}>
             {bestSellers.length > 4 && (
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Meilleures ventes précédentes">
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'right')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes précédentes">
                 <ChevronLeft className="h-5 w-5" />
               </button>
             )}
-            <div key={bestSellerOffset} className={`grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
+            <div key={bestSellerOffset} className={`hidden grid-cols-1 gap-6 sm:grid sm:grid-cols-2 lg:grid-cols-4 ${bestSellerDirection === 'left' ? 'animate-[carouselSlideLeft_0.55s_ease-out]' : 'animate-[carouselSlideRight_0.55s_ease-out]'}`}>
               {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
+            <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 touch-pan-x sm:hidden" role="region" aria-label="Meilleures ventes, faites défiler horizontalement" tabIndex={0}>
+              {bestSellers.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
+            </div>
             {bestSellers.length > 4 && (
-              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="grid h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Meilleures ventes suivantes">
+              <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, setBestSellerDirection, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes suivantes">
                 <ChevronRight className="h-5 w-5" />
               </button>
             )}

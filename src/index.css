@@ -303,6 +303,15 @@
   }
 }
 
+.home-product-touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.home-product-touch-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .about-red-light { animation: none; transform: none; }
 }

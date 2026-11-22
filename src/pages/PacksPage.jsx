@@ -66,7 +66,7 @@ const PackCard = ({ pack, onDetails }) => {
           <span className="text-[10px] text-gray-400">{compositionLabel}</span>
         </div>
         <div className="flex-1">
-          <h2 className="line-clamp-2 text-base font-black uppercase leading-5">{pack.name}</h2>
+          <h2 className="line-clamp-2 text-sm font-black uppercase leading-5 sm:text-base">{pack.name}</h2>
           {pack.description && <p className="mt-2 line-clamp-3 text-xs leading-5 text-gray-400">{pack.description}</p>}
         </div>
         <div className="flex items-end justify-between gap-3 border-t border-white/10 pt-3">
@@ -123,7 +123,7 @@ export const PacksPage = () => {
     <div className="min-h-screen bg-[#131313] px-4 py-10 pb-20 text-[#e5e2e1] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
-          <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff526d]">Sélection Protein Store</p><h1 className="mt-2 text-3xl font-black uppercase text-white sm:text-5xl">{selectedSexe ? `Packs ${genderLabel(selectedSexe)}` : 'Nos packs'}</h1><p className="mt-3 max-w-2xl text-sm text-gray-400">{selectedSexe ? `Découvrez notre sélection de packs ${genderLabel(selectedSexe).toLowerCase()}.` : 'Retrouvez la composition et le tarif enregistré de chaque pack.'}</p></div>
+          <div><p className="text-xs font-black uppercase tracking-[0.22em] text-[#ff526d]">Sélection Protein Store</p><h1 className="mt-2 whitespace-nowrap text-2xl font-black uppercase text-white sm:text-5xl">{selectedSexe ? `Packs ${genderLabel(selectedSexe)}` : 'Nos packs'}</h1><p className="mt-3 max-w-2xl text-sm text-gray-400">{selectedSexe ? `Découvrez notre sélection de packs ${genderLabel(selectedSexe).toLowerCase()}.` : 'Retrouvez la composition et le tarif enregistré de chaque pack.'}</p></div>
           <span className="hidden rounded-lg border border-white/10 bg-[#1b1b1b] px-4 py-3 text-xs font-bold text-gray-300 sm:block">{totalPacks} pack{totalPacks === 1 ? "" : "s"}</span>
         </div>
 
@@ -213,7 +213,7 @@ export const PackDetailPage = () => {
           <div className="flex min-h-[300px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#f0f0f0] p-5 sm:min-h-[440px] sm:p-10"><PackImage pack={pack} detail alt={pack.name} className="max-h-[70vh] w-full object-contain" /></div>
           <div>
             <div className="flex flex-wrap gap-2"><span className="inline-flex rounded border border-[#d90429]/40 bg-[#d90429]/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#ff7186]">{typeLabel(pack)}</span><span className="inline-flex rounded border border-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-300">{genderLabel(packGender(pack))}</span></div>
-            <h1 className="mt-4 text-3xl font-black uppercase leading-tight text-white sm:text-5xl">{pack.name}</h1>
+            <h1 className="mt-4 text-2xl font-black uppercase leading-tight text-white sm:text-5xl">{pack.name}</h1>
             <div className="mt-5 flex flex-wrap items-baseline gap-x-4 gap-y-2">
               {hasConfiguredPrice && pack.basePrice != null && <span className={Number(pack.basePrice) > Number(pack.finalPrice) ? "text-sm text-gray-500 line-through" : "text-2xl font-black text-white"}>{money(pack.basePrice)}</span>}
               <strong className="text-2xl font-black text-white">{hasConfiguredPrice ? money(pack.finalPrice) : "Prix à configurer"}</strong>
@@ -222,7 +222,7 @@ export const PackDetailPage = () => {
             {pack.description && <p className="mt-6 whitespace-pre-line border-y border-white/10 py-5 text-sm leading-7 text-gray-300">{pack.description}</p>}
             {(contents.length > 0 || isCustomPack) && (
               <div className="mt-6 rounded-xl border border-white/10 bg-[#181818] p-4 sm:p-5">
-                <h2 className="font-black uppercase text-white">Composition du pack <span className="ml-1 text-gray-400">({contents.length})</span></h2>
+                <h2 className="text-sm font-black uppercase text-white sm:text-base">Composition du pack <span className="ml-1 text-gray-400">({contents.length})</span></h2>
                 {contents.length ? <ul className="mt-4 divide-y divide-white/10">{contents.map((entry, index) => {
                   const productImage = resolveProductImage(entry.product, null);
                   return <li key={entry.id ?? index} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f0f0f0] p-1.5">{productImage ? <img src={productImage} alt="" loading="lazy" className="h-full w-full object-contain" /> : <ShoppingBag className="h-5 w-5 text-gray-400" />}</div><div className="min-w-0 flex-1"><p className="text-sm font-bold text-white">{entry.product.name}</p><p className="mt-1 text-xs text-gray-400">Quantité : {entry.quantity}{entry.required ? " · Inclus" : " · Optionnel"}</p></div></li>;
