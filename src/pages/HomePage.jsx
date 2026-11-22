@@ -361,7 +361,7 @@ export const HomePage = () => {
               {visibleNewProducts.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
             <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:hidden" role="region" aria-label="Nouveautés, faites défiler horizontalement" tabIndex={0}>
-              {newProducts.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
+              {newProducts.map((product) => <div key={product.id} className="w-full shrink-0 snap-start px-2"><ProductCard product={product} /></div>)}
             </div>
             {newProducts.length > 4 && (
               <button type="button" onClick={() => changeProducts(newProducts, setNewProductsOffset, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Nouveautés suivantes">
@@ -408,7 +408,7 @@ export const HomePage = () => {
               {visibleBestSellers.map((product) => <ProductCard key={product.id} product={product} />)}
             </div>
             <div className="home-product-touch-scroll -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain px-4 pb-2 sm:hidden" role="region" aria-label="Meilleures ventes, faites défiler horizontalement" tabIndex={0}>
-              {bestSellers.map((product) => <div key={product.id} className="w-full shrink-0 snap-start"><ProductCard product={product} /></div>)}
+              {bestSellers.map((product) => <div key={product.id} className="w-full shrink-0 snap-start px-2"><ProductCard product={product} /></div>)}
             </div>
             {bestSellers.length > 4 && (
               <button type="button" onClick={() => changeProducts(bestSellers, setBestSellerOffset, 'left')} className="hidden h-10 w-10 place-items-center justify-self-center rounded-full border border-white/30 bg-black/80 text-white shadow-lg transition-colors hover:border-[#d90429] hover:bg-[#d90429] focus:outline-none focus-visible:ring-2 focus-visible:ring-white sm:grid" aria-label="Meilleures ventes suivantes">
@@ -527,7 +527,7 @@ export const HomePage = () => {
       </section>
 
       {logoBrands.length > 0 && (
-        <section className="brand-logo-marquee-section border-y border-[#d90429]/30 bg-[#0b0b0b] py-6 overflow-hidden" aria-label="Marques partenaires">
+        <section className="brand-logo-marquee-section border-y border-[#d90429]/30 bg-[#0b0b0b] py-4 overflow-hidden sm:py-6" aria-label="Marques partenaires">
           <div
             ref={brandTrackRef}
             className="brand-logo-marquee-track"

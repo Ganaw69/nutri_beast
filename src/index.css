@@ -292,14 +292,19 @@
 }
 
 @media (max-width: 640px) {
+  .brand-logo-marquee-group {
+    gap: 1rem;
+    padding-right: 1rem;
+  }
+
   .brand-logo-card {
-    width: 320px;
-    height: 170px;
+    width: 260px;
+    height: 140px;
   }
 
   .brand-logo-image {
-    max-width: 215px;
-    max-height: 100px;
+    max-width: 180px;
+    max-height: 85px;
   }
 }
 
