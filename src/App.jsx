@@ -211,11 +211,9 @@ const MainContent = () => {
 
     resetScroll();
     const frameId = window.requestAnimationFrame(resetScroll);
-    const timeoutIds = [100, 300, 800].map((delay) => window.setTimeout(resetScroll, delay));
 
     return () => {
       window.cancelAnimationFrame(frameId);
-      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
   }, [activeTab]);
 

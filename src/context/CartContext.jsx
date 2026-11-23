@@ -164,10 +164,7 @@ export const CartProvider = ({ children }) => {
     };
 
     reset();
-    window.requestAnimationFrame(() => {
-      reset();
-      window.setTimeout(reset, 120);
-    });
+    window.requestAnimationFrame(reset);
   };
 
   useEffect(() => {

@@ -12,7 +12,7 @@ import {
   productVariantService,
   resolveProductImage,
 } from "../services/api";
-import { Check, Loader2, Minus, PackagePlus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
+import { ArrowDown, Check, Loader2, Minus, PackagePlus, Plus, Search, ShoppingBag, Trash2 } from "lucide-react";
 import { buildCategoryTree, mergeCategorySources } from "../utils/categoryTree";
 import { getVariantOptionLabels } from "../utils/productVariantOptions";
 
@@ -152,12 +152,15 @@ export const PackBuilderPage = () => {
   const [categoryId, setCategoryId] = useState("");
   const [subcategoryId, setSubcategoryId] = useState("");
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [packsLoading, setPacksLoading] = useState(true);
   const [productsError, setProductsError] = useState("");
   const [variantsLoading, setVariantsLoading] = useState(true);
   const [variantsError, setVariantsError] = useState("");
   const [packsError, setPacksError] = useState("");
   const [categoriesError, setCategoriesError] = useState("");
+  const [flavorsError, setFlavorsError] = useState("");
   const [quoting, setQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState("");
   const [quoteSignature, setQuoteSignature] = useState("");
@@ -165,12 +168,20 @@ export const PackBuilderPage = () => {
   const [error, setError] = useState("");
   const quoteRequestId = useRef(0);
   const variantsByProductRef = useRef(new Map());
+  const compositionRef = useRef(null);
+  const loading = productsLoading || categoriesLoading || packsLoading;
 
   useEffect(() => {
     let current = true;
-    setLoading(true);
+    setProductsLoading(true);
+    setCategoriesLoading(true);
+    setPacksLoading(true);
     setVariantsLoading(true);
     setError("");
+    setProductsError("");
+    setCategoriesError("");
+    setPacksError("");
+    setFlavorsError("");
     setVariantsError("");
 
     productVariantService.getAllPages({ isActive: true }, true)
@@ -194,69 +205,70 @@ export const PackBuilderPage = () => {
       .catch((err) => { if (current) setVariantsError(readError(err)); })
       .finally(() => { if (current) setVariantsLoading(false); });
 
-    Promise.allSettled([
-      productService.getAllPages({ isActive: true, packing: true }, true),
-      categoryService.getMain(),
-      packService.getAllPages({ itemsPerPage: 100, "order[position]": "asc" }, true),
-      flavorService.getAll({ itemsPerPage: 100 }, true),
-    ]).then(([productResult, mainCategoryResult, packResult, flavorResult]) => {
-      const productData = productResult.status === "fulfilled" ? productResult.value : null;
-      const mainCategoryData = mainCategoryResult.status === "fulfilled" ? mainCategoryResult.value : null;
-      const packData = packResult.status === "fulfilled" ? packResult.value : null;
-      const flavorCatalog = collectionItems(flavorResult.status === "fulfilled" ? flavorResult.value : null);
-      const sourceProducts = collectionItems(productData)
+    void productService.getAllPages({ isActive: true, packing: true }, true)
+      .then((productData) => {
+        const sourceProducts = collectionItems(productData)
         .filter((product) => activeValue(product) !== false && product.packing === true)
         .map((product) => ({
-        ...product,
-        variants: variantsByProductRef.current.get(String(idOf(product))) || variantsOf(product),
-      }));
-      const readyProducts = sourceProducts.map((product) => ({
-        ...product,
-        mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url,
-      }));
-      const readyPacks = collectionItems(packData).filter((pack) =>
-        String(pack.type || pack.packType || "").toUpperCase() === "CUSTOM"
-        && idOf(pack) != null
-        // CUSTOM is the authoritative pack type. Older records may have a
-        // missing or stale isCustomizable flag from the admin form.
-        && packIsCurrent(pack)
-      );
-      if (current) {
-        setProducts(readyProducts);
-        setFlavors(flavorCatalog);
-        // Build the complete hierarchy before selecting roots. Slicing the
-        // flattened API response can otherwise retain one root and several of
-        // its children, rather than the seven navbar categories.
+          ...product,
+          variants: variantsByProductRef.current.get(String(idOf(product))) || variantsOf(product),
+        }));
+        const readyProducts = sourceProducts.map((product) => ({
+          ...product,
+          mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url,
+        }));
+        if (current) setProducts(readyProducts);
+        void hydrateProductsWithImages(readyProducts, true).then((hydratedProducts) => {
+          if (!current) return;
+          const hydratedById = new Map(hydratedProducts.map((product) => [String(idOf(product)), product]));
+          setProducts((currentProducts) => currentProducts.map((product) => {
+            const hydrated = hydratedById.get(String(idOf(product)));
+            return hydrated ? { ...product, productImages: hydrated.productImages } : product;
+          }));
+        }).catch((err) => { if (current) setError(readError(err)); });
+      })
+      .catch((err) => { if (current) setProductsError(readError(err)); })
+      .finally(() => { if (current) setProductsLoading(false); });
+
+    void categoryService.getMain()
+      .then((mainCategoryData) => {
         const categoryTree = buildCategoryTree(mergeCategorySources(null, mainCategoryData));
         const categoriesByName = new Map(categoryTree.map((category) => [
           normaliseCategoryName(category.name),
           category,
         ]));
-        setCategories(PACK_BUILDER_ROOT_CATEGORY_NAMES
-          .map((name) => categoriesByName.get(normaliseCategoryName(name)))
-          .filter(Boolean));
-        setCustomPacks(readyPacks);
-        setProductsError(productResult.status === "rejected"
-          ? readError(productResult.reason)
-          : "");
-        setCategoriesError(mainCategoryResult.status === "rejected" ? readError(mainCategoryResult.reason) : "");
-        setPacksError(packResult.status === "rejected" ? readError(packResult.reason) : "");
-        if (!readyPacks.some((pack) => String(idOf(pack)) === String(selectedCustomPackId))) {
-          setSelectedCustomPackId(idOf(readyPacks[0]) ?? null);
-          setCustomPackDraft([]);
-          setCustomPackQuote(null);
+        if (current) {
+          setCategories(PACK_BUILDER_ROOT_CATEGORY_NAMES
+            .map((name) => categoriesByName.get(normaliseCategoryName(name)))
+            .filter(Boolean));
         }
-      }
-      void hydrateProductsWithImages(readyProducts, true).then((hydratedProducts) => {
-        if (!current) return;
-        const hydratedById = new Map(hydratedProducts.map((product) => [String(idOf(product)), product]));
-        setProducts((currentProducts) => currentProducts.map((product) => {
-          const hydrated = hydratedById.get(String(idOf(product)));
-          return hydrated ? { ...product, productImages: hydrated.productImages } : product;
-        }));
-      }).catch((err) => { if (current) setError(readError(err)); });
-    }).catch((err) => { if (current) setError(readError(err)); })
-      .finally(() => { if (current) setLoading(false); });
+      })
+      .catch((err) => { if (current) setCategoriesError(readError(err)); })
+      .finally(() => { if (current) setCategoriesLoading(false); });
+
+    void packService.getAllPages({ itemsPerPage: 100, "order[position]": "asc" }, true)
+      .then((packData) => {
+        const readyPacks = collectionItems(packData).filter((pack) =>
+          String(pack.type || pack.packType || "").toUpperCase() === "CUSTOM"
+          && idOf(pack) != null
+          && packIsCurrent(pack)
+        );
+        if (current) {
+          setCustomPacks(readyPacks);
+          if (!readyPacks.some((pack) => String(idOf(pack)) === String(selectedCustomPackId))) {
+            setSelectedCustomPackId(idOf(readyPacks[0]) ?? null);
+            setCustomPackDraft([]);
+            setCustomPackQuote(null);
+          }
+        }
+      })
+      .catch((err) => { if (current) setPacksError(readError(err)); })
+      .finally(() => { if (current) setPacksLoading(false); });
+
+    void flavorService.getAll({ itemsPerPage: 100 }, true)
+      .then((flavorData) => { if (current) setFlavors(collectionItems(flavorData)); })
+      .catch((err) => { if (current) setFlavorsError(readError(err)); });
+
     return () => { current = false; };
   }, []);
 
@@ -323,6 +335,7 @@ export const PackBuilderPage = () => {
   };
 
   const getSelectedQuantity = (productId) => Number(customPackDraft.find((line) => String(line.productId) === String(productId))?.quantity || 0);
+  const scrollToComposition = () => compositionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   useEffect(() => {
     const requestId = ++quoteRequestId.current;
@@ -379,20 +392,19 @@ export const PackBuilderPage = () => {
         </header>
 
         {loading && <div className="mb-6 flex items-center gap-3 rounded-lg border border-white/10 bg-[#181818] p-4 text-sm text-gray-300" role="status"><Loader2 className="h-5 w-5 animate-spin text-[#d90429]" />Chargement du catalogue…</div>}
-        {(error || productsError || variantsError || packsError || categoriesError) && <div role="alert" className="mb-6 space-y-1 rounded-lg border border-[#d90429]/40 bg-[#d90429]/10 p-4 text-sm text-red-100">{[productsError && `Produits : ${productsError}`, variantsError && `Variantes : ${variantsError}`, categoriesError && `Catégories : ${categoriesError}`, packsError && `Packs : ${packsError}`, error].filter(Boolean).map((message) => <p key={message}>{message}</p>)}</div>}
-        {loading ? <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]"><div className="min-h-64 animate-pulse rounded-xl border border-white/10 bg-[#181818]" /><div className="min-h-64 animate-pulse rounded-xl border border-white/10 bg-[#181818]" /></div> : (
-          <>
+        {(error || productsError || variantsError || packsError || categoriesError || flavorsError) && <div role="alert" className="mb-6 space-y-1 rounded-lg border border-[#d90429]/40 bg-[#d90429]/10 p-4 text-sm text-red-100">{[productsError && `Produits : ${productsError}`, variantsError && `Variantes : ${variantsError}`, categoriesError && `Catégories : ${categoriesError}`, flavorsError && `Saveurs : ${flavorsError}`, packsError && `Packs : ${packsError}`, error].filter(Boolean).map((message) => <p key={message}>{message}</p>)}</div>}
+        <>
             {customPacks.length > 1 && <label className="mb-5 flex w-full max-w-full flex-col gap-2 text-xs font-bold uppercase tracking-wider text-gray-400 sm:max-w-sm">Modèle de composition<select value={selectedCustomPackId || ""} onChange={(event) => { setSelectedCustomPackId(event.target.value); setCustomPackDraft([]); setCustomPackQuote(null); }} className="w-full min-w-0 rounded-lg border border-white/10 bg-[#181818] px-3 py-3 text-sm normal-case tracking-normal text-white"><option value="">Choisir un modèle</option>{customPacks.map((pack) => <option key={idOf(pack)} value={idOf(pack)}>{pack.name}</option>)}</select></label>}
             <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
               <section className="min-w-0 max-w-full">
                 <div className="mb-5 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">{["Choisissez la catégorie", "Choisissez la sous-catégorie", "Choisissez vos produits"].map((label, index) => <button key={label} type="button" disabled={(index === 1 && !categoryId) || (index === 2 && !subcategoryId)} onClick={() => selectStep(index + 1)} className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm font-bold sm:w-auto sm:rounded-full sm:text-center ${step === index + 1 ? "border-[#d90429] bg-[#d90429]/15 text-white" : "border-white/10 text-gray-400"} disabled:cursor-not-allowed disabled:opacity-50`}>{index + 1}. {label}</button>)}</div>
-                {step === 1 ? <div><h2 className="mb-4 text-2xl font-black text-white">1. Choisissez la catégorie</h2><div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">{categories.map((category) => <button type="button" key={category.id} onClick={() => chooseCategory(category.id)} className="min-w-0 rounded-xl border border-white/10 bg-[#181818] p-3 text-left text-sm font-black text-white transition-colors hover:border-[#d90429] sm:p-6 sm:text-xl">{category.name}<span className="mt-2 block text-[11px] font-medium text-gray-400 sm:text-sm">{category.children?.length || 0} sous-catégorie(s)</span></button>)}</div>{!categories.length && <p className="rounded-xl bg-[#181818] p-6 text-base text-gray-300">Aucune catégorie disponible.</p>}</div> : step === 2 ? <div><h2 className="mb-4 text-2xl font-black text-white">2. Choisissez la sous-catégorie</h2><p className="mb-4 text-base text-gray-300">{categories.find((category) => String(category.id) === String(categoryId))?.name}</p><div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">{subcategories.map((subcategory) => <button type="button" key={subcategory.id} onClick={() => chooseSubcategory(subcategory.id)} className="min-w-0 rounded-xl border border-white/10 bg-[#181818] p-3 text-left text-sm font-black text-white transition-colors hover:border-[#d90429] sm:p-6 sm:text-xl">{subcategory.name}</button>)}</div>{!subcategories.length && <p className="rounded-xl bg-[#181818] p-6 text-base text-gray-300">Aucune sous-catégorie disponible.</p>}</div> : <>
+                {step === 1 ? <div><h2 className="mb-4 text-2xl font-black text-white">1. Choisissez la catégorie</h2>{categoriesLoading ? <p className="flex items-center gap-2 rounded-xl bg-[#181818] p-6 text-sm text-gray-300" role="status"><Loader2 className="h-5 w-5 animate-spin text-[#d90429]" />Chargement des catégories…</p> : categories.length ? <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">{categories.map((category) => <button type="button" key={category.id} onClick={() => chooseCategory(category.id)} className="min-w-0 rounded-xl border border-white/10 bg-[#181818] p-3 text-left text-sm font-black text-white transition-colors hover:border-[#d90429] sm:p-6 sm:text-xl">{category.name}<span className="mt-2 block text-[11px] font-medium text-gray-400 sm:text-sm">{category.children?.length || 0} sous-catégorie(s)</span></button>)}</div> : <p className="rounded-xl bg-[#181818] p-6 text-base text-gray-300">Aucune catégorie disponible.</p>}</div> : step === 2 ? <div><h2 className="mb-4 text-2xl font-black text-white">2. Choisissez la sous-catégorie</h2><p className="mb-4 text-base text-gray-300">{categories.find((category) => String(category.id) === String(categoryId))?.name}</p><div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">{subcategories.map((subcategory) => <button type="button" key={subcategory.id} onClick={() => chooseSubcategory(subcategory.id)} className="min-w-0 rounded-xl border border-white/10 bg-[#181818] p-3 text-left text-sm font-black text-white transition-colors hover:border-[#d90429] sm:p-6 sm:text-xl">{subcategory.name}</button>)}</div>{!subcategories.length && <p className="rounded-xl bg-[#181818] p-6 text-base text-gray-300">Aucune sous-catégorie disponible.</p>}</div> : <>
                 <div className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row">
                   <label className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un produit ou une marque" className="w-full rounded-lg border border-white/10 bg-[#181818] py-3 pl-10 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-[#d90429] focus:outline-none" /></label>
                   <p className="min-w-0 break-words self-center text-sm text-gray-400">{categories.find((category) => String(category.id) === String(categoryId))?.name} / {subcategories.find((subcategory) => String(subcategory.id) === String(subcategoryId))?.name}</p>
                 </div>
                 {variantsLoading && <p className="mb-3 flex items-center gap-2 text-xs text-gray-400" role="status"><Loader2 className="h-4 w-4 animate-spin text-[#d90429]" />Chargement des options de variantes…</p>}
-                {productsError ? <div className="rounded-xl border border-white/10 bg-[#181818] p-8 text-center text-sm text-gray-300">Le catalogue des produits n’a pas pu être chargé. Consultez le message d’erreur ci-dessus.</div> : filteredProducts.length ? <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">{filteredProducts.map((product) => {
+                {productsError ? <div className="rounded-xl border border-white/10 bg-[#181818] p-8 text-center text-sm text-gray-300">Le catalogue des produits n’a pas pu être chargé. Consultez le message d’erreur ci-dessus.</div> : productsLoading ? <div className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#181818] p-8 text-sm text-gray-300" role="status"><Loader2 className="h-5 w-5 animate-spin text-[#d90429]" />Chargement des produits…</div> : filteredProducts.length ? <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">{filteredProducts.map((product) => {
                   const productId = product.id ?? iriToId(product["@id"]);
                   const selectedQuantity = getSelectedQuantity(productId);
                   const variants = variantsOf(product);
@@ -426,7 +438,7 @@ export const PackBuilderPage = () => {
                 </>}
               </section>
 
-              <aside className="w-full min-w-0 max-w-full rounded-xl border border-[#d90429]/70 bg-gradient-to-b from-[#201216] to-[#181818] p-4 shadow-[0_0_36px_rgba(217,4,41,0.2)] sm:p-6 lg:sticky lg:top-6">
+              <aside id="pack-composition" ref={compositionRef} className="w-full min-w-0 max-w-full scroll-mt-24 rounded-xl border border-[#d90429]/70 bg-gradient-to-b from-[#201216] to-[#181818] p-4 shadow-[0_0_36px_rgba(217,4,41,0.2)] sm:p-6 lg:sticky lg:top-6">
                 <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
                   <div><h2 className="text-2xl font-black uppercase tracking-wide text-white sm:text-3xl">Votre composition</h2><p className="mt-2 text-base font-medium text-gray-200">{selectedCount} produits distincts - {totalUnits} unites</p></div>
                   {selectedCount > 0 && <button type="button" onClick={clearSelection} title="Vider la selection" className="rounded p-2 text-gray-500 hover:bg-white/5 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>}
@@ -441,7 +453,7 @@ export const PackBuilderPage = () => {
                   })}
                 </div>
                 <div className="mt-4 space-y-3 border-t border-white/10 pt-4 text-sm leading-6">
-                  {!selectedPack ? <p className="text-amber-300">Aucune configuration CUSTOM active et personnalisable n'est disponible.</p> : <p className="text-gray-400">Configuration du pack : <span className="text-white">{selectedPack.name}</span></p>}
+                  {!selectedPack ? <p className="text-amber-300">{packsLoading ? "Chargement de la configuration du pack…" : "Aucune configuration CUSTOM active et personnalisable n'est disponible."}</p> : <p className="text-gray-400">Configuration du pack : <span className="text-white">{selectedPack.name}</span></p>}
                   {selectedCount < minProducts && <p className="text-amber-300">Ajoutez encore {minProducts - selectedCount} produit(s) distinct(s).</p>}
                   {selectedCount > maxProducts && <p className="text-red-300">Un pack accepte au maximum 5 produits distincts.</p>}
                   {!variantsAreSelected && <p className="text-amber-300">Choisissez une variante pour chaque produit concerne.</p>}
@@ -459,8 +471,15 @@ export const PackBuilderPage = () => {
               </aside>
             </div>
           </>
-        )}
       </div>
+      <button
+        type="button"
+        onClick={scrollToComposition}
+        aria-controls="pack-composition"
+        className="fixed bottom-5 right-20 z-40 inline-flex items-center gap-2 rounded-full border border-white/30 bg-gradient-to-r from-[#d90429] to-[#a90020] px-4 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[0_0_18px_rgba(217,4,41,0.55)] transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-white lg:hidden"
+      >
+        Ma composition <ArrowDown className="h-4 w-4" />
+      </button>
     </div>
   );
 };

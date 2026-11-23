@@ -497,14 +497,14 @@ export const HomePage = () => {
             <img
               src={packBuilderBanner}
               alt="Composez votre propre pack de compléments selon vos objectifs"
-              className="block aspect-[3/4] w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.015] sm:aspect-auto"
+              className="block h-auto w-full object-contain"
             />
           </picture>
-          <span className="pointer-events-none absolute bottom-4 left-1/2 inline-flex w-[92%] max-w-[30rem] -translate-x-1/2 items-center justify-center gap-3 rounded-full border border-white/85 bg-gradient-to-r from-[#160308] via-[#8f0019] to-[#e0002d] px-4 py-3 text-[10px] font-black italic uppercase tracking-[0.12em] text-white shadow-[0_0_16px_rgba(255,24,61,0.8),inset_0_0_12px_rgba(255,255,255,0.14)] transition group-hover:brightness-110 sm:bottom-5 sm:px-6 sm:py-3.5 sm:text-xs">
-            <Package className="h-5 w-5 shrink-0" />
-            <span className="h-6 w-px shrink-0 bg-white/70" />
-            COMPOSITEUR DE PACK
-            <ArrowRight className="h-5 w-5 shrink-0" />
+          <span className="pointer-events-none absolute bottom-5 left-1/2 hidden w-[92%] max-w-[30rem] -translate-x-1/2 items-center justify-center gap-3 rounded-full border-2 border-white/90 bg-gradient-to-r from-[#210008] via-[#c90028] to-[#f71940] px-5 py-3.5 text-base font-black italic tracking-wide text-white shadow-[0_0_20px_rgba(255,24,61,0.95),inset_0_0_14px_rgba(255,255,255,0.2)] transition group-hover:brightness-110 sm:flex sm:px-7 sm:py-4 sm:text-lg">
+            <Package className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
+            <span className="h-8 w-px shrink-0 bg-white/85" />
+            Compositeur de pack
+            <ArrowRight className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
           </span>
         </button>
       </section>
