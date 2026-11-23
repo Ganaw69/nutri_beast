@@ -383,3 +383,175 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #d90429;
 }
+
+@property --pack-composer-border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes packComposerBorderSweep {
+  to {
+    --pack-composer-border-angle: 360deg;
+  }
+}
+
+.pack-composer-btn {
+  position: relative;
+  z-index: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  max-width: 100%;
+  margin: 22px auto 28px;
+  padding: 10px 34px;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 9999px;
+  background:
+    radial-gradient(ellipse at left center, rgba(255, 20, 38, 0.22), transparent 38%),
+    radial-gradient(ellipse at right center, rgba(255, 20, 38, 0.22), transparent 38%),
+    linear-gradient(90deg, #a70712 0%, #41030a 12%, #080102 31%, #000000 50%, #080102 69%, #41030a 88%, #a70712 100%);
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 23px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: -0.3px;
+  cursor: pointer;
+  outline: none;
+  isolation: isolate;
+  box-shadow:
+    inset 0 0 8px rgba(255, 35, 48, 0.3),
+    inset 0 -3px 8px rgba(145, 0, 10, 0.5),
+    0 0 13px rgba(190, 9, 20, 0.75),
+    0 4px 22px rgba(145, 0, 10, 0.55);
+  transition: transform 0.2s ease, box-shadow 0.25s ease, filter 0.25s ease;
+}
+
+.pack-composer-btn::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--pack-composer-border-angle),
+    transparent 0deg 305deg,
+    rgba(255, 55, 70, 0.6) 322deg,
+    #ffffff 338deg,
+    rgba(255, 55, 70, 0.6) 350deg,
+    transparent 360deg
+  );
+  content: '';
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: packComposerBorderSweep 3s linear infinite;
+}
+
+.pack-composer-btn::after {
+  position: absolute;
+  z-index: -1;
+  right: 6%;
+  bottom: -24px;
+  left: 6%;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, rgba(20, 0, 0, 0.75) 0%, rgba(210, 10, 20, 0.75) 55%, rgba(40, 0, 0, 0.75) 100%);
+  content: '';
+  filter: blur(10px);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.pack-composer-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+.pack-composer-btn .cube-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
+}
+
+.pack-composer-btn .divider {
+  width: 2px;
+  height: 34px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(255, 60, 60, 0.1) 0%, rgba(255, 70, 80, 0.95) 50%, rgba(255, 60, 60, 0.1) 100%);
+  box-shadow: 0 0 8px rgba(255, 50, 50, 0.9);
+}
+
+.pack-composer-btn .btn-text {
+  white-space: nowrap;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.pack-composer-btn .arrow-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.pack-composer-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow:
+    inset 0 0 12px rgba(255, 55, 68, 0.42),
+    inset 0 -3px 10px rgba(165, 0, 12, 0.6),
+    0 0 24px rgba(235, 15, 25, 0.95),
+    0 8px 32px rgba(200, 0, 15, 0.75);
+}
+
+.pack-composer-btn:hover .arrow-icon {
+  transform: translateX(4px);
+}
+
+.pack-composer-btn:hover::after {
+  opacity: 0.75;
+  transform: scaleX(0.96) translateY(3px);
+}
+
+.pack-composer-btn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.pack-composer-btn:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 4px;
+}
+
+@media (max-width: 640px) {
+  .pack-composer-btn {
+    gap: 12px;
+    margin-top: 18px;
+    padding: 8px 20px;
+    font-size: 17px;
+  }
+
+  .pack-composer-btn .cube-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .pack-composer-btn .divider {
+    height: 26px;
+  }
+
+  .pack-composer-btn .arrow-icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-composer-btn::before {
+    animation: none;
+  }
+}

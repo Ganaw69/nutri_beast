@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
@@ -333,7 +333,7 @@ export const HomePage = () => {
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
             <h2 className="whitespace-nowrap font-black text-[13px] leading-5 text-white uppercase tracking-tight sm:text-3xl">NOUVEAUTÉS À DÉCOUVRIR</h2>
-            <p className="text-xs text-gray-400 font-body mt-1">Les derniers produits ajoutés à notre sélection.</p>
+            
           </div>
           <button
             onClick={() => navigateTo("shop", { shopFilters: { filter: "new" } })}
@@ -380,7 +380,6 @@ export const HomePage = () => {
         <div className="flex items-end justify-between border-b border-white/10 pb-4">
           <div>
             <h2 className="whitespace-nowrap font-black text-[13px] leading-5 text-white uppercase tracking-tight sm:text-3xl">NOS MEILLEURS VENTES</h2>
-            <p className="text-xs text-gray-400 font-body mt-1">Le carburant préféré de nos athlètes d'élite.</p>
           </div>
           <button
             onClick={() => navigateTo("shop")}
@@ -467,7 +466,7 @@ export const HomePage = () => {
       </section>
 
       {/* ================= 5. TRUST BADGES ================= */}
-      <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10">
+      <section className="mx-auto hidden w-full px-4 sm:px-6 lg:px-8 2xl:px-10 md:block">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-5 border-t border-white/10">
           {[
             { icon: Truck, title: 'LIVRAISON RAPIDE', desc: 'Expédition sous 24/48h partout en Tunisie.' },
@@ -485,11 +484,11 @@ export const HomePage = () => {
         </div>
       </section>
       {/* ================= 6. COMPOSER VOTRE PACK ================= */}
-      <section className="w-full px-4 sm:px-6 lg:px-8 pb-4">
+      <section className="w-full px-4 pb-4 text-center sm:px-6 lg:px-8">
         <button
           type="button"
           onClick={() => navigateTo("pack-builder")}
-          className="group relative block w-full overflow-hidden rounded-2xl border border-[#d90429]/45 bg-[#100708] text-left shadow-[0_0_28px_rgba(217,4,41,0.2)] transition hover:-translate-y-0.5 hover:border-[#ff526d] hover:shadow-[0_0_35px_rgba(217,4,41,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          className="block w-full overflow-hidden rounded-2xl border border-[#d90429]/45 bg-[#100708] text-left shadow-[0_0_28px_rgba(217,4,41,0.2)] transition hover:-translate-y-0.5 hover:border-[#ff526d] hover:shadow-[0_0_35px_rgba(217,4,41,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           aria-label="Composer votre pack personnalisé"
         >
           <picture className="block w-full">
@@ -500,12 +499,16 @@ export const HomePage = () => {
               className="block h-auto w-full object-contain"
             />
           </picture>
-          <span className="pointer-events-none absolute bottom-5 left-1/2 hidden w-[92%] max-w-[30rem] -translate-x-1/2 items-center justify-center gap-3 rounded-full border-2 border-white/90 bg-gradient-to-r from-[#210008] via-[#c90028] to-[#f71940] px-5 py-3.5 text-base font-black italic tracking-wide text-white shadow-[0_0_20px_rgba(255,24,61,0.95),inset_0_0_14px_rgba(255,255,255,0.2)] transition group-hover:brightness-110 sm:flex sm:px-7 sm:py-4 sm:text-lg">
-            <Package className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
-            <span className="h-8 w-px shrink-0 bg-white/85" />
-            Compositeur de pack
-            <ArrowRight className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" />
-          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigateTo("pack-builder")}
+          className="pack-composer-btn"
+        >
+          <Package className="cube-icon" aria-hidden="true" />
+          <span className="divider" aria-hidden="true" />
+          <span className="btn-text">Compositeur de pack</span>
+          <ArrowRight className="arrow-icon" aria-hidden="true" />
         </button>
       </section>
 
