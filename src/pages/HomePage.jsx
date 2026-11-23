@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
 import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
-import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2, Package } from "lucide-react";
 import { getProductIdentity } from "../utils/productSearch";
 import logo from "../assets/logo.png";
 import packHommeImage from "../assets/pack-homme.jpeg";
 import packFemmeImage from "../assets/pack-femme.jpeg";
 import packBuilderBanner from "../assets/objectif.png";
+import packBuilderMobileBanner from "../assets/banner-pack-mobile.jpeg";
 
 const normalizeProduct = (p) => ({
   id: p.id,
@@ -491,13 +492,19 @@ export const HomePage = () => {
           className="group relative block w-full overflow-hidden rounded-2xl border border-[#d90429]/45 bg-[#100708] text-left shadow-[0_0_28px_rgba(217,4,41,0.2)] transition hover:-translate-y-0.5 hover:border-[#ff526d] hover:shadow-[0_0_35px_rgba(217,4,41,0.38)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
           aria-label="Composer votre pack personnalisé"
         >
-          <img
-            src={packBuilderBanner}
-            alt="Composez votre propre pack de compléments selon vos objectifs"
-            className="h-44 w-full object-cover object-left transition-transform duration-500 group-hover:scale-[1.015] sm:h-auto"
-          />
-          <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 rounded-full bg-[#d90429] px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-white shadow-lg shadow-black/30 transition group-hover:bg-[#b0021f] sm:bottom-5 sm:right-5 sm:px-5 sm:py-3 sm:text-xs">
-            Composer votre pack <ArrowRight className="h-4 w-4" />
+          <picture className="block w-full">
+            <source media="(max-width: 639px)" srcSet={packBuilderMobileBanner} />
+            <img
+              src={packBuilderBanner}
+              alt="Composez votre propre pack de compléments selon vos objectifs"
+              className="block aspect-[3/4] w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.015] sm:aspect-auto"
+            />
+          </picture>
+          <span className="pointer-events-none absolute bottom-4 left-1/2 inline-flex w-[92%] max-w-[30rem] -translate-x-1/2 items-center justify-center gap-3 rounded-full border border-white/85 bg-gradient-to-r from-[#160308] via-[#8f0019] to-[#e0002d] px-4 py-3 text-[10px] font-black italic uppercase tracking-[0.12em] text-white shadow-[0_0_16px_rgba(255,24,61,0.8),inset_0_0_12px_rgba(255,255,255,0.14)] transition group-hover:brightness-110 sm:bottom-5 sm:px-6 sm:py-3.5 sm:text-xs">
+            <Package className="h-5 w-5 shrink-0" />
+            <span className="h-6 w-px shrink-0 bg-white/70" />
+            COMPOSITEUR DE PACK
+            <ArrowRight className="h-5 w-5 shrink-0" />
           </span>
         </button>
       </section>

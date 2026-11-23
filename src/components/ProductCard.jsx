@@ -76,8 +76,8 @@ export const ProductCard = ({ product }) => {
         </div>
 
         {/* Price & Red Square Action Button matching screenshot */}
-        <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-          <div>
+        <div className="mt-2 flex items-center gap-3 border-t border-white/10 pt-3">
+          <div className="shrink-0">
             <div className="text-base font-black text-white">
               {product.price.toFixed(2)} <span className="text-xs font-black text-white">TND</span>
             </div>
@@ -88,13 +88,14 @@ export const ProductCard = ({ product }) => {
             )}
           </div>
 
-          {/* Red Square Shopping Bag Button */}
           <button
             onClick={() => { void addToCart(product); }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#d90429] text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111]"
+            className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg bg-[#d90429] px-2 text-[9px] font-black uppercase tracking-wide text-white shadow-md transition-colors duration-200 hover:bg-[#b0021f] focus:outline-none focus:ring-2 focus:ring-[#ff526d] focus:ring-offset-2 focus:ring-offset-[#111111] sm:px-3 sm:text-[10px]"
             title={inStock ? "Ajouter au panier" : "Vérifier la disponibilité"}
+            aria-label={inStock ? `Ajouter ${product.name} au panier` : `Vérifier la disponibilité de ${product.name}`}
           >
-            <ShoppingBag className="w-4 h-4 text-white fill-white/20" />
+            <ShoppingBag className="h-4 w-4 shrink-0 fill-white/20" />
+            <span className="truncate">Ajouter au panier</span>
           </button>
         </div>
       </div>

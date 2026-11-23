@@ -235,8 +235,8 @@
 .brand-logo-card {
   position: relative;
   display: flex;
-  width: 410px;
-  height: 210px;
+  width: 390px;
+  height: 200px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -286,8 +286,8 @@
   z-index: 2;
   display: block;
   width: auto;
-  max-width: 340px;
-  max-height: 160px;
+  max-width: 320px;
+  max-height: 150px;
   object-fit: contain;
 }
 
@@ -298,13 +298,13 @@
   }
 
   .brand-logo-card {
-    width: 260px;
-    height: 140px;
+    width: 245px;
+    height: 132px;
   }
 
   .brand-logo-image {
-    max-width: 180px;
-    max-height: 85px;
+    max-width: 170px;
+    max-height: 80px;
   }
 }
 
