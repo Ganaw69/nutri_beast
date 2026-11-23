@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useCart } from "../context/CartContext";
-import { productService, productVariantService, reviewService, flavorService, brandService, categoryService, resolveProductImage, productImageUrl, isPrimaryProductImage, resolveProductFlavors, hydrateProductsWithImages } from "../services/api";
+import { productService, productVariantService, reviewService, flavorService, brandService, categoryService, hydrateProductsWithImages, iriToId, productImageUrl, resolveProductFlavors, resolveProductImage } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 import { getVariantOptionLabels, getVariantOptionValues } from "../utils/productVariantOptions";
 import {
-  Star, ShoppingCart, ShieldCheck, Truck, CheckCircle2,
+  Star, ShoppingCart, ShieldCheck, Truck, ChevronLeft, ChevronRight,
   Zap, Loader2, Send, Headphones, BadgeCheck, ArrowRight, PackageOpen, Search, X
 } from "lucide-react";
 
@@ -16,10 +16,10 @@ const formatMonthYear = (value) => {
 };
 
 const getRelationId = (relation) => {
-  if (relation && typeof relation === 'object') {
-    return relation.id ?? (Number(String(relation['@id'] || relation.iri || '').split('/').pop()) || null);
-  }
-  return Number(String(relation || '').split('/').pop()) || null;
+  const value = relation && typeof relation === 'object'
+    ? relation.id ?? relation['@id'] ?? relation.iri
+    : relation;
+  return iriToId(value) ?? (typeof value === 'string' ? value : null);
 };
 
 const displayBrandName = (brand) => {
@@ -246,6 +246,7 @@ export const ProductDetailPage = () => {
     addToCart,
     navigateTo,
     viewBrandDetails,
+    productOriginBrandId,
     showToast,
     selectedShopCategoryIds,
     setSelectedShopCategoryIds,
@@ -256,16 +257,19 @@ export const ProductDetailPage = () => {
   const [product, setProduct] = useState(null);
   const [selectedBreadcrumbCategories, setSelectedBreadcrumbCategories] = useState([]);
   const [related, setRelated] = useState([]);
+  const [relatedIndex, setRelatedIndex] = useState(0);
   const [variants, setVariants] = useState([]);
   const [selectedVariantKey, setSelectedVariantKey] = useState("");
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [variantsLoading, setVariantsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [activeImage, setActiveImage] = useState('');
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [descriptionHasMore, setDescriptionHasMore] = useState(false);
   const descriptionRef = useRef(null);
+  const relatedViewportRef = useRef(null);
   const flavorImageRequestRef = useRef(0);
 
   const [selectedFlavor, setSelectedFlavor] = useState('');
@@ -326,10 +330,13 @@ export const ProductDetailPage = () => {
     let active = true;
     flavorImageRequestRef.current += 1;
     setLoading(true);
+    setVariantsLoading(true);
     setLoadError("");
     setProduct(null);
     setVariants([]);
     setSelectedVariantKey("");
+    setRelated([]);
+    setReviews([]);
     setDescriptionExpanded(false);
 
     const loadProduct = async () => {
@@ -339,10 +346,14 @@ export const ProductDetailPage = () => {
         if (!isAvailableProduct(prod)) {
           setProduct(null);
           setLoading(false);
+          setVariantsLoading(false);
           return;
         }
 
         const immediateProduct = normalizeProduct(prod);
+        setProduct(immediateProduct);
+        setActiveImage(resolveProductImage(prod, null) || productImageUrl(prod.productImages?.[0]));
+        setLoading(false);
 
         const productCategoryId = getRelationId(prod.category);
         const categoryPromise = prod.category?.name || productCategoryId == null
@@ -352,16 +363,36 @@ export const ProductDetailPage = () => {
         if (productCategoryId) relatedParams['category.id'] = productCategoryId;
 
         const productFlavorIds = (prod.flavors || []).map(getRelationId).filter((id) => id != null);
-        const [imageData, relData, revData, flavorData, flavorDetails, brandData, variantData, categoryData] = await Promise.all([
-          productService.getImages({ product: `/api/products/${selectedProductId}`, itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-          productService.getAllPages(relatedParams, true).catch(() => ({ 'hydra:member': [] })),
-          reviewService.getAll({ 'product.id': selectedProductId, approved: true }, true).catch(() => ({ 'hydra:member': [] })),
-          flavorService.getAll({ itemsPerPage: 100 }, true).catch(() => ({ 'hydra:member': [] })),
-          Promise.all(productFlavorIds.map((id) => flavorService.getOne(id, true).catch(() => null))),
-          immediateProduct.brand || immediateProduct.brandId == null
-            ? Promise.resolve(null)
-            : brandService.getAllPages({}, true).catch(() => null),
-          productVariantService.getAll({ "product.id": selectedProductId, isActive: true }, true, true),
+        const imageRequest = productService.getImages({ product: `/api/products/${selectedProductId}`, itemsPerPage: 100 }, true)
+          .catch(() => ({ 'hydra:member': [] }));
+        const relatedRequest = productService.getAll(relatedParams, true)
+          .catch(() => ({ 'hydra:member': [] }));
+        const reviewRequest = reviewService.getAll({ 'product.id': selectedProductId, approved: true }, true)
+          .catch(() => ({ 'hydra:member': [] }));
+        const flavorRequest = flavorService.getAll({ itemsPerPage: 100 }, true)
+          .catch(() => ({ 'hydra:member': [] }));
+        const flavorDetailsRequest = Promise.all(productFlavorIds.map((id) => flavorService.getOne(id, true).catch(() => null)));
+        const brandRequest = immediateProduct.brand || immediateProduct.brandId == null
+          ? Promise.resolve(null)
+          : brandService.getOne(immediateProduct.brandId, true).catch(() => null);
+        const variantRequest = productVariantService.getAll({ "product.id": selectedProductId, isActive: true }, true, true);
+        const [variantData] = await Promise.all([variantRequest]);
+        if (!active) return;
+
+        const activeVariants = variantData["hydra:member"].filter((variant) => variant.isActive !== false);
+        const firstAvailableVariant = activeVariants.find((variant) => variantSku(variant) && Number(variant.stock) > 0)
+          || activeVariants[0];
+        setVariants(activeVariants);
+        setSelectedVariantKey(firstAvailableVariant ? variantKey(firstAvailableVariant) : "");
+        setVariantsLoading(false);
+
+        const [imageData, relData, revData, flavorData, flavorDetails, brandData, categoryData] = await Promise.all([
+          imageRequest,
+          relatedRequest,
+          reviewRequest,
+          flavorRequest,
+          flavorDetailsRequest,
+          brandRequest,
           categoryPromise,
         ]);
         if (!active) return;
@@ -393,14 +424,11 @@ export const ProductDetailPage = () => {
           ...flavorDetails.filter(Boolean),
         ];
         const brandItems = brandData?.['hydra:member'] || brandData?.member || brandData?.items || [];
-        const brandRecord = brandItems.find((item) => String(getRelationId(item)) === String(immediateProduct.brandId));
+        const brandRecord = brandItems.length > 0
+          ? brandItems.find((item) => String(getRelationId(item)) === String(immediateProduct.brandId))
+          : brandData;
         const norm = normalizeProduct(productWithImages, flavorCatalog);
         if (!norm.brand && brandRecord) norm.brand = displayBrandName(brandRecord);
-        const activeVariants = variantData["hydra:member"].filter((variant) => variant.isActive !== false);
-        const firstAvailableVariant = activeVariants.find((variant) => variantSku(variant) && Number(variant.stock) > 0)
-          || activeVariants[0];
-        setVariants(activeVariants);
-        setSelectedVariantKey(firstAvailableVariant ? variantKey(firstAvailableVariant) : "");
         setProduct(norm);
         const hydratedInitialFlavor = norm.flavorOptions[0];
         const initialVariantFlavor = variantFlavorOption(firstAvailableVariant, norm.flavorOptions);
@@ -413,11 +441,13 @@ export const ProductDetailPage = () => {
         setSelectedFlavor(initialVariantFlavor?.name || (activeVariants.length === 0 ? hydratedInitialFlavor?.name || "" : ""));
 
         const relatedWithImages = await hydrateProductsWithImages(
-          (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 3),
+          (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 8),
+          true,
           true
         );
         if (!active) return;
         const relProds = relatedWithImages.map((item) => normalizeProduct(item, flavorCatalog));
+        setRelatedIndex(0);
         setRelated(relProds);
         setReviews(revData['hydra:member'] || []);
         setLoading(false);
@@ -425,6 +455,7 @@ export const ProductDetailPage = () => {
         if (active) {
           setLoadError("Impossible de charger les variantes du produit. Réessayez avant de l’ajouter au panier.");
           setLoading(false);
+          setVariantsLoading(false);
         }
       }
     };
@@ -459,6 +490,12 @@ export const ProductDetailPage = () => {
     } catch {
       // Keep the already-visible product image if this flavor gallery cannot load.
     }
+  };
+
+  const scrollRelated = (direction) => {
+    const viewport = relatedViewportRef.current;
+    if (!viewport) return;
+    viewport.scrollBy({ left: direction * viewport.clientWidth, behavior: "smooth" });
   };
 
   const handleVariantSelect = async (variant) => {
@@ -562,8 +599,9 @@ export const ProductDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-10 h-10 text-[#d90429] animate-spin" />
+      <div className="flex min-h-[60vh] items-center justify-center gap-3 text-sm font-semibold text-white" role="status" aria-label="Chargement de la fiche produit">
+        <Loader2 className="h-8 w-8 animate-spin text-[#d90429]" />
+        <span>Chargement de la fiche produit…</span>
       </div>
     );
   }
@@ -609,11 +647,17 @@ export const ProductDetailPage = () => {
     String(shopRouteFilters?.filter || "").trim().toLocaleLowerCase("fr")
   );
   const categoryIsSelected = selectedShopCategoryIds.length > 0 || Boolean(shopRouteFilters?.category);
-  const breadcrumbCategories = selectedBreadcrumbCategories.length > 0
-    ? selectedBreadcrumbCategories
-    : categoryIsSelected && product.category
-      ? [{ id: product.categoryId, name: product.category }]
-      : [{ id: null, name: "Toutes les offres" }];
+  const brandIsSelected = Boolean(product.brand && productOriginBrandId != null && [
+    product.brandId,
+    product.brandSlug,
+  ].some((id) => id != null && String(id).toLowerCase() === String(productOriginBrandId).toLowerCase()));
+  const breadcrumbCategories = brandIsSelected
+    ? [{ id: product.brandId ?? productOriginBrandId, name: product.brand, slug: product.brandSlug, isBrand: true }]
+    : selectedBreadcrumbCategories.length > 0
+      ? selectedBreadcrumbCategories
+      : categoryIsSelected && product.category
+        ? [{ id: product.categoryId, name: product.category }]
+        : [{ id: null, name: "Toutes les offres" }];
   const showNewBreadcrumb = product.isNew || newShopFilter;
 
   const selectedFlavorOption = product.flavorOptions.find((flavor) => flavor.name === selectedFlavor);
@@ -648,6 +692,14 @@ export const ProductDetailPage = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    if (category.isBrand) {
+                      viewBrandDetails({
+                        id: category.id,
+                        slug: category.slug,
+                        name: category.name,
+                      });
+                      return;
+                    }
                     setSearchQuery("");
                     if (category.id != null) {
                       setSelectedShopCategoryIds([category.id]);
@@ -777,8 +829,10 @@ export const ProductDetailPage = () => {
                   {(hasVariants ? selectedVariantOriginalPrice : product.originalPrice).toFixed(2)} TND
                 </span>
               )}
-              <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${(hasVariants ? selectedVariantInStock : product.inStock) ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
-                {hasVariants
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${variantsLoading ? 'border border-amber-500/30 bg-amber-500/10 text-amber-300' : (hasVariants ? selectedVariantInStock : product.inStock) ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border border-red-500/30 text-red-400'}`}>
+                {variantsLoading
+                  ? "Vérification du stock…"
+                  : hasVariants
                   ? selectedVariant ? selectedVariantInStock ? "En stock" : "Rupture de stock" : hasVariantFlavors ? "Choisissez une saveur" : "Choisissez une variante"
                   : product.inStock ? 'En stock' : 'Rupture de stock'}
               </span>
@@ -957,12 +1011,12 @@ export const ProductDetailPage = () => {
                   void addToCart(product, selectedFlavor, selectedSize, quantity);
                 }
               }}
-              disabled={variants.length > 0
+              disabled={variantsLoading || (variants.length > 0
                 ? !selectedVariant || !variantSku(selectedVariant) || Number(selectedVariant.stock ?? 0) <= 0
-                : !product.inStock || Boolean(loadError)}
+                : !product.inStock || Boolean(loadError))}
               className="min-w-0 flex-1 bg-[#d90429] hover:bg-[#b0021f] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-heading font-black text-xs uppercase tracking-wider h-[52px] px-6 rounded-xl shadow-xl shadow-[#d90429]/30 flex items-center justify-center gap-3 transition-all"
             >
-              <ShoppingCart className="w-5 h-5" /> {(hasVariants ? selectedVariantInStock : product.inStock) ? 'AJOUTER AU PANIER' : 'INDISPONIBLE'}
+              <ShoppingCart className="w-5 h-5" /> {variantsLoading ? 'VÉRIFICATION DU STOCK' : (hasVariants ? selectedVariantInStock : product.inStock) ? 'AJOUTER AU PANIER' : 'INDISPONIBLE'}
             </button>
           </div>
 
@@ -1118,9 +1172,44 @@ export const ProductDetailPage = () => {
       {/* Related Products */}
       {related.length > 0 && (
         <div className="space-y-6">
-          <h2 className="font-heading font-black text-xl text-white uppercase">MÊME CATÉGORIE</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {related.map(p => <ProductCard key={p.id} product={p} />)}
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="font-heading font-black text-xl text-white uppercase">MÊME CATÉGORIE</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-400" aria-live="polite">{relatedIndex + 1} / {related.length}</span>
+              <button
+                type="button"
+                onClick={() => scrollRelated(-1)}
+                disabled={relatedIndex === 0}
+                aria-label="Produit recommandé précédent"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRelated(1)}
+                disabled={relatedIndex >= related.length - 1}
+                aria-label="Produit recommandé suivant"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div
+            ref={relatedViewportRef}
+            onScroll={(event) => {
+              const { scrollLeft, clientWidth } = event.currentTarget;
+              if (clientWidth > 0) setRelatedIndex(Math.min(related.length - 1, Math.round(scrollLeft / clientWidth)));
+            }}
+            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-none"
+            aria-label="Produits recommandés"
+          >
+            {related.map((item) => (
+              <div key={item.id} className="w-full shrink-0 snap-center px-1 sm:px-2">
+                <ProductCard product={item} />
+              </div>
+            ))}
           </div>
         </div>
       )}

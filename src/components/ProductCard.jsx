@@ -1,10 +1,13 @@
 import React from "react";
 import { useCart } from "../context/CartContext";
 import { ShoppingBag } from "lucide-react";
+import { productImageUrl, resolveProductImage } from "../services/api";
 
 export const ProductCard = ({ product }) => {
   const { addToCart, viewProductDetails } = useCart();
-  const hasImage = !!product.image;
+  const image = resolveProductImage(product, null)
+    || productImageUrl(product.image ?? product.image_url ?? product.imageUrl);
+  const hasImage = !!image;
   const inStock = product.inStock !== false && Number(product.stock ?? 1) > 0;
   const hasDiscount = product.isOnSale
     || (Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price))
@@ -46,7 +49,7 @@ export const ProductCard = ({ product }) => {
 
         {hasImage ? (
           <img
-            src={product.image}
+            src={image}
             alt={product.name}
             width={1080}
             height={1080}

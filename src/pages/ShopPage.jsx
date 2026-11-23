@@ -321,7 +321,7 @@ export const ShopPage = () => {
   useEffect(() => {
     const requestVersion = ++imageRequestVersionRef.current;
     setProducts(pagedProducts);
-    void hydrateProductsWithImages(pagedProducts).then((productsWithImages) => {
+    void hydrateProductsWithImages(pagedProducts, true, true).then((productsWithImages) => {
       if (requestVersion !== imageRequestVersionRef.current) return;
       setProducts((currentProducts) => {
         const availabilityById = new Map(currentProducts.map((product) => [

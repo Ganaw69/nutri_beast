@@ -1,18 +1,52 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { reviewService } from '../../services/api';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { reviewService, productService, iriToId } from '../../services/api';
 import { Search, Check, X, Trash2, Loader2, Star, RefreshCw } from 'lucide-react';
 import { AdminActionButton } from '../../components/admin/AdminActionButton';
 
+const reviewProductReference = (review) => (
+  review.product
+  ?? review.productId
+  ?? review.product_id
+  ?? review.productIri
+  ?? review.product_iri
+);
+
+const reviewProductId = (review) => {
+  const product = reviewProductReference(review);
+  return iriToId(typeof product === 'object' && product !== null
+    ? product.id ?? product['@id'] ?? product.iri
+    : product);
+};
+
+const embeddedReviewProductName = (review) => {
+  const product = reviewProductReference(review);
+  return (typeof product === 'object' && product !== null ? product.name : '')
+    || review.productName
+    || review.product_name
+    || '';
+};
+
+const reviewProductName = (review, productNames) => {
+  const name = embeddedReviewProductName(review);
+  if (name) return name;
+  const id = reviewProductId(review);
+  return id === null ? 'Produit non renseigné' : productNames[String(id)] || `Produit #${id}`;
+};
+
 export const ReviewManager = () => {
   const [reviews, setReviews] = useState([]);
+  const [productNames, setProductNames] = useState({});
+  const [productLookupError, setProductLookupError] = useState('');
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending'); // all | pending | approved | rejected
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const productNameCache = useRef(new Map());
 
   const fetchReviews = useCallback(async () => {
     setLoading(true);
     setError('');
+    setProductLookupError('');
     try {
       // Fetch the complete moderation list. Filtering with approved/rejected
       // query parameters is not supported consistently by every API version.
@@ -28,6 +62,41 @@ export const ReviewManager = () => {
   }, []);
 
   useEffect(() => { fetchReviews(); }, [fetchReviews]);
+
+  useEffect(() => {
+    let active = true;
+    const productIds = [...new Set(reviews
+      .filter((review) => (
+        !embeddedReviewProductName(review)
+        && !productNames[String(reviewProductId(review))]
+      ))
+      .map(reviewProductId)
+      .filter((id) => id !== null && !productNameCache.current.has(String(id))))];
+    if (!productIds.length) return undefined;
+
+    Promise.allSettled(productIds.map((id) => productService.getOne(id))).then((results) => {
+      if (!active) return;
+      const fetchedNames = {};
+      const failedIds = [];
+      results.forEach((result, index) => {
+        const id = String(productIds[index]);
+        if (result.status === 'fulfilled' && result.value?.name) {
+          fetchedNames[id] = result.value.name;
+          productNameCache.current.set(id, result.value.name);
+        } else {
+          failedIds.push(id);
+        }
+      });
+      if (Object.keys(fetchedNames).length) {
+        setProductNames((current) => ({ ...current, ...fetchedNames }));
+      }
+      if (failedIds.length) {
+        setProductLookupError(`Impossible de charger le nom de ${failedIds.length} produit(s) associé(s) aux avis.`);
+      }
+    });
+
+    return () => { active = false; };
+  }, [reviews, productNames]);
 
   const reviewStatus = (review) => {
     if (review.approved === true || review.status === 'approved') return 'approved';
@@ -50,7 +119,8 @@ export const ReviewManager = () => {
     const matchesSearch = !query
       || review.customerName?.toLowerCase().includes(query)
       || review.comment?.toLowerCase().includes(query)
-      || review.email?.toLowerCase().includes(query);
+      || review.email?.toLowerCase().includes(query)
+      || String(reviewProductName(review, productNames)).toLowerCase().includes(query);
     return matchesStatus && matchesSearch;
   });
 
@@ -85,6 +155,7 @@ export const ReviewManager = () => {
         </div>
         <div className="divide-y divide-[#2a2a2a]">
           {error && <div role="alert" className="p-5 text-sm text-red-300">{error}</div>}
+          {productLookupError && <div role="status" className="px-5 pt-4 text-xs text-amber-300">{productLookupError}</div>}
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 text-[#d90429] animate-spin" /></div>
           ) : filtered.map(r => (
@@ -104,7 +175,9 @@ export const ReviewManager = () => {
                   </span>
                 </div>
                 <p className="text-xs text-gray-300 line-clamp-2">{r.comment}</p>
-                <p className="text-xs text-gray-500 mt-1">{r.product?.name || r.productName || '—'}</p>
+                <p className="mt-2 text-xs text-gray-400">
+                  Produit : <span className="font-semibold text-white">{reviewProductName(r, productNames)}</span>
+                </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {reviewStatus(r) !== 'approved' && (

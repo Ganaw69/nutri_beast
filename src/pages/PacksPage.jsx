@@ -199,7 +199,7 @@ export const PackDetailPage = () => {
         const product = fetched || (typeof reference === "object" ? reference : null);
         return product ? { ...product, mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url } : null;
       });
-      const hydratedProducts = await hydrateProductsWithImages(products.filter(Boolean), true);
+      const hydratedProducts = await hydrateProductsWithImages(products.filter(Boolean), true, true);
       const hydratedById = new Map(hydratedProducts.map((product) => [String(entityId(product)), product]));
       const details = usableRelations.map(({ relationId, relationData }) => {
         const product = hydratedById.get(String(entityId(relationData.product)));

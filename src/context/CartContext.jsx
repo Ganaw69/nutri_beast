@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { couponService, productService, productVariantService, resolvePackImage, resolveProductImage } from "../services/api";
+import { couponService, iriToId, productService, productVariantService, resolvePackImage, resolveProductImage } from "../services/api";
 import { FREE_SHIPPING_THRESHOLD } from "../config/store";
 
 const CartContext = createContext();
@@ -142,6 +142,7 @@ export const CartProvider = ({ children }) => {
   const [selectedProductSlug, setSelectedProductSlug] = useState(initialRoute.productSlug || null);
   const [selectedPackId, setSelectedPackId] = useState(initialRoute.packId || null);
   const [selectedBrandId, setSelectedBrandId] = useState(initialRoute.brandId || null);
+  const [productOriginBrandId, setProductOriginBrandId] = useState(null);
   const [customPackDraft, setCustomPackDraft] = useState([]);
   const [selectedCustomPackId, setSelectedCustomPackId] = useState(null);
   const [customPackQuote, setCustomPackQuote] = useState(null);
@@ -504,8 +505,15 @@ export const CartProvider = ({ children }) => {
 
   const viewProductDetails = async (productOrId) => {
     let product = typeof productOrId === "object" && productOrId !== null ? productOrId : null;
-    const productId = product?.id ?? productOrId;
-    if (!product?.name || !productId) {
+    const rawProductId = product?.id
+      ?? product?.productId
+      ?? product?.product_id
+      ?? product?.["@id"]
+      ?? product?.iri
+      ?? product?.slug
+      ?? productOrId;
+    const productId = iriToId(rawProductId) ?? rawProductId;
+    if (!product?.name || !productId || typeof productId === "object") {
       try {
         product = await productService.getOne(productId, true);
       } catch (error) {
@@ -516,6 +524,7 @@ export const CartProvider = ({ children }) => {
     }
 
     const slug = productSlug(product);
+    setProductOriginBrandId(activeTab === "brand-detail" ? selectedBrandId : null);
     setSelectedProductId(productId);
     setSelectedProductSlug(slug || null);
     setActiveTab("product-detail");
@@ -612,6 +621,7 @@ export const CartProvider = ({ children }) => {
         selectedPackId,
         viewPackDetails,
         selectedBrandId,
+        productOriginBrandId,
         viewBrandDetails,
         customPackDraft,
         setCustomPackDraft,

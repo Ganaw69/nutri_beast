@@ -57,8 +57,35 @@ const displayRelationNames = (items = []) => (Array.isArray(items) ? items : [])
   .map((item) => typeof item === 'string' ? item.split('/').pop() : displayName(item))
   .filter(Boolean)
   .join(', ') || '—';
-const entityId = (item) => item?.id ?? iriToId(item?.['@id'] || item?.iri);
+const entityId = (item) => {
+  const id = item?.id ?? item?.['@id'] ?? item?.iri;
+  return iriToId(id) ?? id ?? null;
+};
 const relationId = (value) => typeof value === 'object' && value !== null ? entityId(value) : iriToId(value);
+const flattenCategories = (items = []) => items.flatMap((item) => [
+  item,
+  ...flattenCategories(item.children || []),
+]);
+const productCategoryPath = (product, categories) => {
+  const relation = product?.category;
+  const categoryId = typeof relation === 'object' && relation !== null
+    ? entityId(relation)
+    : iriToId(relation);
+  const category = categories.find((item) => String(entityId(item)) === String(categoryId))
+    || (typeof relation === 'object' && relation !== null ? relation : null);
+  const categoryName = displayName(category)
+    || displayName(relation)
+    || (typeof relation === 'string' && !relation.includes('/') && !/^\d+$/.test(relation) ? relation : '');
+  if (!categoryName) return '—';
+
+  const parentId = getCategoryParentId(category);
+  const parent = categories.find((item) => String(entityId(item)) === String(parentId));
+  const parentName = displayName(parent)
+    || (typeof category?.parent === 'object' ? displayName(category.parent) : '');
+  return parentName && parentName !== categoryName
+    ? `${parentName} / ${categoryName}`
+    : categoryName;
+};
 const variantProductId = (variant) => relationId(variant?.product ?? variant?.productId ?? variant?.productIri);
 const variantSku = (variant) => variant?.sku ?? variant?.SKU ?? '';
 const variantLabel = (variant) => {
@@ -1136,17 +1163,53 @@ export const ProductManager = () => {
     setDetailsModal({ product, images: [], loading: true, error: '' });
     try {
       const fullProduct = await productService.getOne(product.id).catch(() => product);
-      const [images, variantsResponse] = await Promise.all([
+      const categoryRelation = fullProduct.category ?? product.category;
+      const categoryId = relationId(categoryRelation);
+      const brandRelation = fullProduct.brand ?? product.brand;
+      const brandId = relationId(brandRelation);
+      const knownCategories = [...categoryItems, ...flattenCategories(productCategoryTree)];
+      const knownCategory = knownCategories.find((category) => String(entityId(category)) === String(categoryId));
+      const knownBrand = brands.find((brand) => String(entityId(brand)) === String(brandId));
+      let categoryError = '';
+      const categoryPromise = displayName(categoryRelation)
+        ? Promise.resolve(categoryRelation)
+        : knownCategory
+          ? Promise.resolve(knownCategory)
+          : categoryId == null
+            ? Promise.resolve(null)
+            : categoryService.getOne(categoryId, true).catch((error) => {
+              categoryError = `La catégorie n’a pas pu être chargée : ${error.message}`;
+              return null;
+            });
+      const brandPromise = displayName(brandRelation)
+        ? Promise.resolve(brandRelation)
+        : knownBrand
+          ? Promise.resolve(knownBrand)
+          : brandId == null
+            ? Promise.resolve(null)
+            : brandService.getOne(brandId, true).catch((error) => {
+              const brandError = `La marque n’a pas pu être chargée : ${error.message}`;
+              categoryError = [categoryError, brandError].filter(Boolean).join(' ');
+              return null;
+            });
+      const [images, variantsResponse, categoryDetails, brandDetails] = await Promise.all([
         hydrateProductImages(fullProduct.id || product.id, fullProduct.productImages || product.productImages || []),
         productVariantService.getAll({ 'product.id': product.id }, true, true),
+        categoryPromise,
+        brandPromise,
       ]);
       const primaryIndex = images.findIndex(isPrimaryProductImage);
       setSelectedDetailImage(primaryIndex >= 0 ? primaryIndex : 0);
       setDetailsModal({
-        product: { ...fullProduct, variants: variantsResponse['hydra:member'] },
+        product: {
+          ...fullProduct,
+          category: categoryDetails || categoryRelation,
+          brand: brandDetails || brandRelation,
+          variants: variantsResponse['hydra:member'],
+        },
         images,
         loading: false,
-        error: '',
+        error: categoryError,
       });
     } catch (e) {
       setDetailsModal({ product, images: [], loading: false, error: e.message || 'Impossible de charger les détails.' });
@@ -1438,7 +1501,7 @@ export const ProductManager = () => {
                       </div>
                       <div>
                         <div className="font-bold text-white text-sm">{p.name}</div>
-                        <div className="text-xs text-gray-500">{p.category?.name || '—'}</div>
+                        <div className="text-xs text-gray-500">{productCategoryPath(p, categoryItems)}</div>
                       </div>
                     </div>
                   </td>
@@ -2066,13 +2129,18 @@ export const ProductManager = () => {
         const salePrice = Number(product.salePrice || 0);
         const hasPromotion = salePrice > 0 && salePrice < price;
         const finalPrice = hasPromotion ? salePrice : price;
-        const brand = displayBrandName(product.brand) || product.brandName || product.brand_name || '?';
+        const brandId = relationId(product.brand);
+        const brandRecord = brands.find((item) => String(entityId(item)) === String(brandId));
+        const resolvedBrandName = displayBrandName(brandRecord || product.brand);
+        const brand = resolvedBrandName && resolvedBrandName !== String(brandId)
+          ? resolvedBrandName
+          : product.brandName || product.brand_name || '?';
         const amount = product.montantRemise ?? product.montant_remise;
         const headerFormat = [product.weight ? `${product.weight} kg` : '', product.productOptions?.type].filter(Boolean).join(' ? ');
         const details = [
           ...(product.variants?.length > 0 ? [] : [[Barcode, 'SKU', product.sku || '?']]),
           [Barcode, 'Code-barres', product.barcode || '?'],
-          [Layers, 'Cat?gorie', displayName(product.category) || '?'],
+          [Layers, 'Catégorie', productCategoryPath(product, [...categoryItems, ...flattenCategories(productCategoryTree)])],
           [BadgeCheck, 'Marque', brand],
           [Weight, 'Poids', product.weight ? `${product.weight} kg` : '?'],
           [Target, 'Objectifs', displayRelationNames(product.goals)],

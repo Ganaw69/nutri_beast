@@ -150,7 +150,7 @@ export const BrandDetailPage = () => {
       setProducts(availableProducts.map(normalizeProduct));
       setLoading(false);
 
-      void hydrateProductsWithImages(availableProducts, true).then((productsWithImages) => {
+      void hydrateProductsWithImages(availableProducts, true, true).then((productsWithImages) => {
         if (current) setProducts(productsWithImages.map(normalizeProduct));
       }).catch(() => {
         // The product list remains usable when optional image hydration fails.

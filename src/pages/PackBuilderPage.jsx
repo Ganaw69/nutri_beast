@@ -218,7 +218,7 @@ export const PackBuilderPage = () => {
           mainImage: product.mainImage ?? product.mainImageUrl ?? product.main_image_url,
         }));
         if (current) setProducts(readyProducts);
-        void hydrateProductsWithImages(readyProducts, true).then((hydratedProducts) => {
+        void hydrateProductsWithImages(readyProducts, true, true).then((hydratedProducts) => {
           if (!current) return;
           const hydratedById = new Map(hydratedProducts.map((product) => [String(idOf(product)), product]));
           setProducts((currentProducts) => currentProducts.map((product) => {

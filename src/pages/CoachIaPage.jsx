@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Bot, Send, User, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { coachApi } from "../services/coachApi";
-import { productService, resolveProductImage } from "../services/api";
+import { hydrateProductsWithImages, iriToId, productService, resolveProductImage } from "../services/api";
 import { useCart } from "../context/CartContext";
 
 const createMessage = (sender, text, extra = {}) => ({
@@ -62,7 +62,46 @@ const renderMessageText = (text) => {
 
 
 const loadRecommendedProducts = async (replyText, apiProducts = []) => {
-  const products = [...(Array.isArray(apiProducts) ? apiProducts : [])];
+  const normalizeRecommendation = (recommendation) => {
+    const item = typeof recommendation === "string" ? { product: recommendation } : recommendation || {};
+    const nestedProduct = item.product && typeof item.product === "object" ? item.product : null;
+    const product = nestedProduct ? { ...item, ...nestedProduct } : { ...item };
+    const variant = item.variant || (nestedProduct ? item : product.variants?.[0]);
+    const relationId = nestedProduct?.id
+      ?? iriToId(nestedProduct?.["@id"] ?? nestedProduct?.iri)
+      ?? (typeof item.product === "string" || typeof item.product === "number" ? iriToId(item.product) : null);
+    const rawId = relationId
+      ?? item.product_id
+      ?? item.productId
+      ?? item.id
+      ?? iriToId(item["@id"] ?? item.iri);
+    const id = iriToId(rawId) ?? rawId;
+    const variantImage = variant?.image
+      ?? variant?.image_url
+      ?? variant?.imageUrl
+      ?? variant?.mainImageUrl;
+    const productImages = Array.isArray(product.productImages) ? [...product.productImages] : [];
+    if (variantImage) productImages.push({ image: variantImage });
+
+    return {
+      ...product,
+      id,
+      name: product.name ?? product.product_name ?? item.name ?? item.product_name,
+      brand: product.brand?.name ?? product.brandName ?? product.brand_name ?? (typeof product.brand === "string" ? product.brand : ""),
+      category: product.category?.name ?? product.categoryName ?? (typeof product.category === "string" ? product.category : ""),
+      image: product.image
+        ?? product.image_url
+        ?? product.imageUrl
+        ?? product.mainImageUrl
+        ?? variantImage
+        ?? item.image_url
+        ?? item.imageUrl,
+      productImages,
+      price: product.salePrice ?? product.price ?? item.salePrice ?? item.price,
+    };
+  };
+  const products = (Array.isArray(apiProducts) ? apiProducts : [])
+    .map(normalizeRecommendation);
   const knownIds = new Set(products.map((product) =>
     String(product.id ?? product.product_id ?? product.productId ?? "")
   ));
@@ -82,11 +121,18 @@ const loadRecommendedProducts = async (replyText, apiProducts = []) => {
 
   fetched.forEach((result) => {
     if (result.status === "fulfilled" && result.value) {
-      products.push(result.value);
+      products.push(normalizeRecommendation(result.value));
     }
   });
 
-  return products.map((product) => {
+  const uniqueProducts = new Map();
+  products.forEach((product, index) => {
+    const key = product.id != null ? String(product.id) : `recommendation-${index}`;
+    uniqueProducts.set(key, { ...uniqueProducts.get(key), ...product });
+  });
+  const hydratedProducts = await hydrateProductsWithImages([...uniqueProducts.values()], true, true);
+
+  return hydratedProducts.map((product) => {
     const id = product.id ?? product.product_id ?? product.productId;
     const price = Number(product.salePrice ?? product.price);
 
@@ -101,7 +147,11 @@ const loadRecommendedProducts = async (replyText, apiProducts = []) => {
         ...product,
         image: product.image ?? product.image_url ?? product.imageUrl,
       }),
-      href: id ? `#product/${encodeURIComponent(id)}` : null,
+      href: id
+        ? `#product/${encodeURIComponent(id)}`
+        : product.slug
+          ? `#product/${encodeURIComponent(product.slug)}`
+          : null,
     };
   });
 };
@@ -113,17 +163,12 @@ export const CoachIaPage = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [apiStatus, setApiStatus] = useState("online");
   const messagesContainerRef = useRef(null);
-  const newestMessageRef = useRef(null);
   const requestControllerRef = useRef(null);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
-    const newestMessage = newestMessageRef.current;
-    if (!container || !newestMessage) return;
-
-    const { top, bottom } = container.getBoundingClientRect();
-    if (bottom <= 0 || top >= window.innerHeight) return;
-    newestMessage.scrollIntoView({ behavior: "smooth", block: "nearest", container: "nearest" });
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping]);
 
   useEffect(() => () => requestControllerRef.current?.abort(), []);
@@ -190,7 +235,7 @@ export const CoachIaPage = () => {
   const statusLabels = { online: "EN LIGNE", checking: "VÉRIFICATION", offline: "INDISPONIBLE" };
 
   return (
-    <div className="w-full max-w-5xl mx-auto min-h-[calc(100dvh-11rem)] px-4 sm:px-6 lg:px-8 py-6 sm:py-10 flex flex-col justify-center gap-4 sm:gap-6">
+    <div className="mx-auto flex min-h-[calc(100dvh-9rem)] w-full max-w-6xl min-w-0 flex-col justify-center gap-3 px-3 py-3 sm:gap-6 sm:px-6 sm:py-10 lg:px-8">
       <div className="bg-gradient-to-r from-surface-dark via-surface-high to-surface-dark border border-accent-gold/40 p-4 sm:p-6 rounded-2xl flex items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-accent-gold/20 text-accent-gold flex items-center justify-center border border-accent-gold/40 shadow-lg">
@@ -232,13 +277,12 @@ export const CoachIaPage = () => {
         ))}
       </div>
 
-      <div className="bg-surface border border-white/10 rounded-2xl h-[min(480px,calc(100dvh-18rem))] min-h-[360px] flex flex-col justify-between overflow-hidden shadow-2xl">
+      <div className="flex h-[min(560px,calc(100dvh-19rem))] min-h-[320px] flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-2xl sm:min-h-[400px]">
         <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-6 space-y-4">
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <div
               key={message.id}
-              ref={index === messages.length - 1 && !isTyping ? newestMessageRef : null}
-              className={`flex gap-3 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex min-w-0 gap-3 ${message.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               {message.sender === "ai" && (
                 <div className="w-8 h-8 rounded-full bg-accent-gold text-background flex items-center justify-center shrink-0 font-bold shadow-md">
@@ -247,7 +291,7 @@ export const CoachIaPage = () => {
               )}
 
               <div
-                className={`max-w-[90%] sm:max-w-2xl p-4 sm:p-5 rounded-2xl text-sm sm:text-base ${
+                className={`min-w-0 max-w-[calc(100%_-_2.75rem)] p-4 text-sm sm:max-w-2xl sm:p-5 sm:text-base ${
                   message.sender === "user"
                     ? "bg-primary text-white rounded-br-none shadow-md shadow-primary/20 font-medium"
                     : "bg-surface-high border border-white/10 text-on-surface rounded-bl-none"
@@ -263,7 +307,8 @@ export const CoachIaPage = () => {
                       ...product,
                       image: product.image ?? product.image_url ?? product.imageUrl,
                     });
-                    const productHref = product.href || (productId ? `#product/${productId}` : null);
+                    const productHref = product.href
+                      || (productId ? `#product/${encodeURIComponent(productId)}` : product.slug ? `#product/${encodeURIComponent(product.slug)}` : null);
                     const productMeta = [product.brand, product.category]
                       .filter((value) =>
                         typeof value === "string" &&
@@ -274,12 +319,14 @@ export const CoachIaPage = () => {
                     return (
                   <a
                     key={`${productId || productName}-${productIndex}`}
-                    href={productHref || "#"}
+                    href={productHref || undefined}
                     onClick={(event) => {
-                      event.preventDefault();
-                      if (productId) void viewProductDetails({ ...product, id: productId, name: productName });
+                      if (productId) {
+                        event.preventDefault();
+                        void viewProductDetails({ ...product, id: productId, name: productName });
+                      }
                     }}
-                    className="flex items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
+                    className="flex min-w-0 items-center gap-3 rounded-xl border border-accent-gold/40 bg-surface-low p-3 transition-colors hover:border-accent-gold hover:bg-surface"
                     aria-label={`Voir le produit ${productName}`}
                   >
                     {productImage ? (
@@ -315,7 +362,7 @@ export const CoachIaPage = () => {
           ))}
 
           {isTyping && (
-            <div ref={newestMessageRef} className="flex gap-3 justify-start items-center">
+            <div className="flex gap-3 justify-start items-center">
               <div className="w-8 h-8 rounded-full bg-accent-gold text-background flex items-center justify-center font-bold">
                 <Bot className="w-5 h-5" />
               </div>

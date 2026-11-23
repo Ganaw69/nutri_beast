@@ -214,8 +214,8 @@ export const HomePage = () => {
       setLoading(false);
 
       void Promise.all([
-        hydrateProductsWithImages(availableProducts),
-        hydrateProductsWithImages(availableNewProducts),
+        hydrateProductsWithImages(availableProducts, true, true),
+        hydrateProductsWithImages(availableNewProducts, true, true),
       ]).then(([bestSellersWithImages, newProductsWithImages]) => {
         if (!active) return;
         setBestSellers((current) => mergeHydratedProductImages(bestSellersWithImages, current));

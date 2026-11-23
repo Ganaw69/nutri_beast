@@ -40,8 +40,9 @@ const AdminPage = lazyPage(() => import("./pages/admin/AdminPage"), "AdminPage")
 const AdminLoginPage = lazyPage(() => import("./pages/admin/AdminLoginPage"), "AdminLoginPage");
 
 const PageLoader = () => (
-  <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Chargement">
+  <div className="flex min-h-[45vh] items-center justify-center gap-3 text-sm font-semibold text-white" role="status" aria-label="Chargement">
     <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#d90429] border-t-transparent" />
+    <span>Chargement de la page…</span>
   </div>
 );
 

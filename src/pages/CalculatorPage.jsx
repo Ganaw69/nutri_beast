@@ -60,7 +60,7 @@ export const CalculatorPage = () => {
 
         // Collection responses can omit the image object. Hydrate the real
         // product-image records before rendering the recommendation cards.
-        const productsWithImages = await hydrateProductsWithImages(products, true).catch(() => products);
+        const productsWithImages = await hydrateProductsWithImages(products, true, true).catch(() => products);
 
         if (active) setCatalog(productsWithImages.map(normalizeProduct));
       } catch {

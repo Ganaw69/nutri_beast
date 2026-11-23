@@ -46,7 +46,7 @@ export const NewProductsPage = () => {
         setProducts(newProducts);
         setLoading(false);
 
-        void hydrateProductsWithImages(newProducts).then((hydratedProducts) => {
+        void hydrateProductsWithImages(newProducts, true, true).then((hydratedProducts) => {
           if (active) setProducts(hydratedProducts);
         }).catch(() => {
           // Product data remains usable if optional image hydration fails.

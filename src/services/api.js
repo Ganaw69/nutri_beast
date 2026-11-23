@@ -1036,7 +1036,7 @@ const hasEmbeddedProductImage = (product) => {
   });
 };
 
-export const hydrateProductsWithImages = async (products = [], skipAuth = true) => {
+export const hydrateProductsWithImages = async (products = [], skipAuth = true, includeVariantImages = false) => {
   if (!products.length) return products;
 
   const productsWithoutImages = products.filter((product) => !hasEmbeddedProductImage(product));
@@ -1046,14 +1046,22 @@ export const hydrateProductsWithImages = async (products = [], skipAuth = true) 
   // per card. The API Platform filter is intentionally relation-based so it
   // remains valid when products use UUIDs rather than numeric ids.
   const productIds = productsWithoutImages
-    .map((product) => product?.id ?? iriToId(product?.['@id'] || product?.iri))
+    .map((product) => {
+      const id = product?.id ?? product?.product_id ?? product?.productId ?? iriToId(product?.['@id'] || product?.iri);
+      return iriToId(id) ?? id;
+    })
     .filter((id) => id !== null && id !== undefined);
-  const data = await productService
-    .getImages({
+  if (productIds.length === 0) return products;
+  const [data, variantData] = await Promise.all([
+    productService.getImages({
       itemsPerPage: Math.max(1, productIds.length * 2),
       ...(productIds.length ? { 'product.id[]': productIds } : {}),
-    }, skipAuth)
-    .catch(() => ({ 'hydra:member': [] }));
+    }, skipAuth).catch(() => ({ 'hydra:member': [] })),
+    includeVariantImages
+      ? productVariantService.getAllPages({ 'product.id[]': productIds }, skipAuth, true)
+        .catch(() => ({ 'hydra:member': [] }))
+      : Promise.resolve({ 'hydra:member': [] }),
+  ]);
   const imagesByProduct = new Map();
   (data?.['hydra:member'] || data?.member || data?.items || []).forEach((image) => {
     const productId = getProductImageProductId(image);
@@ -1062,11 +1070,58 @@ export const hydrateProductsWithImages = async (products = [], skipAuth = true) 
     imagesByProduct.set(key, [...(imagesByProduct.get(key) || []), image]);
   });
 
+  const variantProductIds = new Map();
+  const variantsByProduct = new Map();
+  (variantData?.['hydra:member'] || variantData?.member || variantData?.items || []).forEach((variant) => {
+    const rawProduct = variant?.product ?? variant?.productId ?? variant?.productIri;
+    const rawProductId = typeof rawProduct === 'object'
+      ? rawProduct.id ?? rawProduct['@id'] ?? rawProduct.iri
+      : rawProduct;
+    const productId = iriToId(rawProductId) ?? rawProductId;
+    const rawVariantId = variant?.id ?? iriToId(variant?.['@id'] || variant?.iri);
+    const variantId = iriToId(rawVariantId) ?? rawVariantId;
+    if (productId == null || variantId == null) return;
+    const productKey = String(productId);
+    const variantKey = String(variantId);
+    variantProductIds.set(variantKey, productKey);
+    variantsByProduct.set(productKey, [...(variantsByProduct.get(productKey) || []), variant]);
+  });
+
+  const variantIds = includeVariantImages ? [...variantProductIds.keys()] : [];
+  const variantImageData = variantIds.length
+    ? await productService.getImages({
+      itemsPerPage: Math.max(1, variantIds.length * 2),
+      'variant.id[]': variantIds,
+    }, skipAuth).catch(() => ({ 'hydra:member': [] }))
+    : { 'hydra:member': [] };
+  const variantImagesByProduct = new Map();
+  (variantImageData?.['hydra:member'] || variantImageData?.member || variantImageData?.items || []).forEach((image) => {
+    const rawVariant = image?.variant ?? image?.productVariant ?? image?.variantId ?? image?.variant_id;
+    const rawVariantId = typeof rawVariant === 'object'
+      ? rawVariant.id ?? rawVariant['@id'] ?? rawVariant.iri
+      : rawVariant;
+    const variantId = iriToId(rawVariantId) ?? rawVariantId;
+    const productKey = variantProductIds.get(String(variantId));
+    if (!productKey) return;
+    variantImagesByProduct.set(productKey, [...(variantImagesByProduct.get(productKey) || []), image]);
+  });
+
   return products.map((product) => {
     if (hasEmbeddedProductImage(product)) return product;
-    const productId = product?.id ?? iriToId(product?.['@id'] || product.iri);
+    const rawProductId = product?.id ?? product?.product_id ?? product?.productId ?? iriToId(product?.['@id'] || product.iri);
+    const productId = iriToId(rawProductId) ?? rawProductId;
+    const productKey = String(productId);
     const embeddedImages = Array.isArray(product.productImages) ? product.productImages : [];
-    const productImages = [...embeddedImages, ...(imagesByProduct.get(String(productId)) || [])];
+    const inlineVariantImages = (variantsByProduct.get(productKey) || [])
+      .map((variant) => variant.image ?? variant.image_url ?? variant.imageUrl ?? variant.mainImageUrl)
+      .filter(Boolean)
+      .map((image) => ({ image }));
+    const productImages = [
+      ...embeddedImages,
+      ...(imagesByProduct.get(productKey) || []),
+      ...(variantImagesByProduct.get(productKey) || []),
+      ...inlineVariantImages,
+    ];
     return productImages.length > 0 ? { ...product, productImages } : product;
   });
 };

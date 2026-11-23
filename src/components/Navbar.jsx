@@ -329,7 +329,7 @@ export const Navbar = () => {
         setSearchSuggestions(suggestions);
         setSearchLoading(false);
         if (suggestions.length > 0) {
-          const suggestionsWithImages = await hydrateProductsWithImages(suggestions, true);
+          const suggestionsWithImages = await hydrateProductsWithImages(suggestions, true, true);
           if (current) setSearchSuggestions(suggestionsWithImages);
         }
       } catch {
@@ -1071,6 +1071,14 @@ export const Navbar = () => {
                   </div>
                   {openCategoryId === item.id && item.children?.length > 0 && (
                     <div className="mx-3 mb-3 space-y-1 border-l border-red-500/70 pl-3">
+                      <button
+                        type="button"
+                        onClick={() => handleSubCategoryClick(item)}
+                        aria-label={`Voir toute la catégorie ${item.label}`}
+                        className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-bold text-[#ff7186] hover:bg-neutral-900 hover:text-white"
+                      >
+                        Tout voir · {item.label}
+                      </button>
                       {item.children.map((child) => (
                         <button key={child.id} onClick={() => handleSubCategoryClick(child)} className="block w-full rounded px-2 py-1.5 text-left text-[11px] font-normal text-gray-300 hover:bg-neutral-900 hover:text-white">
                           {child.name}
