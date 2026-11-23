@@ -258,6 +258,7 @@ export const ProductDetailPage = () => {
   const [selectedBreadcrumbCategories, setSelectedBreadcrumbCategories] = useState([]);
   const [related, setRelated] = useState([]);
   const [relatedIndex, setRelatedIndex] = useState(0);
+  const [relatedVisibleCount, setRelatedVisibleCount] = useState(1);
   const [variants, setVariants] = useState([]);
   const [selectedVariantKey, setSelectedVariantKey] = useState("");
   const [reviews, setReviews] = useState([]);
@@ -271,6 +272,13 @@ export const ProductDetailPage = () => {
   const descriptionRef = useRef(null);
   const relatedViewportRef = useRef(null);
   const flavorImageRequestRef = useRef(0);
+
+  useEffect(() => {
+    const updateVisibleCount = () => setRelatedVisibleCount(window.innerWidth >= 1024 ? 4 : 1);
+    updateVisibleCount();
+    window.addEventListener("resize", updateVisibleCount, { passive: true });
+    return () => window.removeEventListener("resize", updateVisibleCount);
+  }, []);
 
   const [selectedFlavor, setSelectedFlavor] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
@@ -365,8 +373,40 @@ export const ProductDetailPage = () => {
         const productFlavorIds = (prod.flavors || []).map(getRelationId).filter((id) => id != null);
         const imageRequest = productService.getImages({ product: `/api/products/${selectedProductId}`, itemsPerPage: 100 }, true)
           .catch(() => ({ 'hydra:member': [] }));
-        const relatedRequest = productService.getAll(relatedParams, true)
-          .catch(() => ({ 'hydra:member': [] }));
+        const relatedRequest = (async () => {
+          const getMembers = (response) => response?.['hydra:member'] || response?.member || response?.items || [];
+          const chooseRelated = (items) => {
+            const seen = new Set();
+            return items.filter((item) => {
+              const id = getRelationId(item.id ?? item['@id'] ?? item.iri);
+              const key = String(id ?? item.name);
+              if (!isAvailableProduct(item)
+                || String(id) === String(prod.id)
+                || (productCategoryId && String(getRelationId(item.category)) !== String(productCategoryId))
+                || seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            }).slice(0, 8);
+          };
+
+          let selected = [];
+          try {
+            selected = chooseRelated(getMembers(await productService.getAll(relatedParams, true)));
+          } catch (error) {
+            console.warn("Unable to load category recommendations.", error);
+          }
+
+          if (selected.length < 4 && productCategoryId) {
+            try {
+              const fallback = await productService.getAll({ isActive: true, itemsPerPage: 100 }, true);
+              const fallbackSelection = chooseRelated(getMembers(fallback));
+              if (fallbackSelection.length > selected.length) selected = fallbackSelection;
+            } catch (error) {
+              console.warn("Unable to load fallback product recommendations.", error);
+            }
+          }
+          return selected;
+        })();
         const reviewRequest = reviewService.getAll({ 'product.id': selectedProductId, approved: true }, true)
           .catch(() => ({ 'hydra:member': [] }));
         const flavorRequest = flavorService.getAll({ itemsPerPage: 100 }, true)
@@ -386,7 +426,7 @@ export const ProductDetailPage = () => {
         setSelectedVariantKey(firstAvailableVariant ? variantKey(firstAvailableVariant) : "");
         setVariantsLoading(false);
 
-        const [imageData, relData, revData, flavorData, flavorDetails, brandData, categoryData] = await Promise.all([
+        const [imageData, relatedProducts, revData, flavorData, flavorDetails, brandData, categoryData] = await Promise.all([
           imageRequest,
           relatedRequest,
           reviewRequest,
@@ -441,13 +481,14 @@ export const ProductDetailPage = () => {
         setSelectedFlavor(initialVariantFlavor?.name || (activeVariants.length === 0 ? hydratedInitialFlavor?.name || "" : ""));
 
         const relatedWithImages = await hydrateProductsWithImages(
-          (relData['hydra:member'] || []).filter((item) => isAvailableProduct(item) && String(item.id) !== String(prod.id) && (!productCategoryId || String(getRelationId(item.category)) === String(productCategoryId))).slice(0, 8),
+          relatedProducts,
           true,
           true
         );
         if (!active) return;
         const relProds = relatedWithImages.map((item) => normalizeProduct(item, flavorCatalog));
         setRelatedIndex(0);
+        relatedViewportRef.current?.scrollTo({ left: 0, behavior: "auto" });
         setRelated(relProds);
         setReviews(revData['hydra:member'] || []);
         setLoading(false);
@@ -1173,9 +1214,13 @@ export const ProductDetailPage = () => {
       {related.length > 0 && (
         <div className="space-y-6">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="font-heading font-black text-xl text-white uppercase">MÊME CATÉGORIE</h2>
+            <h2 className="font-heading font-black text-xl text-white uppercase">PRODUITS RECOMMANDÉS</h2>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400" aria-live="polite">{relatedIndex + 1} / {related.length}</span>
+              <span className="text-xs font-bold text-gray-400" aria-live="polite">
+                {relatedIndex + 1}{Math.min(related.length, relatedIndex + relatedVisibleCount) > relatedIndex + 1
+                  ? `-${Math.min(related.length, relatedIndex + relatedVisibleCount)}`
+                  : ""} / {related.length}
+              </span>
               <button
                 type="button"
                 onClick={() => scrollRelated(-1)}
@@ -1188,7 +1233,7 @@ export const ProductDetailPage = () => {
               <button
                 type="button"
                 onClick={() => scrollRelated(1)}
-                disabled={relatedIndex >= related.length - 1}
+                disabled={relatedIndex >= Math.max(0, related.length - relatedVisibleCount)}
                 aria-label="Produit recommandé suivant"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -1199,14 +1244,25 @@ export const ProductDetailPage = () => {
           <div
             ref={relatedViewportRef}
             onScroll={(event) => {
-              const { scrollLeft, clientWidth } = event.currentTarget;
-              if (clientWidth > 0) setRelatedIndex(Math.min(related.length - 1, Math.round(scrollLeft / clientWidth)));
+              const viewport = event.currentTarget;
+              const slideWidth = viewport.querySelector("[data-related-slide]")?.getBoundingClientRect().width
+                || viewport.clientWidth;
+              if (slideWidth > 0) {
+                setRelatedIndex(Math.max(0, Math.min(
+                  related.length - relatedVisibleCount,
+                  Math.round(viewport.scrollLeft / slideWidth)
+                )));
+              }
             }}
             className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-none"
             aria-label="Produits recommandés"
           >
             {related.map((item) => (
-              <div key={item.id} className="w-full shrink-0 snap-center px-1 sm:px-2">
+              <div
+                key={item.id}
+                data-related-slide
+                className="w-full shrink-0 snap-start px-1 sm:px-2 lg:w-1/4 lg:basis-1/4"
+              >
                 <ProductCard product={item} />
               </div>
             ))}
