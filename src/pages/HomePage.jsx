@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { useCart } from "../context/CartContext";
-import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages } from "../services/api";
+import { productService, couvertureService, brandService, resolveProductImage, mediaUrl, resolveBrandLogo, hydrateProductsWithImages, hydrateProductsWithVariantStock } from "../services/api";
 import { ProductCard } from "../components/ProductCard";
 import { ArrowRight, Truck, FlaskConical, ShieldCheck, ChevronLeft, ChevronRight, Loader2, Package } from "lucide-react";
 import { getProductIdentity } from "../utils/productSearch";
@@ -23,7 +23,8 @@ const normalizeProduct = (p) => ({
   isOnSale: p.isOnSale,
   salePrice: p.salePrice,
   badge: p.isBestSeller || p.isFeatured ? 'TOP SELLER' : p.isNew ? 'NOUVEAU' : null,
-  inStock: p.stock > 0,
+  inStock: p.hasAvailableVariant ?? Number(p.stock ?? 0) > 0,
+  variantStockPending: Number(p.stock ?? 0) <= 0 && p.variantStockChecked !== true,
   flavors: p.flavors?.map(f => f.name) || [],
   sizes: [],
   sku: p.sku,
@@ -39,6 +40,21 @@ const uniqueProducts = (products) => {
     if (seen.has(identity)) return false;
     seen.add(identity);
     return true;
+  });
+};
+
+const mergeHydratedProductImages = (products, currentProducts) => {
+  const currentById = new Map(currentProducts.map((product) => [String(product.id), product]));
+  return products.map((product) => {
+    const normalized = normalizeProduct(product);
+    const current = currentById.get(String(product.id));
+    return current
+      ? {
+          ...normalized,
+          inStock: current.inStock,
+          variantStockPending: current.variantStockPending,
+        }
+      : normalized;
   });
 };
 
@@ -147,6 +163,7 @@ export const HomePage = () => {
   const [newProductsOffset, setNewProductsOffset] = useState(0);
   const [bestSellersError, setBestSellersError] = useState('');
   const [newProductsError, setNewProductsError] = useState('');
+  const [variantStockError, setVariantStockError] = useState('');
   const [brands, setBrands] = useState([]);
   const [heroCouvertures, setHeroCouvertures] = useState([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
@@ -183,6 +200,7 @@ export const HomePage = () => {
         : '');
       setBestSellers(availableProducts.map(normalizeProduct));
       setNewProducts(availableNewProducts.map(normalizeProduct));
+      setVariantStockError('');
       const couvertureData = couvertureResult.status === 'fulfilled' ? couvertureResult.value : {};
       const brandData = brandResult.status === 'fulfilled' ? brandResult.value : {};
       const couvertures = (couvertureData['hydra:member'] || couvertureData.member || [])
@@ -200,9 +218,35 @@ export const HomePage = () => {
         hydrateProductsWithImages(availableNewProducts),
       ]).then(([bestSellersWithImages, newProductsWithImages]) => {
         if (!active) return;
-        setBestSellers(bestSellersWithImages.map(normalizeProduct));
-        setNewProducts(newProductsWithImages.map(normalizeProduct));
+        setBestSellers((current) => mergeHydratedProductImages(bestSellersWithImages, current));
+        setNewProducts((current) => mergeHydratedProductImages(newProductsWithImages, current));
       });
+
+      const updateVariantAvailability = (products, setProducts) => {
+        void hydrateProductsWithVariantStock(products).then((productsWithStock) => {
+          if (!active) return;
+          const stockById = new Map(productsWithStock.map((product) => [
+            String(product.id ?? product['@id'] ?? product.iri),
+            product,
+          ]));
+          setProducts((current) => current.map((product) => {
+            const stockProduct = stockById.get(String(product.id));
+            if (!stockProduct) return product;
+            return {
+              ...product,
+              inStock: stockProduct.hasAvailableVariant ?? Number(stockProduct.stock ?? 0) > 0,
+              variantStockPending: Number(stockProduct.stock ?? 0) <= 0
+                && stockProduct.variantStockChecked !== true,
+            };
+          }));
+        }).catch((stockError) => {
+          if (!active) return;
+          setVariantStockError(stockError?.message || 'Erreur inconnue.');
+        });
+      };
+
+      updateVariantAvailability(availableProducts, setBestSellers);
+      updateVariantAvailability(availableNewProducts, setNewProducts);
     });
 
     return () => { active = false; };
@@ -420,6 +464,12 @@ export const HomePage = () => {
           <div className="text-center py-8 text-gray-500 text-sm">Aucun produit en vedette pour l'instant.</div>
         )}
       </section>
+
+      {variantStockError && (
+        <p role="alert" className="mx-auto w-full px-4 text-center text-xs text-amber-300 sm:px-6 lg:px-8">
+          Impossible de vérifier le stock des variantes : {variantStockError}
+        </p>
+      )}
 
       {/* ================= 4. PACKS HOMME / FEMME ================= */}
       <section className="mx-auto w-full px-4 sm:px-6 lg:px-8 2xl:px-10">
