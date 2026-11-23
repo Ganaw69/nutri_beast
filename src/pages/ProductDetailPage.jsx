@@ -375,14 +375,15 @@ export const ProductDetailPage = () => {
           .catch(() => ({ 'hydra:member': [] }));
         const relatedRequest = (async () => {
           const getMembers = (response) => response?.['hydra:member'] || response?.member || response?.items || [];
-          const chooseRelated = (items) => {
+          const chooseRelated = (items, includeOtherCategories = false) => {
             const seen = new Set();
             return items.filter((item) => {
               const id = getRelationId(item.id ?? item['@id'] ?? item.iri);
               const key = String(id ?? item.name);
               if (!isAvailableProduct(item)
                 || String(id) === String(prod.id)
-                || (productCategoryId && String(getRelationId(item.category)) !== String(productCategoryId))
+                || (!includeOtherCategories && productCategoryId
+                  && String(getRelationId(item.category)) !== String(productCategoryId))
                 || seen.has(key)) return false;
               seen.add(key);
               return true;
@@ -396,11 +397,22 @@ export const ProductDetailPage = () => {
             console.warn("Unable to load category recommendations.", error);
           }
 
-          if (selected.length < 4 && productCategoryId) {
+          if (selected.length < 8) {
             try {
               const fallback = await productService.getAll({ isActive: true, itemsPerPage: 100 }, true);
-              const fallbackSelection = chooseRelated(getMembers(fallback));
-              if (fallbackSelection.length > selected.length) selected = fallbackSelection;
+              const fallbackSelection = chooseRelated(getMembers(fallback), true);
+              const selectedKeys = new Set(selected.map((item) => String(
+                getRelationId(item.id ?? item['@id'] ?? item.iri) ?? item.name
+              )));
+              selected = [
+                ...selected,
+                ...fallbackSelection.filter((item) => {
+                  const key = String(getRelationId(item.id ?? item['@id'] ?? item.iri) ?? item.name);
+                  if (selectedKeys.has(key)) return false;
+                  selectedKeys.add(key);
+                  return true;
+                }),
+              ].slice(0, 8);
             } catch (error) {
               console.warn("Unable to load fallback product recommendations.", error);
             }
@@ -538,6 +550,10 @@ export const ProductDetailPage = () => {
     if (!viewport) return;
     viewport.scrollBy({ left: direction * viewport.clientWidth, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    setRelatedIndex((current) => Math.min(current, Math.max(0, related.length - relatedVisibleCount)));
+  }, [related.length, relatedVisibleCount]);
 
   const handleVariantSelect = async (variant) => {
     const requestId = flavorImageRequestRef.current + 1;
@@ -1215,57 +1231,57 @@ export const ProductDetailPage = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between gap-4">
             <h2 className="font-heading font-black text-xl text-white uppercase">PRODUITS RECOMMANDÉS</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400" aria-live="polite">
-                {relatedIndex + 1}{Math.min(related.length, relatedIndex + relatedVisibleCount) > relatedIndex + 1
-                  ? `-${Math.min(related.length, relatedIndex + relatedVisibleCount)}`
-                  : ""} / {related.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => scrollRelated(-1)}
-                disabled={relatedIndex === 0}
-                aria-label="Produit recommandé précédent"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollRelated(1)}
-                disabled={relatedIndex >= Math.max(0, related.length - relatedVisibleCount)}
-                aria-label="Produit recommandé suivant"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
+            <span className="text-xs font-bold text-gray-400" aria-live="polite">
+              {relatedIndex + 1}{Math.min(related.length, relatedIndex + relatedVisibleCount) > relatedIndex + 1
+                ? `-${Math.min(related.length, relatedIndex + relatedVisibleCount)}`
+                : ""} / {related.length}
+            </span>
           </div>
-          <div
-            ref={relatedViewportRef}
-            onScroll={(event) => {
-              const viewport = event.currentTarget;
-              const slideWidth = viewport.querySelector("[data-related-slide]")?.getBoundingClientRect().width
-                || viewport.clientWidth;
-              if (slideWidth > 0) {
-                setRelatedIndex(Math.max(0, Math.min(
-                  related.length - relatedVisibleCount,
-                  Math.round(viewport.scrollLeft / slideWidth)
-                )));
-              }
-            }}
-            className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-none"
-            aria-label="Produits recommandés"
-          >
-            {related.map((item) => (
-              <div
-                key={item.id}
-                data-related-slide
-                className="w-full shrink-0 snap-start px-1 sm:px-2 lg:w-1/4 lg:basis-1/4"
-              >
-                <ProductCard product={item} />
-              </div>
-            ))}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scrollRelated(-1)}
+              disabled={relatedIndex === 0}
+              aria-label="Produit recommandé précédent"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div
+              ref={relatedViewportRef}
+              onScroll={(event) => {
+                const viewport = event.currentTarget;
+                const slideWidth = viewport.querySelector("[data-related-slide]")?.getBoundingClientRect().width
+                  || viewport.clientWidth;
+                if (slideWidth > 0) {
+                  setRelatedIndex(Math.max(0, Math.min(
+                    related.length - relatedVisibleCount,
+                    Math.round(viewport.scrollLeft / slideWidth)
+                  )));
+                }
+              }}
+              className="flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-smooth scrollbar-none"
+              aria-label="Produits recommandés"
+            >
+              {related.map((item) => (
+                <div
+                  key={item.id}
+                  data-related-slide
+                  className="w-full shrink-0 snap-start px-1 sm:px-2 lg:w-1/4 lg:basis-1/4"
+                >
+                  <ProductCard product={item} />
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => scrollRelated(1)}
+              disabled={relatedIndex >= Math.max(0, related.length - relatedVisibleCount)}
+              aria-label="Produit recommandé suivant"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white transition-colors hover:border-[#d90429] hover:bg-[#d90429] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}
